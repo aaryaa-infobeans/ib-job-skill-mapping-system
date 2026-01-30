@@ -32,8 +32,8 @@ The system is designed as a backend service with a set of REST APIs. The core of
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/ib-job-skill-match-system.git
-    cd ib-job-skill-match-system
+    git clone https://github.com/your-username/ib-job-skill-mapping-system.git
+    cd ib-job-skill-mapping-system
     ```
 
 2.  **Create a virtual environment and install dependencies:**
@@ -46,7 +46,7 @@ The system is designed as a backend service with a set of REST APIs. The core of
 
 3.  **Set up the database:**
     -   Note: Database needs to be already create while import from pgAdmin
-    -   Create a PostgreSQL database named `ib_job_skill_match_system`.
+    -   Create a PostgreSQL database named `ib-job-skill-mapping-system`.
     -   Run the SQL script `input/ib-job-skill-match-system-db.sql` to create the tables.
 
 4.  **Run the application:**
@@ -65,7 +65,7 @@ The system is designed as a backend service with a set of REST APIs. The core of
 -   `GET /api/v1/health`: Health check endpoint.
 -   `GET /api/v1/metrics`: Exposes Prometheus metrics.
 
-For detailed request and response payloads, please refer to the `Revised Requisition Req-Resp and Team-Member-Skill-Availiability-PayLoad.pdf` document in the `input` directory.
+For detailed request and response payloads, please refer to the `https://docs.google.com/document/d/1_LguCMwJEqArEnjtCwAUt36yvRvzJKBk2IRPHNEY0co/edit?tab=t.0` document on google drive.
 
 ## Database Schema
 
