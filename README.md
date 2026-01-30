@@ -73,13 +73,16 @@ For detailed request and response payloads, please refer to the `https://docs.go
 
 The database schema is defined in the `input/ib-job-skill-match-system-db.sql` file. The main tables are:
 
+-   `auth_clients`
+-   `auth_access_tokens`
 -   `requisition_requests`
 -   `requisition_detail`
 -   `team_member`
+-   `category_master`
 -   `skill_master`
 -   `team_member_skill`
 -   `team_member_allocation`
--   `requisition_team_member_match`
+-   `skill_certification`
 
 For a complete understanding of the schema, please refer to the SQL file.
 
