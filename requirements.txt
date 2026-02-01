@@ -1,0 +1,17 @@
+# Core Dependencies
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+alembic
+
+# AI & LangGraph
+langchain
+langgraph
+
+# Testing
+pytest
+pytest-cov
+
+# Linting & Formatting
+ruff
