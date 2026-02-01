@@ -1,0 +1,1 @@
+As a database designer update logical-data-model.md file for Entity Relationship based on database schema design in file: ib-job-skill-mapping-system.sql
