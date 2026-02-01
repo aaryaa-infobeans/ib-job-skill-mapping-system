@@ -25,7 +25,7 @@ The system MUST have robust logging, monitoring, and auditing capabilities. This
     - **Backend**: Python 3.11+ with FastAPI
     - **API Style:** REST, API-first, OpenAPI documented
     - **Message Broker:** RabbitMQ
-    - **AI/ML**: LangGraph 
+    - **AI/ML**: LangGraph,  LangChain, Scikit-learn
 - **Performance**: The system MUST return top-N matches within a few seconds for a typical number of team members. Retrieval of previously computed matches MUST be sub-second.
 - **Scalability**: The system architecture MUST support horizontal scaling of its stateless components to handle future growth.
 - **Reliability**: The system MUST maintain a minimum uptime of 99.5%.
