@@ -21,6 +21,7 @@ Secondary (read-only):
 - /specs/non-functional/*
 - /specs/data/*
 - /specs/ai/*
+- plan.md
 
 No requirement, behavior, or design may be introduced outside these documents.
 
