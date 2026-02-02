@@ -7,25 +7,25 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas.requisition import RequisitionRequest, RequisitionResponse
 from app.db.repositories.requisition_repository import RequisitionRepository
-from app.db.session import get_db
-from app.ai.graph import create_graph
+from app.db.session import get_db, SessionLocal
+from app.ai.graph_executor import execute_graph_with_audit
 
 router = APIRouter(prefix="/jd-skill-mapping", tags=["jd-skill-mapping"])
 logger = logging.getLogger(__name__)
 
 
-def process_requisition_with_graph(correlation_id: str, request: RequisitionRequest):
-    """Background task to process requisition through LangGraph."""
+def process_requisition_with_graph(correlation_id: str, request: RequisitionRequest, request_id: str):
+    """Background task to process requisition through LangGraph with audit trail."""
+    # Create a new database session for the background task
+    db = SessionLocal()
+    
     try:
         logger.info(f"Starting graph processing for correlation_id={correlation_id}")
-        
-        # Create graph
-        graph = create_graph()
         
         # Prepare initial state
         initial_state = {
             "requisition_input": {
-                "request_id": request.request_id,
+                "request_id": request_id,
                 "job_description": request.job_description.jd_text,
                 "requested_team_ids": [],  # TODO: Add team filtering support
                 "min_availability_percentage": 50,  # Default value
@@ -38,8 +38,8 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
             "error_message": None,
         }
         
-        # Run graph
-        final_state = graph.invoke(initial_state)
+        # Run graph with audit trail
+        final_state = execute_graph_with_audit(initial_state, request_id, db)
         
         logger.info(f"Graph processing completed for correlation_id={correlation_id}")
         
@@ -59,6 +59,8 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         
     except Exception as e:
         logger.error(f"Error processing requisition with graph: {str(e)}", exc_info=True)
+    finally:
+        db.close()
 
 
 @router.post("/", response_model=RequisitionResponse, status_code=202)
@@ -89,7 +91,12 @@ async def create_jd_skill_mapping(
         db.commit()
 
         # Queue graph processing as background task
-        background_tasks.add_task(process_requisition_with_graph, correlation_id, request)
+        background_tasks.add_task(
+            process_requisition_with_graph,
+            correlation_id,
+            request,
+            request.request_id  # Pass request_id for audit trail
+        )
         
         logger.info(f"Queued graph processing for correlation_id={correlation_id}")
 
