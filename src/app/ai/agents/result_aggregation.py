@@ -7,10 +7,32 @@ from app.ai.state import GraphState
 logger = logging.getLogger(__name__)
 
 
+def determine_fit_level(final_score: float) -> str:
+    """Determine fit level based on final score.
+    
+    Args:
+        final_score: Final score (0.0 to 1.0)
+    
+    Returns:
+        Fit level: HIGH, MEDIUM, or LOW
+    """
+    if final_score >= 0.75:
+        return "HIGH"
+    elif final_score >= 0.50:
+        return "MEDIUM"
+    else:
+        return "LOW"
+
+
 def result_aggregation_node(state: GraphState) -> GraphState:
     """Format final ranked list of candidates for API response.
     
-    This is a stub implementation that logs execution.
+    This node:
+    1. Takes candidate_scores from state
+    2. Formats each candidate for API response
+    3. Derives fit_level from final_score
+    4. Includes availability information
+    5. Populates state.final_results with sorted list
     """
     logger.info("Executing Result_Aggregation_Agent node")
     
@@ -20,20 +42,59 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         state["final_results"] = []
         return state
     
-    # Stub: Convert candidate scores to final results format
+    # Format results for API response
     final_results = []
+    
     for candidate in candidate_scores:
-        final_results.append({
+        # Determine fit level from score
+        fit_level = determine_fit_level(candidate["final_score"])
+        
+        # Build explanation list
+        explanation = []
+        
+        # Add overall score explanation
+        explanation.append(
+            f"Overall match score: {candidate['final_score']:.2f} ({fit_level} fit)"
+        )
+        
+        # Add skill match details
+        skill_score = candidate.get("skill_score", 0.0)
+        matched_skills = candidate.get("match_reasons", {}).get("skills_matched", [])
+        if matched_skills:
+            explanation.append(
+                f"Skills matched: {', '.join(matched_skills)} (score: {skill_score:.2f})"
+            )
+        else:
+            explanation.append(f"Skill match score: {skill_score:.2f}")
+        
+        # Add experience details
+        experience_score = candidate.get("experience_score", 0.0)
+        explanation.append(f"Experience match score: {experience_score:.2f}")
+        
+        # Add availability details
+        is_available = candidate.get("is_available", False)
+        availability_score = candidate.get("availability_score", 0.0)
+        availability_pct = availability_score * 100
+        explanation.append(
+            f"Availability: {availability_pct:.0f}% capacity "
+            f"({'Available' if is_available else 'Limited availability'})"
+        )
+        
+        # Create result entry
+        result_entry = {
             "team_member_id": candidate["team_member_id"],
             "profile_score": candidate["final_score"],
-            "fit_level": "HIGH" if candidate["final_score"] >= 0.8 else "MEDIUM",
-            "availability_match": candidate["is_available"],
-            "explanation": [
-                f"Candidate scored {candidate['final_score']:.2f} based on skills and experience",
-                f"Skills matched: {', '.join(candidate['match_reasons'].get('skills_matched', []))}",
-            ],
-        })
+            "fit_level": fit_level,
+            "availability_match": is_available,
+            "explanation": explanation,
+        }
+        
+        final_results.append(result_entry)
     
+    # Results are already sorted by final_score from matching_scoring_node
     state["final_results"] = final_results
+    
     logger.info(f"Result_Aggregation_Agent completed with {len(final_results)} results")
+    logger.debug(f"Top 3 candidates: {[r['team_member_id'] for r in final_results[:3]]}")
+    
     return state
