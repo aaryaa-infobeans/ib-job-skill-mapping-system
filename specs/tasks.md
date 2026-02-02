@@ -14,7 +14,7 @@
   - The repository is created and accessible to the team.
 - **Dependencies**: None
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 #### Task 1.2: Configure Branch Protection Rules
 - **Description**: Implement branch protection rules for the `main` branch to require pull requests and passing status checks before merging.
@@ -27,7 +27,7 @@
   - Pull requests require at least one approval.
 - **Dependencies**: Task 1.1
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 ### Epic: Database & Data Model
 
@@ -42,7 +42,7 @@
   - Connection strings are stored securely.
 - **Dependencies**: None
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 #### Task 1.4: Set up Database Migration Tooling
 - **Description**: Integrate Alembic into the project to manage database schema migrations.
@@ -54,7 +54,7 @@
   - The `alembic` command can connect to the development database.
 - **Dependencies**: Task 1.3
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 1.5: Create Initial Schema Migration
 - **Description**: Write the first Alembic migration script to create all tables as defined in the logical data model.
@@ -66,7 +66,7 @@
   - Running `alembic upgrade head` successfully creates all tables in the database.
 - **Dependencies**: Task 1.4
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 ### Epic: Continuous Integration
 
@@ -80,7 +80,7 @@
   - The CI job fails if code is not formatted or has linting errors.
 - **Dependencies**: Task 1.1
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 #### Task 1.7: Configure CI Pipeline for Unit Testing
 - **Description**: Add a step to the CI pipeline to execute the `pytest` test suite.
@@ -92,7 +92,7 @@
   - The CI job fails if any unit test fails.
 - **Dependencies**: Task 1.6
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 ---
 
@@ -110,7 +110,7 @@
   - The application can be started locally and serves a root `/` endpoint.
 - **Dependencies**: Phase 1
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 2.2: Implement Pydantic Models for FR-3 (Bulk Upsert)
 - **Description**: Create Pydantic models for the request and response bodies of the `skill-availability/bulk-upsert` endpoint.
@@ -122,7 +122,7 @@
   - Models accurately reflect the JSON structure in `FR-3.3`.
 - **Dependencies**: Task 2.1
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 2.3: Implement `POST /api/v1/team-members/skill-availability/bulk-upsert` Endpoint
 - **Description**: Implement the business logic for the bulk upsert endpoint, including request validation and idempotent database writes.
@@ -136,7 +136,7 @@
   - The endpoint returns a `400 Bad Request` for invalid payloads.
 - **Dependencies**: Task 2.2, Task 1.5
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 2.4: Write Integration Test for FR-3 Success Case
 - **Description**: Create an integration test that sends a valid payload to the bulk upsert endpoint and verifies the database state.
@@ -148,7 +148,7 @@
   - The test passes and confirms that data is correctly inserted and updated.
 - **Dependencies**: Task 2.3
 - **Owner Role**: QA / Test Automation
-- **Task Type**: Test
+- **Task Type**: Test (Completed)
 
 #### Task 2.5: Implement Pydantic Models for FR-1 (Requisition Request)
 - **Description**: Create Pydantic models for the request and response bodies of the `/jd-skill-mapping` endpoint.
@@ -160,7 +160,7 @@
   - Models accurately reflect the JSON structure in `FR-1.1`.
 - **Dependencies**: Task 2.1
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 2.6: Implement `POST /api/v1/jd-skill-mapping` Endpoint
 - **Description**: Implement the logic to accept, validate, and persist a requisition request. At this stage, it will not trigger the AI pipeline.
@@ -174,7 +174,7 @@
   - The endpoint returns a `202 Accepted` with a `correlation_id`.
 - **Dependencies**: Task 2.5, Task 1.5
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 2.7: Implement `GET /api/v1/jd-skill-mapping/{correlation_id}/matches` Stub
 - **Description**: Implement a stub for the match results endpoint that returns a correctly structured but empty or placeholder response.
@@ -186,7 +186,7 @@
   - The endpoint returns a `200 OK` with a valid JSON structure as per `FR-2.2`.
 - **Dependencies**: Task 2.6
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 ---
 
@@ -204,7 +204,7 @@
   - The Python code matches the structure defined in the specification.
 - **Dependencies**: Phase 2
 - **Owner Role**: AI / ML Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 3.2: Implement LangGraph Topology with Stubs
 - **Description**: Define the LangGraph graph with nodes and edges as specified. Each node will be a stub function that performs no logic but logs its execution.
@@ -217,7 +217,7 @@
   - The sequence of stubbed node executions matches the defined topology.
 - **Dependencies**: Task 3.1
 - **Owner Role**: AI / ML Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 3.3: Integrate Graph Trigger into Requisition API
 - **Description**: Modify the `POST /api/v1/jd-skill-mapping` endpoint to trigger the LangGraph execution as a background task.
@@ -230,7 +230,7 @@
   - The API response time is not blocked by the graph execution.
 - **Dependencies**: Task 3.2, Task 2.6
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 3.4: Write Integration Test for Graph Triggering
 - **Description**: Create a test to verify that a successful requisition submission correctly initiates the (stubbed) AI pipeline.
@@ -242,7 +242,7 @@
   - The test confirms that the `graph.run()` method is called with the correct initial state.
 - **Dependencies**: Task 3.3
 - **Owner Role**: QA / Test Automation
-- **Task Type**: Test
+- **Task Type**: Test (Completed)
 
 ---
 
