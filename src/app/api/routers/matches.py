@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.ai.results_cache import get_results
 from app.db.repositories.requisition_repository import RequisitionRepository
 from app.db.session import get_db
 
@@ -16,11 +17,10 @@ class MatchResult(BaseModel):
     """Individual match result."""
 
     team_member_id: str
-    full_name: str
-    match_score: float
-    matched_skills: List[str]
-    missing_skills: List[str]
-    explanation: str
+    profile_score: float
+    fit_level: str
+    availability_match: bool
+    explanation: List[str]
 
 
 class MatchesResponse(BaseModel):
@@ -37,7 +37,7 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
     """
     Get match results for a requisition.
 
-    This is a stub endpoint that returns a placeholder structure.
+    Returns the ranked list of candidates with scores and explanations.
     """
     repo = RequisitionRepository(db)
 
@@ -46,10 +46,34 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
     if not requisition:
         raise HTTPException(status_code=404, detail="Requisition not found")
 
-    # Return stub response with valid structure
+    # Retrieve results from cache
+    final_results = get_results(correlation_id)
+    
+    if final_results is None:
+        # Results not yet available - still processing
+        return MatchesResponse(
+            correlation_id=correlation_id,
+            status="PROCESSING",
+            total_matches=0,
+            matches=[],
+        )
+    
+    # Format results for response
+    matches = [
+        MatchResult(
+            team_member_id=result["team_member_id"],
+            profile_score=result["profile_score"],
+            fit_level=result["fit_level"],
+            availability_match=result["availability_match"],
+            explanation=result["explanation"],
+        )
+        for result in final_results
+    ]
+    
     return MatchesResponse(
         correlation_id=correlation_id,
-        status="PROCESSING",
-        total_matches=0,
-        matches=[],
+        status="COMPLETED",
+        total_matches=len(matches),
+        matches=matches,
     )
+

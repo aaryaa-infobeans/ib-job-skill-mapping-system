@@ -42,7 +42,20 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         final_state = graph.invoke(initial_state)
         
         logger.info(f"Graph processing completed for correlation_id={correlation_id}")
-        logger.info(f"Final results: {final_state.get('final_results')}")
+        
+        # Store results in cache
+        final_results = final_state.get("final_results", [])
+        if final_results:
+            from app.ai.results_cache import store_results
+            store_results(correlation_id, final_results)
+            logger.info(f"Stored {len(final_results)} results for {correlation_id}")
+        else:
+            logger.warning(f"No final_results generated for {correlation_id}")
+        
+        # Log any errors
+        error_message = final_state.get("error_message")
+        if error_message:
+            logger.error(f"Graph execution error for {correlation_id}: {error_message}")
         
     except Exception as e:
         logger.error(f"Error processing requisition with graph: {str(e)}", exc_info=True)
