@@ -8,14 +8,15 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
+    JSON,
     Numeric,
     SmallInteger,
     String,
-    Enum,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -106,7 +107,7 @@ class RequisitionDetail(Base):
     requisition_request_id = Column(
         Integer, ForeignKey("requisition_requests.id"), nullable=False, unique=True
     )
-    payload_json = Column(JSONB, nullable=False)
+    payload_json = Column(JSON, nullable=False)
     payload_hash = Column(CHAR(64), nullable=False, unique=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -212,7 +213,7 @@ class SkillCertification(Base):
 
     # Composite foreign key
     __table_args__ = (
-        ForeignKey(
+        ForeignKeyConstraint(
             ["team_member_id", "skill_id"],
             ["team_member_skill.team_member_id", "team_member_skill.skill_id"],
         ),
@@ -230,7 +231,7 @@ class LangGraphCheckpoint(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     request_id = Column(String(64), ForeignKey("requisition_requests.request_id"), nullable=False)
     node_name = Column(String(50), nullable=False)
-    state_json = Column(JSONB, nullable=False)
+    state_json = Column(JSON, nullable=False)
     token_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
