@@ -1,4 +1,7 @@
 """Alembic environment configuration."""
+
+import os
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -6,17 +9,28 @@ from sqlalchemy import pool
 
 from alembic import context
 
+# Add src to path to import app modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+# Import the Base and settings
+from app.db.base import Base
+from app.settings import settings
+
+# Import all models so they're registered with Base.metadata
+import app.db.models  # noqa: F401
+
 # this is the Alembic Config object
 config = context.config
+
+# Set the sqlalchemy.url from settings
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Add your model's MetaData object here for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

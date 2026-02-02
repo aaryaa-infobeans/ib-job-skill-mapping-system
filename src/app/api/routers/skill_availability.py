@@ -1,4 +1,5 @@
 """Skill availability router."""
+
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/skill-availability")

@@ -1,4 +1,5 @@
 """LangGraph state schema."""
+
 from typing import TypedDict
 
 

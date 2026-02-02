@@ -1,5 +1,5 @@
 """Error handling."""
-from fastapi import HTTPException
+
 
 
 class ApplicationError(Exception):

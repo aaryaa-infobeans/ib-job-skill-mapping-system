@@ -1,4 +1,5 @@
 """Database base."""
+
 from sqlalchemy.orm import DeclarativeBase
 
 
