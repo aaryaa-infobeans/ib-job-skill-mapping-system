@@ -4,6 +4,7 @@ An AI-powered intelligent job requisition and skill mapping system that matches 
 
 ## 📋 Table of Contents
 
+- [Quick Start](#quick-start)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
@@ -16,6 +17,92 @@ An AI-powered intelligent job requisition and skill mapping system that matches 
 - [Project Structure](#project-structure)
 - [Development Phases](#development-phases)
 - [Contributing](#contributing)
+
+## ⚡ Quick Start
+
+Get the system up and running in 5 minutes:
+
+### Step 1: Clone and Setup Environment
+
+```bash
+# Clone repository
+git clone https://github.com/aaryaa-infobeans/ib-job-skill-mapping-system.git
+cd ib-job-skill-mapping-system
+
+# Create and activate virtual environment
+python -m venv venv
+
+# Windows PowerShell
+.\venv\Scripts\Activate.ps1
+
+# macOS/Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -e ".[dev]"
+```
+
+### Step 2: Start Database
+
+```bash
+# Start PostgreSQL using Docker Compose
+docker compose up -d postgres
+
+# Wait for database to be ready (about 10 seconds)
+```
+
+### Step 3: Configure Environment
+
+Create a `.env` file in the project root:
+
+```bash
+# Required: Database connection
+DATABASE_URL=postgresql://user:password@localhost:5432/ib_job_skill_mapping
+
+# Required: OpenAI API key (get from https://platform.openai.com/api-keys)
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# Optional: JWT secret (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+SECRET_KEY=your-generated-secret-key-here
+```
+
+### Step 4: Run Database Migrations
+
+```bash
+# Create database schema
+alembic upgrade head
+```
+
+### Step 5: Start the Application
+
+```bash
+# Start API server with hot-reload
+uvicorn src.main:app --reload
+```
+
+The API is now running at:
+- **Swagger UI**: http://localhost:8000/docs
+- **API Base**: http://localhost:8000
+- **Health Check**: http://localhost:8000/health
+
+### Step 6: Test the API
+
+```bash
+# Check health endpoint
+curl http://localhost:8000/health
+
+# Expected output:
+# {"status":"healthy","timestamp":"2026-02-03T...","database":"connected"}
+```
+
+### Next Steps
+
+- **Configure OAuth Client**: See [OAuth Client Setup](#oauth-client-setup) section
+- **Load Sample Data**: Run `psql -U user -h localhost -d ib_job_skill_mapping -f specs-data/ib-job-skill-mapping-system.sql`
+- **Run Tests**: Execute `pytest` to verify installation
+- **Explore API**: Visit http://localhost:8000/docs for interactive API documentation
+
+---
 
 ## ✨ Features
 
@@ -227,7 +314,11 @@ openssl rand -base64 32
 
 Register an OAuth client in the database:
 
-```sql
+```bash
+# Connect to database
+psql -U user -h localhost -d ib_job_skill_mapping
+
+# Create OAuth client
 INSERT INTO oauth_clients (client_id, client_name, hashed_secret, scopes, is_active)
 VALUES (
     'test-client',
@@ -236,6 +327,21 @@ VALUES (
     ARRAY['read', 'write'],
     true
 );
+
+# Exit psql
+\q
+```
+
+**Generate JWT Token for Testing:**
+
+```bash
+# Using Python
+python -c "from jose import jwt; from datetime import datetime, timedelta; print(jwt.encode({'sub': 'test-client', 'scopes': ['read', 'write'], 'exp': datetime.utcnow() + timedelta(hours=24)}, 'your-secret-key-here', algorithm='HS256'))"
+```
+
+Use this token in API requests:
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" http://localhost:8000/api/v1/jd-skill-mapping/
 ```
 
 ## 🏃 Running the Application
@@ -506,7 +612,171 @@ python scripts/cleanup_test_data.py \
 python tests/test_idempotent_retry.py --auth-token "your-jwt-token"
 ```
 
-## 📁 Project Structure
+## � Troubleshooting
+
+### Common Setup Issues
+
+#### Issue: `psycopg2` installation fails
+
+**Solution:**
+```bash
+# Windows: Install Visual C++ Build Tools first
+# Or use binary package
+pip install psycopg2-binary
+```
+
+#### Issue: Docker Compose not found
+
+**Solution:**
+```bash
+# Check Docker installation
+docker --version
+docker compose version
+
+# If using older Docker, try:
+docker-compose up -d postgres
+```
+
+#### Issue: Port 5432 already in use
+
+**Solution:**
+```bash
+# Check what's using port 5432
+# Windows PowerShell
+netstat -ano | findstr :5432
+
+# Kill the process or use different port in docker-compose.yml
+ports:
+  - "5433:5432"  # Changed host port to 5433
+
+# Update DATABASE_URL accordingly
+DATABASE_URL=postgresql://user:password@localhost:5433/ib_job_skill_mapping
+```
+
+#### Issue: Alembic migration fails
+
+**Solution:**
+```bash
+# Check database connection
+psql -U user -h localhost -d ib_job_skill_mapping -c "SELECT 1"
+
+# Reset database if needed
+alembic downgrade base
+alembic upgrade head
+
+# Or recreate database
+psql -U user -h localhost -c "DROP DATABASE IF EXISTS ib_job_skill_mapping"
+psql -U user -h localhost -c "CREATE DATABASE ib_job_skill_mapping"
+alembic upgrade head
+```
+
+#### Issue: OpenAI API key not working
+
+**Solution:**
+```bash
+# Verify .env file is in project root
+ls -la .env  # macOS/Linux
+dir .env     # Windows
+
+# Test API key
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer YOUR_OPENAI_API_KEY"
+
+# Make sure .env is loaded (restart uvicorn after changing .env)
+```
+
+#### Issue: `uvicorn: command not found`
+
+**Solution:**
+```bash
+# Ensure virtual environment is activated
+# You should see (venv) in your prompt
+
+# Windows PowerShell
+.\venv\Scripts\Activate.ps1
+
+# macOS/Linux
+source venv/bin/activate
+
+# Verify installation
+pip list | grep uvicorn
+
+# If not installed
+pip install -e ".[dev]"
+```
+
+#### Issue: Module import errors
+
+**Solution:**
+```bash
+# Install package in editable mode
+pip install -e ".[dev]"
+
+# Verify src is in Python path
+python -c "import sys; print('\n'.join(sys.path))"
+
+# Run from project root directory
+cd /path/to/ib-job-skill-mapping-system
+uvicorn src.main:app --reload
+```
+
+#### Issue: Tests failing
+
+**Solution:**
+```bash
+# Ensure test database is set up
+export DATABASE_URL=postgresql://user:password@localhost:5432/ib_job_skill_mapping_test
+alembic upgrade head
+
+# Clear pytest cache
+pytest --cache-clear
+
+# Run with verbose output
+pytest -v
+
+# Run specific test
+pytest tests/test_api.py -v
+```
+
+### Performance Issues
+
+#### Slow API response times
+
+**Causes & Solutions:**
+
+1. **Database connection pool exhausted**
+   ```bash
+   # Increase pool size in src/config.py
+   SQLALCHEMY_POOL_SIZE = 20
+   SQLALCHEMY_MAX_OVERFLOW = 40
+   ```
+
+2. **Missing database indexes**
+   ```sql
+   -- Add indexes for frequently queried columns
+   CREATE INDEX CONCURRENTLY idx_team_members_skills 
+   ON team_members USING GIN(primary_skills);
+   
+   CREATE INDEX CONCURRENTLY idx_requisitions_status 
+   ON requisition_requests(status);
+   ```
+
+3. **OpenAI API timeout**
+   ```bash
+   # Increase timeout in agent configuration
+   # Check network connectivity to api.openai.com
+   ```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check logs**: Look at application logs for detailed error messages
+2. **Review specs**: Check [specs/](specs/) directory for requirements
+3. **GitHub Issues**: Search existing issues or create a new one
+4. **Documentation**: Review [docs/phase-6-testing-guide.md](docs/phase-6-testing-guide.md)
+
+
 
 ```
 ib-job-skill-mapping-system/
