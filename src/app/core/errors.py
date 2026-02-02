@@ -1,7 +1,6 @@
 """Error handling."""
 
 
-
 class ApplicationError(Exception):
     """Base application error."""
 
