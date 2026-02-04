@@ -49,6 +49,16 @@ class FinalResult(TypedDict):
     explanation: List[str]
 
 
+class TokenMetrics(TypedDict):
+    """Token tracking metrics per checkpoint."""
+    
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost_usd: float
+    model: str
+
+
 class GraphState(TypedDict):
     """Complete state object passed through the LangGraph execution."""
 
@@ -66,6 +76,15 @@ class GraphState(TypedDict):
 
     # Populated by Result_Aggregation_Agent
     final_results: Optional[List[FinalResult]]
+    
+    # Tracking metrics
+    total_evaluated: Optional[int]
+    total_qualified: Optional[int]
+    
+    # Token tracking (optional, for LLM observability)
+    token_metrics: Optional[Dict[str, TokenMetrics]]
+    cumulative_tokens: Optional[int]
+    cumulative_cost_usd: Optional[float]
 
     # To track errors
     error_message: Optional[str]

@@ -3,6 +3,7 @@
 import os
 from typing import Optional
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
@@ -25,8 +26,47 @@ class Settings(BaseSettings):
     # Secrets Manager Configuration
     secrets_backend: str = "env"  # Options: env, aws, vault
     
-    class Config:
-        env_file = ".env"
+    # LLM Configuration
+    openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4"
+    openai_embedding_model: str = "text-embedding-3-large"
+    openai_input_rate: Optional[float] = None
+    openai_output_rate: Optional[float] = None
+    
+    # Agent Weights
+    weight_mandatory_skills: float = 0.35
+    weight_preferred_skills: float = 0.20
+    weight_experience: float = 0.15
+    weight_semantic_similarity: float = 0.10
+    weight_certification: float = 0.10
+    weight_jd_text: float = 0.10
+    
+    # Thresholds
+    fit_score_threshold: float = 0.5
+    rag_similarity_threshold: float = 0.6
+    
+    # Retry Configuration
+    max_retry_attempts: int = 3
+    retry_backoff_factor: float = 2.0
+    
+    # pgvector Configuration
+    pgvector_dimension: int = 3072
+    
+    # Application Configuration
+    app_env: str = "development"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    reload: bool = True
+    
+    # Security Configuration
+    secret_key: Optional[str] = None
+    access_token_expire_minutes: int = 30
+    
+    model_config = ConfigDict(
+        extra="ignore",
+        env_file=".env",
+        case_sensitive=False
+    )
     
     def get_database_url(self) -> str:
         """
@@ -46,7 +86,7 @@ class Settings(BaseSettings):
         if not db_url:
             db_url = self.database_url or os.getenv(
                 "DATABASE_URL",
-                "postgresql://user:password@localhost:5432/ib_job_skill_mapping"
+                "postgresql://user:password@localhost:5433/ib_job_skill_mapping"
             )
         
         return db_url

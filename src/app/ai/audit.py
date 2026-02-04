@@ -1,7 +1,8 @@
 """Audit trail utilities for LangGraph execution."""
 
 import logging
-from datetime import datetime
+import json
+from datetime import datetime, date
 from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
@@ -9,6 +10,27 @@ from sqlalchemy.orm import Session
 from app.db.models.models import LangGraphCheckpoint
 
 logger = logging.getLogger(__name__)
+
+
+def convert_dates_to_iso(obj: Any) -> Any:
+    """Recursively convert date and datetime objects to ISO format strings.
+    
+    Args:
+        obj: Object to convert (dict, list, date, datetime, or other)
+        
+    Returns:
+        Object with all dates converted to ISO strings
+    """
+    if isinstance(obj, dict):
+        return {k: convert_dates_to_iso(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_dates_to_iso(item) for item in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, date):
+        return obj.isoformat()
+    else:
+        return obj
 
 
 def save_checkpoint(
@@ -28,10 +50,13 @@ def save_checkpoint(
         token_count: Number of LLM tokens consumed (if applicable)
     """
     try:
+        # Convert any date/datetime objects to ISO strings for JSON serialization
+        serializable_state = convert_dates_to_iso(state)
+        
         checkpoint = LangGraphCheckpoint(
             request_id=request_id,
             node_name=node_name,
-            state_json=state,
+            state_json=serializable_state,
             token_count=token_count,
             created_at=datetime.utcnow(),
         )

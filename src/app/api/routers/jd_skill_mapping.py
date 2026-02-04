@@ -22,11 +22,11 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
     try:
         logger.info(f"Starting graph processing for correlation_id={correlation_id}")
         
-        # Prepare initial state
+        # Prepare initial state with all required fields
         initial_state = {
             "requisition_input": {
                 "request_id": request_id,
-                "job_description": request.job_description.jd_text,
+                "job_description": request.job_description.model_dump(),
                 "requested_team_ids": [],  # TODO: Add team filtering support
                 "min_availability_percentage": 50,  # Default value
                 "correlation_id": correlation_id,
@@ -36,6 +36,12 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
             "candidate_scores": None,
             "final_results": None,
             "error_message": None,
+            # Initialize token tracking
+            "token_metrics": {},
+            "cumulative_tokens": 0,
+            "cumulative_cost_usd": 0.0,
+            "total_evaluated": 0,
+            "total_qualified": 0,
         }
         
         # Run graph with audit trail

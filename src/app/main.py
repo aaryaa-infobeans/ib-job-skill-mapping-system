@@ -1,6 +1,11 @@
 """FastAPI application entry point."""
 
 import logging
+import os
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI
 

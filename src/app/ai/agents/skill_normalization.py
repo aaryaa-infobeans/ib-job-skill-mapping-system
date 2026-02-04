@@ -87,11 +87,11 @@ def skill_normalization_node(state: GraphState) -> GraphState:
     # Query skill master table
     db: Session = SessionLocal()
     try:
-        skill_masters = db.query(SkillMaster).filter(SkillMaster.is_active == True).all()
+        skill_masters = db.query(SkillMaster).all()
         
         # Create lookup map
         skill_master_map = {
-            skill.skill_name: skill.skill_id 
+            skill.skill_name.lower(): skill.skill_id 
             for skill in skill_masters
         }
         
