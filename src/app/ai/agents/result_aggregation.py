@@ -127,7 +127,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         # Create result entry with detailed explanation
         result_entry = {
             "team_member_id": candidate["team_member_id"],
-            "profile_score": candidate["final_score"],
+            "profile_score": round(candidate["final_score"], 2),
             "fit_level": fit_level,
             "availability_match": candidate.get("is_available", False),
             "explanation": explanation,
