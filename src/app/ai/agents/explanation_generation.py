@@ -275,6 +275,23 @@ def explanation_generation_node(state: GraphState) -> GraphState:
             else:
                 # Fallback to template-based explanation on LLM failure
                 logger.warning(f"LLM failed for {team_member_id}, using template-based explanation")
+                
+                # Append failed attempt to LLM logs
+                if "llm_call_logs" not in state or state["llm_call_logs"] is None:
+                    state["llm_call_logs"] = []
+                
+                state["llm_call_logs"].append({
+                    "agent_name": "explanation_generation",
+                    "prompt_name": "detailed_candidate_explanation",
+                    "model": "gpt-4",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,
+                    "status": "FAILED",
+                    "error_message": f"LLM explanation generation failed for {team_member_id}"
+                })
+                
                 candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
                 explanations_failed += 1
         else:

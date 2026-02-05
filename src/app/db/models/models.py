@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    Text,
     text,
 )
 import sqlalchemy as sa
@@ -260,6 +261,8 @@ class LLMRequestLog(Base):
     completion_tokens = Column(Integer, nullable=False)
     total_tokens = Column(Integer, nullable=False)
     cost_usd = Column(Numeric(precision=10, scale=6), nullable=False)
+    status = Column(String(50), nullable=False, default="SUCCESS")
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 

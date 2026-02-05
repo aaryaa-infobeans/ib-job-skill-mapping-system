@@ -233,6 +233,20 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         
     except Exception as e:
         logger.error(f"Error in skill_normalization_node, falling back to deterministic: {str(e)}")
+        
+        # Add failed LLM attempt to logs
+        state["llm_call_logs"].append({
+            "agent_name": "skill_normalization",
+            "prompt_name": "skill_ontology_normalization",
+            "model": "gpt-4",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0,
+            "status": "FAILED",
+            "error_message": str(e)
+        })
+        
         # FALLBACK: Use deterministic matching if LLM fails (e.g. RateLimitError)
         skill_master_map = _get_skill_master_map(db)
         state["normalized_skills"] = {

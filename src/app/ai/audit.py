@@ -128,6 +128,8 @@ def save_llm_request_log(
     prompt_tokens: int,
     completion_tokens: int,
     cost_usd: float,
+    status: str = "SUCCESS",
+    error_message: Optional[str] = None,
 ) -> None:
     """Log an LLM request to the database for auditing and cost tracking.
     
@@ -140,6 +142,8 @@ def save_llm_request_log(
         prompt_tokens: Number of prompt tokens
         completion_tokens: Number of completion tokens
         cost_usd: Computed cost in USD
+        status: SUCCESS or FAILED
+        error_message: Error details if status is FAILED
     """
     try:
         log_entry = LLMRequestLog(
@@ -151,6 +155,8 @@ def save_llm_request_log(
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
             cost_usd=cost_usd,
+            status=status,
+            error_message=error_message,
             created_at=datetime.utcnow(),
         )
         db.add(log_entry)

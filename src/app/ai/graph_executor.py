@@ -150,6 +150,8 @@ def execute_graph_with_audit(
                 prompt_tokens=log.get("prompt_tokens"),
                 completion_tokens=log.get("completion_tokens"),
                 cost_usd=log.get("cost_usd"),
+                status=log.get("status", "SUCCESS"),
+                error_message=log.get("error_message"),
             )
     
     # Log final token summary
