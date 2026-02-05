@@ -12,12 +12,21 @@ class RequisitionInput(TypedDict):
 
 
 class ParsedJD(TypedDict):
-    """Structured output from JD parsing."""
+    """Structured output from JD parsing, enriched with payload data."""
 
     normalized_title: str
     normalized_role: str
     extracted_mandatory_skills: List[str]
     extracted_preferred_skills: List[str]
+    client_name: Optional[str]
+    experience: Optional[Dict]
+    expected_start_date: Optional[str]
+    requisition_duration_month: Optional[int]
+    priority: Optional[str]
+    location: Optional[List[str]]
+    work_mode: Optional[List[str]]
+    jd_text: str
+    metadata: Optional[Dict]
 
 
 class NormalizedSkills(TypedDict):

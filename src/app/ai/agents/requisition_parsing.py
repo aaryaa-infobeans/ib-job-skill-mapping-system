@@ -12,20 +12,19 @@ logger = logging.getLogger(__name__)
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
 
-Your task is to parse requisition/job description information and return a structured JSON object.
+Your task is to enrich requisition information by analyzing the job description text and normalizing existing data.
 
 Given:
-- Job title and role
+- Basic job metadata (title, role, client)
 - Job description text (jd_text)
-- Existing mandatory_skills and preferred_skills lists
+- Initial mandatory and preferred skill lists
 
 Your responsibilities:
-1. Extract all technical skills, tools, platforms, and technologies from the jd_text
-2. Combine extracted skills with provided skill lists
-3. Categorize skills into mandatory (required/must-have) vs preferred (nice-to-have/optional)
-4. Normalize the job title to standard format (e.g., "Sr. Python Dev" -> "Senior Python Developer")
-5. Extract experience requirements if mentioned (in months)
-6. Extract location and work mode preferences if mentioned
+1. Extract additional technical skills, tools, and technologies from the `jd_text` that are not already in the provided lists.
+2. Normalize all skills (extracted and provided) to a standard format (e.g., "python" -> "Python", "k8s" -> "Kubernetes").
+3. Normalize the job title and role category to standard professional formats.
+4. Extract or verify experience requirements (in months).
+5. Identify expected start date and duration if explicitly mentioned in the text.
 
 Return ONLY a valid JSON object with this exact structure:
 {
@@ -42,10 +41,9 @@ Return ONLY a valid JSON object with this exact structure:
 }
 
 Important:
-- Skills should be normalized (e.g., "python" -> "Python", "k8s" -> "Kubernetes")
-- All fields must be present in the JSON
-- Use null for missing information
-- Extract experience in months (e.g., "3-5 years" -> min_months: 36, max_months: 60)
+- Combine payload skills with newly extracted ones.
+- Ensure the JSON is valid and only contains the requested fields.
+- Use null for missing information.
 """
 
 
@@ -53,50 +51,55 @@ def parse_requisition_with_llm(
     job_description: dict,
     max_retries: int = 2
 ) -> Optional[dict]:
-    """Parse requisition using LLM.
+    """Enrich requisition data using LLM.
+    
+    This function merges the original payload with LLM-normalized and extracted data.
     
     Args:
         job_description: Job description dict from requisition_input
         max_retries: Maximum number of retry attempts
     
     Returns:
-        Parsed requisition dict or None on failure
+        Enriched requisition dict (ParsedJD) or None on failure
     """
-    # For stub implementation without LLM dependency, return structured data
-    # In production, this would call OpenAI API
+    # For stub implementation, we'll simulate the LLM enrichment by merging
+    # In production, this would call the actual LLM API with REQUISITION_PARSING_PROMPT
     
-    logger.info("Parsing requisition (stub implementation - would call LLM in production)")
+    logger.info("Enriching requisition (stub implementation)")
     
-    # Extract input data
-    title = job_description.get("title", "")
-    role = job_description.get("role", "")
-    jd_text = job_description.get("jd_text", "")
-    mandatory_skills = job_description.get("mandatory_skills", [])
-    preferred_skills = job_description.get("preferred_skills", [])
-    expected_start_date = job_description.get("expected_start_date")
-    requisition_duration_month = job_description.get("requisition_duration_month")
-    experience = job_description.get("experience")
-    
-    # Stub: Return deterministic parsed output
-    # In production, this would be LLM-generated
-    parsed_jd = {
-        "normalized_title": title or "Software Engineer",
-        "normalized_role": role or "Engineer",
-        "extracted_mandatory_skills": mandatory_skills or [],
-        "extracted_preferred_skills": preferred_skills or [],
-        "experience": {
-            "min_months": experience.get("min_months") if experience else None,
-            "max_months": experience.get("max_months") if experience else None,
-        },
-        "expected_start_date": expected_start_date,
-        "requisition_duration_month": requisition_duration_month,
+    # Simulate LLM enrichment/normalization
+    llm_output = {
+        "normalized_title": job_description.get("title", "Software Engineer"),
+        "normalized_role": job_description.get("role", "Engineer"),
+        "extracted_mandatory_skills": list(set(job_description.get("mandatory_skills", []))),
+        "extracted_preferred_skills": list(set(job_description.get("preferred_skills", []))),
+        "experience": job_description.get("experience", {"min_months": None, "max_months": None}),
+        "expected_start_date": job_description.get("expected_start_date"),
+        "requisition_duration_month": job_description.get("requisition_duration_month"),
     }
     
-    logger.info(f"Parsed requisition: {parsed_jd['normalized_title']} - "
-                f"{len(parsed_jd['extracted_mandatory_skills'])} mandatory, "
-                f"{len(parsed_jd['extracted_preferred_skills'])} preferred skills")
+    # Merge LLM enrichment back into the full context
+    enriched_jd = {
+        # LLM Enriched fields
+        "normalized_title": llm_output["normalized_title"],
+        "normalized_role": llm_output["normalized_role"],
+        "extracted_mandatory_skills": llm_output["extracted_mandatory_skills"],
+        "extracted_preferred_skills": llm_output["extracted_preferred_skills"],
+        "experience": llm_output["experience"],
+        "expected_start_date": llm_output["expected_start_date"],
+        "requisition_duration_month": llm_output["requisition_duration_month"],
+        
+        # Original Payload fields preserved
+        "client_name": job_description.get("client_name"),
+        "priority": job_description.get("priority"),
+        "location": job_description.get("location", []),
+        "work_mode": job_description.get("work_mode", []),
+        "jd_text": job_description.get("jd_text", ""),
+        "metadata": job_description.get("metadata", {}),
+    }
     
-    return parsed_jd
+    logger.info(f"Enriched requisition: {enriched_jd['normalized_title']}")
+    return enriched_jd
 
 
 def requisition_parsing_node(state: GraphState) -> GraphState:
