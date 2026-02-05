@@ -45,6 +45,25 @@ Return a JSON object with this exact structure:
 }
 """
 
+# Common skill aliases for deterministic matching
+SKILL_ALIASES = {
+    "js": "JavaScript",
+    "ts": "TypeScript",
+    "py": "Python",
+    "postgres": "PostgreSQL",
+    "pg": "PostgreSQL",
+    "k8s": "Kubernetes",
+    "docker": "Docker",
+    "react": "React",
+    "vue": "Vue.js",
+    "angular": "Angular",
+    "node": "Node.js",
+    "nodejs": "Node.js",
+    "aws": "AWS",
+    "azure": "Azure",
+    "gcp": "Google Cloud Platform",
+}
+
 def _get_ontology_data(db: Session) -> Dict[str, List[str]]:
     """Fetch all skills from the ontology table."""
     try:
@@ -63,6 +82,26 @@ def _get_skill_master_map(db: Session) -> Dict[str, str]:
         logger.error(f"Error fetching skill master: {str(e)}")
         return {}
 
+def _normalize_deterministic_fallback(raw_skills: List[str], skill_master_map: Dict[str, str]) -> List[str]:
+    """Fallback to deterministic ID mapping if LLM fails usage of aliases."""
+    normalized_ids = []
+    for raw in raw_skills:
+        name = raw.strip().lower()
+        
+        # Check direct match
+        if name in skill_master_map:
+            normalized_ids.append(skill_master_map[name])
+            continue
+            
+        # Check alias match
+        if name in SKILL_ALIASES:
+            canonical = SKILL_ALIASES[name].lower()
+            if canonical in skill_master_map:
+                normalized_ids.append(skill_master_map[canonical])
+                continue
+                
+    return list(set(normalized_ids))
+
 def skill_normalization_node(state: GraphState) -> GraphState:
     """Normalize and expand skills using the skill ontology and LLM.
     
@@ -75,23 +114,36 @@ def skill_normalization_node(state: GraphState) -> GraphState:
     """
     logger.info("Executing Skill_Normalization_Agent node with ontology")
     
+    # Ensure state keys exist
+    if state.get("llm_call_logs") is None:
+        state["llm_call_logs"] = []
+    
     parsed_jd = state.get("parsed_jd")
     if not parsed_jd:
         logger.error("Missing parsed_jd in state")
         state["error_message"] = "Missing parsed_jd"
-        return state
-    
-    mandatory_skills = parsed_jd.get("extracted_mandatory_skills", [])
-    preferred_skills = parsed_jd.get("extracted_preferred_skills", [])
-    
-    if not mandatory_skills and not preferred_skills:
-        logger.warning("No skills found to normalize")
+        # Always ensure normalized_skills is set to avoid downstream crashes
         state["normalized_skills"] = {
             "mandatory_skill_ids": [],
             "preferred_skill_ids": [],
             "mandatory_enriched": {},
             "preferred_enriched": {}
         }
+        return state
+    
+    mandatory_skills = parsed_jd.get("extracted_mandatory_skills", [])
+    preferred_skills = parsed_jd.get("extracted_preferred_skills", [])
+    
+    # Initialize normalized_skills in state
+    state["normalized_skills"] = {
+        "mandatory_skill_ids": [],
+        "preferred_skill_ids": [],
+        "mandatory_enriched": {},
+        "preferred_enriched": {}
+    }
+
+    if not mandatory_skills and not preferred_skills:
+        logger.warning("No skills found to normalize")
         return state
 
     db: Session = SessionLocal()
@@ -136,9 +188,6 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
         
         # Add to LLM logs for observability
-        if "llm_call_logs" not in state or state["llm_call_logs"] is None:
-            state["llm_call_logs"] = []
-            
         state["llm_call_logs"].append({
             "agent_name": "skill_normalization",
             "prompt_name": "skill_ontology_normalization",
@@ -159,26 +208,20 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         for item in result.get("mandatory", []):
             canonical = item.get("canonical")
             if canonical:
-                # Map to skill_master ID
                 skill_id = skill_master_map.get(canonical.lower())
                 if skill_id:
                     normalized_mandatory_ids.append(skill_id)
                     mandatory_enriched[skill_id] = item.get("enriched", [])
-                else:
-                    logger.warning(f"Canonical skill '{canonical}' not found in SkillMaster")
         
         normalized_preferred_ids = []
         preferred_enriched = {}
         for item in result.get("preferred", []):
             canonical = item.get("canonical")
             if canonical:
-                # Map to skill_master ID
                 skill_id = skill_master_map.get(canonical.lower())
                 if skill_id:
                     normalized_preferred_ids.append(skill_id)
                     preferred_enriched[skill_id] = item.get("enriched", [])
-                else:
-                    logger.warning(f"Canonical skill '{canonical}' not found in SkillMaster")
                     
         # Populate state
         state["normalized_skills"] = {
@@ -188,21 +231,17 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "preferred_enriched": preferred_enriched,
         }
         
-        logger.info(f"Skill_Normalization_Agent completed: "
-                    f"{len(normalized_mandatory_ids)} mandatory, "
-                    f"{len(normalized_preferred_ids)} preferred")
-        
     except Exception as e:
-        logger.error(f"Error in skill_normalization_node: {str(e)}", exc_info=True)
-        state["error_message"] = f"Skill normalization failed: {str(e)}"
-        # Fallback to empty if absolutely failed
-        if "normalized_skills" not in state:
-            state["normalized_skills"] = {
-                "mandatory_skill_ids": [],
-                "preferred_skill_ids": [],
-                "mandatory_enriched": {},
-                "preferred_enriched": {}
-            }
+        logger.error(f"Error in skill_normalization_node, falling back to deterministic: {str(e)}")
+        # FALLBACK: Use deterministic matching if LLM fails (e.g. RateLimitError)
+        skill_master_map = _get_skill_master_map(db)
+        state["normalized_skills"] = {
+            "mandatory_skill_ids": _normalize_deterministic_fallback(mandatory_skills, skill_master_map),
+            "preferred_skill_ids": _normalize_deterministic_fallback(preferred_skills, skill_master_map),
+            "mandatory_enriched": {},
+            "preferred_enriched": {}
+        }
+        state["error_message"] = f"Normalization fallback used due to: {str(e)}"
     finally:
         db.close()
     

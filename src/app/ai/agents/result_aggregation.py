@@ -131,7 +131,9 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             "fit_level": fit_level,
             "availability_match": candidate.get("is_available", False),
             "explanation": explanation,
-            "detailed_explanation": detailed_explanation if detailed_explanation else None,
+            "detailed_breakdown": {
+                "llm_explanation": detailed_explanation if detailed_explanation else None,
+            }
         }
         
         final_results.append(result_entry)

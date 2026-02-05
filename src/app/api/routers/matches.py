@@ -21,7 +21,7 @@ class MatchResult(BaseModel):
     fit_level: str
     availability_match: bool
     explanation: List[str]
-    detailed_explanation: Optional[dict] = None
+    detailed_breakdown: Optional[dict] = None
 
 
 class MatchesMetrics(BaseModel):
@@ -60,9 +60,9 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Requisition not found")
 
     # Retrieve results from cache
-    final_results = get_results(correlation_id)
+    cached_data = get_results(correlation_id)
     
-    if final_results is None:
+    if cached_data is None:
         # Results not yet available - still processing
         return MatchesResponse(
             correlation_id=correlation_id,
@@ -70,6 +70,9 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
             total_matches=0,
             matches=[],
         )
+    
+    final_results = cached_data.get("results", [])
+    cached_metrics = cached_data.get("metrics", {})
     
     # Format results for response
     matches = [
@@ -79,14 +82,23 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
             fit_level=result["fit_level"],
             availability_match=result["availability_match"],
             explanation=result["explanation"],
-            detailed_explanation=result.get("detailed_explanation"),
+            detailed_breakdown=result.get("detailed_breakdown"),
         )
         for result in final_results
     ]
     
-    # Get metrics from cache if available
-    # Try to retrieve metrics from results_cache - this would be populated by the workflow
-    metrics = MatchesMetrics()
+    # Get metrics from cache
+    metrics = None
+    if cached_metrics:
+        metrics = MatchesMetrics(
+            total_evaluated=cached_metrics.get("total_evaluated"),
+            total_qualified=cached_metrics.get("total_qualified"),
+            token_count=cached_metrics.get("token_count"),
+            cost_usd=cached_metrics.get("cost_usd"),
+        )
+        # Calculate qualification rate if possible
+        if metrics.total_evaluated and metrics.total_evaluated > 0:
+            metrics.qualification_rate = (metrics.total_qualified or 0) / metrics.total_evaluated
     
     return MatchesResponse(
         correlation_id=correlation_id,

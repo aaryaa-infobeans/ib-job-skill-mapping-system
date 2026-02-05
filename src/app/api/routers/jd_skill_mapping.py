@@ -38,6 +38,7 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
             "error_message": None,
             # Initialize token tracking
             "token_metrics": {},
+            "llm_call_logs": [],
             "cumulative_tokens": 0,
             "cumulative_cost_usd": 0.0,
             "total_evaluated": 0,
@@ -53,8 +54,17 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         final_results = final_state.get("final_results", [])
         if final_results:
             from app.ai.results_cache import store_results
-            store_results(correlation_id, final_results)
-            logger.info(f"Stored {len(final_results)} results for {correlation_id}")
+            
+            # Build metrics for reporting
+            metrics = {
+                "total_evaluated": final_state.get("total_evaluated", 0),
+                "total_qualified": final_state.get("total_qualified", 0),
+                "token_count": final_state.get("cumulative_tokens", 0),
+                "cost_usd": final_state.get("cumulative_cost_usd", 0.0),
+            }
+            
+            store_results(correlation_id, final_results, metrics=metrics)
+            logger.info(f"Stored {len(final_results)} results and metrics for {correlation_id}")
         else:
             logger.warning(f"No final_results generated for {correlation_id}")
         
