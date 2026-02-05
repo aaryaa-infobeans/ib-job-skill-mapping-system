@@ -87,6 +87,8 @@ class TeamMemberRepository:
         inserted = 0
         updated = 0
 
+        # Step 1: Normalize all skills (ensure they exist in skill_master and have consistent IDs)
+        normalized_skills = []
         for skill_data in skills:
             # Ensure skill exists in skill_master
             skill = (
@@ -96,35 +98,54 @@ class TeamMemberRepository:
             )
 
             if not skill:
-                # Create skill if it doesn't exist
-                # First ensure category exists
-                category = None
-                if skill_data.category:
-                    category = (
-                        self.db.query(CategoryMaster)
-                        .filter(CategoryMaster.category_name == skill_data.category)
-                        .first()
-                    )
-                    if not category:
-                        # Get next category_id
-                        max_id = self.db.query(func.max(CategoryMaster.category_id)).scalar() or 0
-                        category = CategoryMaster(
-                            category_id=max_id + 1, category_name=skill_data.category
-                        )
-                        self.db.add(category)
-                        self.db.flush()
-
-                category_id = category.category_id if category else 1  # Default category
-
-                skill = SkillMaster(
-                    skill_id=skill_data.skill_id,
-                    skill_name=skill_data.skill_name,
-                    category_id=category_id,
+                # Check if skill name exists with a different ID (case-insensitive)
+                skill_by_name = (
+                    self.db.query(SkillMaster)
+                    .filter(SkillMaster.skill_name.ilike(skill_data.skill_name))
+                    .first()
                 )
-                self.db.add(skill)
-                self.db.flush()
+                
+                if skill_by_name:
+                    # Use existing skill
+                    skill = skill_by_name
+                    # Update local skill_id to match db
+                    skill_data.skill_id = skill.skill_id
+                else:
+                    # Create skill if it doesn't exist
+                    category = None
+                    if skill_data.category:
+                        category = (
+                            self.db.query(CategoryMaster)
+                            .filter(CategoryMaster.category_name == skill_data.category)
+                            .first()
+                        )
+                        if not category:
+                            max_id = self.db.query(func.max(CategoryMaster.category_id)).scalar() or 0
+                            category = CategoryMaster(
+                                category_id=max_id + 1, category_name=skill_data.category
+                            )
+                            self.db.add(category)
+                            self.db.flush()
 
-            # Upsert team_member_skill
+                    category_id = category.category_id if category else 1
+                    skill = SkillMaster(
+                        skill_id=skill_data.skill_id,
+                        skill_name=skill_data.skill_name,
+                        category_id=category_id,
+                    )
+                    self.db.add(skill)
+                    self.db.flush()
+            
+            normalized_skills.append(skill_data)
+
+        # Step 2: De-duplicate normalized skills by ID
+        unique_skills = {}
+        for s in normalized_skills:
+            # If duplicate, could merge here, but for now take the last one
+            unique_skills[s.skill_id] = s
+
+        # Step 3: Upsert team_member_skill
+        for skill_data in unique_skills.values():
             existing_skill = (
                 self.db.query(TeamMemberSkill)
                 .filter(
@@ -193,7 +214,12 @@ class TeamMemberRepository:
         inserted = 0
         updated = 0
 
-        for alloc_data in allocations:
+        # De-duplicate allocations by project_id
+        unique_allocs = {}
+        for a in allocations:
+            unique_allocs[a.project_id] = a
+
+        for alloc_data in unique_allocs.values():
             existing = (
                 self.db.query(TeamMemberAllocation)
                 .filter(
