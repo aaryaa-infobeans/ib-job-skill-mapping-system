@@ -21,7 +21,7 @@ class MatchResult(BaseModel):
     fit_level: str
     availability_match: bool
     explanation: List[str]
-    detailed_breakdown: Optional[dict] = None
+    detailed_explanation: Optional[dict] = None
 
 
 class MatchesMetrics(BaseModel):
@@ -79,7 +79,7 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
             fit_level=result["fit_level"],
             availability_match=result["availability_match"],
             explanation=result["explanation"],
-            detailed_breakdown=result.get("detailed_breakdown"),
+            detailed_explanation=result.get("detailed_explanation"),
         )
         for result in final_results
     ]

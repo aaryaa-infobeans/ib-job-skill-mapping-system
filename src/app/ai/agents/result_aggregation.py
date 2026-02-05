@@ -131,14 +131,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             "fit_level": fit_level,
             "availability_match": candidate.get("is_available", False),
             "explanation": explanation,
-            "detailed_breakdown": {
-                "skill_score": round(candidate.get("skill_score", 0.0), 2),
-                "experience_score": round(candidate.get("experience_score", 0.0), 2),
-                "availability_score": round(candidate.get("availability_score", 0.0), 2),
-                "is_available": candidate.get("is_available", False),
-                "match_reasons": candidate.get("match_reasons", {}),
-                "llm_explanation": detailed_explanation if detailed_explanation else None,
-            }
+            "detailed_explanation": detailed_explanation if detailed_explanation else None,
         }
         
         final_results.append(result_entry)
