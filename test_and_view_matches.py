@@ -115,56 +115,21 @@ if response.status_code == 202:
                 print(f"  - ID: {detail.id}")
                 print(f"  - Payload Hash: {detail.payload_hash}")
 
-            # Get LangGraph checkpoints
-            checkpoints = db.query(LangGraphCheckpoint).filter(
-                LangGraphCheckpoint.request_id == req.request_id
+            # Step 4: Check LLM Request Logs
+            from app.db.models.models import LLMRequestLog
+            llm_logs = db.query(LLMRequestLog).filter(
+                LLMRequestLog.request_id == req.request_id
             ).all()
 
-            print(f"\n🔍 LangGraph Checkpoints: {len(checkpoints)}")
-            if checkpoints:
-                # Display checkpoint info with token tracking
-                total_tokens = 0
-                total_cost = 0.0
-                
-                for i, cp in enumerate(checkpoints, 1):
-                    print(f"\n  Checkpoint {i}: {cp.node_name}")
-                    print(f"    - ID: {cp.id}")
-                    
-                    if cp.token_count is not None:
-                        print(f"    - Token Count: {cp.token_count:,}")
-                        total_tokens += cp.token_count
-                    else:
-                        print(f"    - Token Count: None (awaiting integration)")
-                    
-                    # Show state keys
-                    if cp.state_json and isinstance(cp.state_json, dict):
-                        state_keys = list(cp.state_json.keys())
-                        print(f"    - State Keys: {state_keys}")
-                        
-                        # Display relevant metrics
-                        if "candidate_count" in cp.state_json:
-                            print(f"    - Candidates: {cp.state_json['candidate_count']}")
-                        if "total_evaluated" in cp.state_json:
-                            print(f"    - Total Evaluated: {cp.state_json['total_evaluated']}")
-                        if "total_qualified" in cp.state_json:
-                            print(f"    - Total Qualified: {cp.state_json['total_qualified']}")
-                
-                if total_tokens > 0:
-                    # Calculate cost from tokens (GPT-4: $0.03 per 1M input tokens, $0.06 per 1M output tokens)
-                    # Assuming roughly 50% input, 50% output
-                    estimated_cost = (total_tokens / 2) / 1_000_000 * 0.03 + (total_tokens / 2) / 1_000_000 * 0.06
-                    print(f"\n📊 Token & Cost Summary:")
-                    print(f"  - Total Tokens Used: {total_tokens:,}")
-                    print(f"  - Estimated Cost: ${estimated_cost:.6f} (${estimated_cost*100:.4f}¢)")
-                    print(f"  - Cost per Candidate Explanation: ${estimated_cost/2 if total_tokens > 0 else 0:.6f}")
-                    print(f"  - Model: GPT-4 (input: $0.03/1M, output: $0.06/1M)")
-                else:
-                    print(f"\n⚠️  Token Tracking Status:")
-                    print(f"  - Tokens not yet captured")
-                    print(f"  - Note: Non-LLM nodes (jd_parsing, skill_normalization, matching_scoring) don't consume tokens")
-                    print(f"  - LLM explanations are tracked in explanation_generation checkpoint")
+            if llm_logs:
+                print(f"\n📜 LLM Request Logs: {len(llm_logs)}")
+                for log in llm_logs:
+                    print(f"  - Agent: {log.agent_name}")
+                    print(f"    Prompt: {log.prompt_name}")
+                    print(f"    Tokens: {log.total_tokens} (P: {log.prompt_tokens}, C: {log.completion_tokens})")
+                    print(f"    Cost: ${log.cost_usd:.6f}")
             else:
-                print("  (No checkpoints found - processing may not have started yet)")
+                print("\n📜 LLM Request Logs: None found in llm_request_log table")
         else:
             print("❌ Requisition not found in database")
     finally:
