@@ -35,7 +35,7 @@ class RequisitionRepository:
         req = RequisitionRequestModel(
             request_id=request_data.request_id,
             auth_client_id=auth_client_id,
-            status=1,  # RECEIVED status
+            status=100,  # RECEIVED status (from requisition_status_master)
             client_name=request_data.client_name or request_data.job_description.client_name,
             correlation_id=correlation_id,
             received_at=datetime.utcnow(),

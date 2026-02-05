@@ -1,0 +1,97 @@
+{
+  "test_date": "2026-02-05T13:32:20.647212",
+  "base_url": "http://localhost:8001",
+  "results": [
+    {
+      "test": "Health Check",
+      "endpoint": "GET /health",
+      "status_code": 200,
+      "result": "PASS",
+      "response": {
+        "status": "healthy",
+        "checks": {
+          "database": "healthy"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-02-05T13:32:00.861435"
+    },
+    {
+      "test": "Metrics",
+      "endpoint": "GET /api/v1/metrics",
+      "status_code": 200,
+      "result": "PASS",
+      "response": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{endpoint=\"/health\",method=\"GET\",status_code=\"200\"} 1.0\n# HELP http_requests_created Total HTTP req",
+      "error": null,
+      "timestamp": "2026-02-05T13:32:02.913848"
+    },
+    {
+      "test": "Bulk Upsert (No Auth)",
+      "endpoint": "POST /api/v1/team-members/skill-availability/bulk-upsert",
+      "status_code": 500,
+      "result": "UNEXPECTED",
+      "response": "Internal Server Error",
+      "error": null,
+      "timestamp": "2026-02-05T13:32:05.103174"
+    },
+    {
+      "test": "Requisition Request (No Auth)",
+      "endpoint": "POST /api/v1/jd-skill-mapping/",
+      "status_code": 202,
+      "result": "UNEXPECTED",
+      "response": "{\"correlation_id\":\"CORR-20260205133207-REQ-TEST\",\"status\":\"QUEUED_FOR_PROCESSING\",\"received_at\":\"2026-02-05T13:32:07.179309\"}",
+      "error": null,
+      "timestamp": "2026-02-05T13:32:07.199137"
+    },
+    {
+      "test": "Get Matches (No Auth)",
+      "endpoint": "GET /api/v1/jd-skill-mapping/{correlation_id}/matches",
+      "status_code": 404,
+      "result": "UNEXPECTED",
+      "response": "{\"detail\":\"Requisition not found\"}",
+      "error": null,
+      "timestamp": "2026-02-05T13:32:09.272387"
+    },
+    {
+      "test": "Bulk Upsert (With Auth)",
+      "endpoint": "POST /api/v1/team-members/skill-availability/bulk-upsert",
+      "status_code": 500,
+      "result": "FAIL",
+      "response": "Internal Server Error",
+      "error": null,
+      "timestamp": "2026-02-05T13:32:11.476517"
+    },
+    {
+      "test": "Requisition Request (With Auth)",
+      "endpoint": "POST /api/v1/jd-skill-mapping/",
+      "status_code": 202,
+      "result": "PASS",
+      "response": {
+        "correlation_id": "CORR-20260205133213-REQ-TEST",
+        "status": "QUEUED_FOR_PROCESSING",
+        "received_at": "2026-02-05T13:32:13.546938"
+      },
+      "error": null,
+      "timestamp": "2026-02-05T13:32:13.568247"
+    },
+    {
+      "test": "Get Matches (With Auth)",
+      "endpoint": "GET /api/v1/jd-skill-mapping/{correlation_id}/matches",
+      "status_code": 200,
+      "result": "PASS",
+      "response": {
+        "correlation_id": "CORR-20260205133213-REQ-TEST",
+        "status": "PROCESSING",
+        "total_matches": 0,
+        "matches": []
+      },
+      "error": null,
+      "timestamp": "2026-02-05T13:32:20.641786"
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 4,
+    "failed": 1
+  }
+}

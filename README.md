@@ -77,7 +77,7 @@ alembic upgrade head
 
 ```bash
 # Start API server with hot-reload
-uvicorn src.main:app --reload
+uvicorn src.main:app --reload  --host 0.0.0.0 --port 8001
 ```
 
 The API is now running at:
