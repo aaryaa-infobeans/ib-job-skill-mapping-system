@@ -190,16 +190,24 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         logger.warning("No parsed_jd found in state")
         return state
     
-    # Load FIT_SCORE_THRESHOLD - only explain qualified candidates (COST OPTIMIZATION)
+    # Load thresholds and limits
     fit_score_threshold = float(os.getenv("FIT_SCORE_THRESHOLD", "0.5"))
+    max_llm_explanations = int(os.getenv("MAX_LLM_EXPLANATIONS", "5"))
     
     # Count totals for logging
     total_candidates = len(candidate_scores)
-    qualified_count = sum(1 for c in candidate_scores if c.get("final_score", 0) >= fit_score_threshold)
+    qualified_candidates = [c for c in candidate_scores if c.get("final_score", 0) >= fit_score_threshold]
+    qualified_count = len(qualified_candidates)
+    
+    # Sort qualified candidates by score descending to ensure we pick the top ones
+    qualified_candidates.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+    
+    llm_target_count = min(qualified_count, max_llm_explanations)
     
     logger.info(
-        f"Explanation generation: generating LLM explanations for {qualified_count}/{total_candidates} "
-        f"qualified candidates (threshold: {fit_score_threshold:.2f}) - COST OPTIMIZATION"
+        f"Explanation generation: Found {qualified_count}/{total_candidates} qualified candidates. "
+        f"Generating LLM explanations for TOP {llm_target_count} (limit: {max_llm_explanations}) "
+        "and template explanations for the rest - COST & PERFORMANCE OPTIMIZATION"
     )
     
     # Track tokens for this node
@@ -207,44 +215,56 @@ def explanation_generation_node(state: GraphState) -> GraphState:
     total_cost = 0.0
     explanations_generated = 0
     explanations_failed = 0
+    templates_used = 0
     
-    # Generate explanations for ONLY qualified candidates (COST OPTIMIZATION)
-    for candidate in candidate_scores:
-        # Skip candidates below threshold - no need to explain them
-        if candidate.get("final_score", 0) < fit_score_threshold:
-            logger.debug(
-                f"Skipping explanation for {candidate.get('team_member_id')} "
-                f"(score: {candidate.get('final_score', 0):.2f} < {fit_score_threshold:.2f})"
-            )
-            continue
-        
+    # Process all candidates
+    for i, candidate in enumerate(candidate_scores):
         team_member_id = candidate.get("team_member_id")
         final_score = candidate.get("final_score", 0.0)
+        
+        # 1. Skip candidates below threshold
+        if final_score < fit_score_threshold:
+            logger.debug(
+                f"Skipping explanation for {team_member_id} "
+                f"(score: {final_score:.2f} < {fit_score_threshold:.2f})"
+            )
+            continue
+            
         fit_level = "HIGH" if final_score >= 0.75 else "MEDIUM" if final_score >= 0.5 else "LOW"
         
-        # Generate LLM explanation
-        llm_result = _generate_llm_explanation(
-            team_member_id=team_member_id,
-            final_score=final_score,
-            fit_level=fit_level,
-            parsed_jd=parsed_jd,
-            candidate_data=candidate,
-        )
+        # 2. Check if this candidate is in the top N for LLM explanation
+        # Note: qualified_candidates is sorted, so we can check if this candidate is one of the top N
+        is_top_candidate = any(c.get("team_member_id") == team_member_id for c in qualified_candidates[:max_llm_explanations])
         
-        if llm_result:
-            # Add explanation to candidate
-            candidate["detailed_explanation"] = llm_result["explanation_data"]
-            candidate["explanation_tokens"] = llm_result["token_count"]
-            candidate["explanation_cost_usd"] = llm_result["cost_usd"]
+        if is_top_candidate:
+            # Generate LLM explanation
+            llm_result = _generate_llm_explanation(
+                team_member_id=team_member_id,
+                final_score=final_score,
+                fit_level=fit_level,
+                parsed_jd=parsed_jd,
+                candidate_data=candidate,
+            )
             
-            total_tokens += llm_result["token_count"]
-            total_cost += llm_result["cost_usd"]
-            explanations_generated += 1
+            if llm_result:
+                # Add explanation to candidate
+                candidate["detailed_explanation"] = llm_result["explanation_data"]
+                candidate["explanation_tokens"] = llm_result["token_count"]
+                candidate["explanation_cost_usd"] = llm_result["cost_usd"]
+                
+                total_tokens += llm_result["token_count"]
+                total_cost += llm_result["cost_usd"]
+                explanations_generated += 1
+            else:
+                # Fallback to template-based explanation on LLM failure
+                logger.warning(f"LLM failed for {team_member_id}, using template-based explanation")
+                candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
+                explanations_failed += 1
         else:
-            # Fallback to template-based explanation
-            logger.warning(f"LLM failed for {team_member_id}, using template-based explanation")
+            # 3. Use template-based explanation for qualified but non-top candidates
+            logger.debug(f"Using template explanation for {team_member_id} (outside top {max_llm_explanations})")
             candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
-            explanations_failed += 1
+            templates_used += 1
     
     # Store node metrics in state for tracking
     if not state.get("token_metrics"):
@@ -255,7 +275,9 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         "completion_tokens": total_tokens // 2,
         "total_tokens": total_tokens,
         "cost_usd": total_cost,
-        "model": "gpt-4"
+        "model": "gpt-4",
+        "llm_explanations": explanations_generated,
+        "template_explanations": templates_used + explanations_failed
     }
     
     # Update cumulative tracking
@@ -264,9 +286,10 @@ def explanation_generation_node(state: GraphState) -> GraphState:
     
     logger.info(
         f"Explanation_Generation_Agent completed: "
-        f"generated LLM explanations for {explanations_generated} candidates, "
-        f"{explanations_failed} failed (using templates), "
-        f"tokens: {total_tokens:,}, cost: ${total_cost:.4f}"
+        f"LLM explanations: {explanations_generated}, "
+        f"Template explanations: {templates_used}, "
+        f"LLM failures: {explanations_failed}, "
+        f"Total tokens: {total_tokens:,}, Cost: ${total_cost:.4f}"
     )
     
     return state

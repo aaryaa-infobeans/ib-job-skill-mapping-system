@@ -11,7 +11,7 @@ Usage:
     display.print_all_checkpoints()
     
     # Display single checkpoint
-    display.print_checkpoint("jd_parsing")
+    display.print_checkpoint("requisition_parsing")
     
     # Get formatted output
     output = display.format_checkpoints()
@@ -193,7 +193,7 @@ class CheckpointDisplay:
         """
         # Map checkpoint names to relevant state keys
         checkpoint_keys = {
-            "jd_parsing": ["parsed_jd", "correlation_id"],
+            "requisition_parsing": ["parsed_jd", "correlation_id"],
             "skill_normalization": ["normalized_skills", "correlation_id"],
             "matching_scoring": ["scored_candidates", "correlation_id", "candidate_count"],
             "explanation_generation": ["explanations", "correlation_id", "candidate_count"],
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     # Simulate checkpoint data
     checkpoints_data = [
         {
-            "segment": "jd_parsing",
+            "segment": "requisition_parsing",
             "prompt_tokens": 150,
             "completion_tokens": 220,
             "cost_usd": 0.00156,

@@ -49,18 +49,18 @@ def execute_graph_with_audit(
     # Get token metrics from state if available
     token_metrics = final_state.get("token_metrics", {})
     
-    # Checkpoint 1: JD Parsing
+    # Checkpoint 1: Requisition Parsing
     if final_state.get("parsed_jd"):
-        jd_parsing_tokens = token_metrics.get("jd_parsing", {}).get("total_tokens")
+        req_parsing_tokens = token_metrics.get("requisition_parsing", {}).get("total_tokens")
         save_checkpoint(
             db=db,
             request_id=request_id,
-            node_name="jd_parsing",
+            node_name="requisition_parsing",
             state={
                 "parsed_jd": final_state.get("parsed_jd"),
                 "correlation_id": correlation_id,
             },
-            token_count=jd_parsing_tokens,
+            token_count=req_parsing_tokens,
         )
     
     # Checkpoint 2: Skill Normalization

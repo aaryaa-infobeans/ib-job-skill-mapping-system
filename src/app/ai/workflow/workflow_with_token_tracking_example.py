@@ -32,9 +32,9 @@ class WorkflowWithTokenTracking:
         self.llm_client = llm_client
         self.logger = logger or logging.getLogger(__name__)
     
-    async def checkpoint_1_jd_parsing(self, state: ExtendedAgentState) -> ExtendedAgentState:
+    async def checkpoint_1_requisition_parsing(self, state: ExtendedAgentState) -> ExtendedAgentState:
         """
-        Checkpoint 1: Parse requisition JD using LLM.
+        Checkpoint 1: Parse requisition using LLM.
         
         Token tracking:
         - Records LLM call tokens
@@ -42,15 +42,15 @@ class WorkflowWithTokenTracking:
         - Calculates cost for this checkpoint
         """
         self.logger.info("=" * 80)
-        self.logger.info("CHECKPOINT 1: JD Parsing")
+        self.logger.info("CHECKPOINT 1: Requisition Parsing")
         self.logger.info("=" * 80)
         
         # Mark entry into checkpoint
-        state.enter_checkpoint("jd_parsing")
+        state.enter_checkpoint("requisition_parsing")
         state.log_checkpoint_entry(self.logger)
         
         try:
-            # Parse JD using LLM
+            # Parse requisition using LLM
             response = self.llm_client.chat.completions.create(
                 model="gpt-4",
                 messages=[
@@ -69,7 +69,7 @@ class WorkflowWithTokenTracking:
             
             # Record tokens for this LLM call
             state.record_tokens(
-                segment="jd_parsing",
+                segment="requisition_parsing",
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
                 model=response.model
@@ -79,16 +79,16 @@ class WorkflowWithTokenTracking:
             state.parsed_jd = response.choices[0].message.content
             state.status = "parsing_complete"
             
-            self.logger.info("✓ JD parsing complete")
+            self.logger.info("✓ Requisition parsing complete")
             
         except Exception as e:
-            self.logger.error(f"✗ JD parsing failed: {str(e)}")
-            state.mark_error(f"JD parsing error: {str(e)}")
+            self.logger.error(f"✗ Requisition parsing failed: {str(e)}")
+            state.mark_error(f"Requisition parsing error: {str(e)}")
             raise
         
         finally:
             # Mark exit from checkpoint
-            state.exit_checkpoint("jd_parsing")
+            state.exit_checkpoint("requisition_parsing")
             state.log_checkpoint_exit(self.logger)
         
         return state
@@ -422,7 +422,7 @@ if __name__ == "__main__":
         
         try:
             # Run through checkpoints
-            state = await workflow.checkpoint_1_jd_parsing(state)
+            state = await workflow.checkpoint_1_requisition_parsing(state)
             state = await workflow.checkpoint_2_skill_normalization(state)
             state = await workflow.checkpoint_3_matching_scoring(state, candidates[:50])
             state = await workflow.checkpoint_4_explanation_generation(state)

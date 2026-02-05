@@ -86,7 +86,7 @@ class Settings(BaseSettings):
         if not db_url:
             db_url = self.database_url or os.getenv(
                 "DATABASE_URL",
-                "postgresql://user:password@localhost:5433/ib_job_skill_mapping"
+                "postgresql+psycopg2://user:password@localhost:5433/ib_job_skill_mapping"
             )
         
         return db_url

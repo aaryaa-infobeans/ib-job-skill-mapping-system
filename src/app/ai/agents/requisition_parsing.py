@@ -1,4 +1,4 @@
-"""Job description parsing agent."""
+"""Requisition parsing agent."""
 
 import json
 import logging
@@ -9,10 +9,10 @@ from app.ai.state import GraphState
 
 logger = logging.getLogger(__name__)
 
-# System prompt for JD parsing
-JD_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job descriptions.
+# System prompt for requisition parsing
+REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
 
-Your task is to parse job description information and return a structured JSON object.
+Your task is to parse requisition/job description information and return a structured JSON object.
 
 Given:
 - Job title and role
@@ -49,23 +49,23 @@ Important:
 """
 
 
-def parse_jd_with_llm(
+def parse_requisition_with_llm(
     job_description: dict,
     max_retries: int = 2
 ) -> Optional[dict]:
-    """Parse job description using LLM.
+    """Parse requisition using LLM.
     
     Args:
         job_description: Job description dict from requisition_input
         max_retries: Maximum number of retry attempts
     
     Returns:
-        Parsed JD dict or None on failure
+        Parsed requisition dict or None on failure
     """
     # For stub implementation without LLM dependency, return structured data
     # In production, this would call OpenAI API
     
-    logger.info("Parsing JD (stub implementation - would call LLM in production)")
+    logger.info("Parsing requisition (stub implementation - would call LLM in production)")
     
     # Extract input data
     title = job_description.get("title", "")
@@ -92,24 +92,24 @@ def parse_jd_with_llm(
         "requisition_duration_month": requisition_duration_month,
     }
     
-    logger.info(f"Parsed JD: {parsed_jd['normalized_title']} - "
+    logger.info(f"Parsed requisition: {parsed_jd['normalized_title']} - "
                 f"{len(parsed_jd['extracted_mandatory_skills'])} mandatory, "
                 f"{len(parsed_jd['extracted_preferred_skills'])} preferred skills")
     
     return parsed_jd
 
 
-def jd_parsing_node(state: GraphState) -> GraphState:
-    """Parse job description and extract structured information.
+def requisition_parsing_node(state: GraphState) -> GraphState:
+    """Parse requisition and extract structured information.
     
     This node:
-    1. Extracts job description from requisition_input
+    1. Extracts job description / requisition data from requisition_input
     2. Calls LLM to parse and structure the information
     3. Validates the output against ParsedJD schema
     4. Populates state.parsed_jd on success
     5. Sets state.error_message on failure after retries
     """
-    logger.info("Executing JD_Parsing_Agent node")
+    logger.info("Executing Requisition_Parsing_Agent node")
     logger.info(f"Processing request_id: {state['requisition_input']['request_id']}")
     
     requisition_input = state.get("requisition_input")
@@ -133,18 +133,18 @@ def jd_parsing_node(state: GraphState) -> GraphState:
             return state
     
     try:
-        # Parse JD using LLM
-        parsed_jd = parse_jd_with_llm(job_description)
+        # Parse requisition using LLM
+        parsed_jd = parse_requisition_with_llm(job_description)
         
         if parsed_jd:
             state["parsed_jd"] = parsed_jd
-            logger.info("JD_Parsing_Agent completed successfully")
+            logger.info("Requisition_Parsing_Agent completed successfully")
         else:
-            logger.error("Failed to parse JD after retries")
-            state["error_message"] = "JD parsing failed after retries"
+            logger.error("Failed to parse requisition after retries")
+            state["error_message"] = "Requisition parsing failed after retries"
     
     except Exception as e:
-        logger.error(f"Error in jd_parsing_node: {str(e)}", exc_info=True)
-        state["error_message"] = f"JD parsing error: {str(e)}"
+        logger.error(f"Error in requisition_parsing_node: {str(e)}", exc_info=True)
+        state["error_message"] = f"Requisition parsing error: {str(e)}"
     
     return state

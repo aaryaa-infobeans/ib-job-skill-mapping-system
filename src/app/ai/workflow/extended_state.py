@@ -13,7 +13,7 @@ Usage:
     
     # In each node:
     state.token_tracker.record_tokens(
-        segment="jd_parsing",
+        segment="requisition_parsing",
         prompt_tokens=150,
         completion_tokens=220,
         model="gpt-4"
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     
     # Simulate workflow
     checkpoints = [
-        "jd_parsing",
+        "requisition_parsing",
         "skill_normalization",
         "matching_scoring",
         "explanation_generation",

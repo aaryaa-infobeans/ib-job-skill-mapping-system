@@ -6,19 +6,19 @@ Provides token accounting, cost aggregation, and observability across all LLM ca
 
 Usage:
     tracker = TokenTracker(openai_config)
-    tracker.start_segment("jd_parsing")
+    tracker.start_segment("requisition_parsing")
     
     # Make LLM call
     response = llm_client.chat.completions.create(...)
     
     tracker.record_tokens(
-        segment="jd_parsing",
+        segment="requisition_parsing",
         prompt_tokens=response.usage.prompt_tokens,
         completion_tokens=response.usage.completion_tokens,
         model=response.model
     )
     
-    checkpoint = tracker.get_checkpoint_summary("jd_parsing")
+    checkpoint = tracker.get_checkpoint_summary("requisition_parsing")
     # Returns: {
     #     "segment": "jd_parsing",
     #     "prompt_tokens": 150,
