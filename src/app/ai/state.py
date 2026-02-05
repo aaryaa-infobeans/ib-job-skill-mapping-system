@@ -34,6 +34,8 @@ class NormalizedSkills(TypedDict):
 
     mandatory_skill_ids: List[str]  # Mapped to skill_master
     preferred_skill_ids: List[str]  # Mapped to skill_master
+    mandatory_enriched: Optional[Dict[str, List[str]]]  # core_skill -> [terms]
+    preferred_enriched: Optional[Dict[str, List[str]]]  # core_skill -> [terms]
 
 
 class CandidateScores(TypedDict):

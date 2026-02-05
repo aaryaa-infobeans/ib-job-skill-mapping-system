@@ -261,3 +261,13 @@ class LLMRequestLog(Base):
     total_tokens = Column(Integer, nullable=False)
     cost_usd = Column(Numeric(precision=10, scale=6), nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SkillOntology(Base):
+    """Enriched skill ontology for expansion and normalization."""
+
+    __tablename__ = "skill_ontology"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    core_skill = Column(String(255), nullable=False, unique=True)
+    enriched_terms = Column(postgresql.ARRAY(String(255)), nullable=True)
