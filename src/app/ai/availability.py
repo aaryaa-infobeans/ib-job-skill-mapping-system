@@ -133,7 +133,7 @@ def evaluate_availability(
     
     return {
         "is_available": is_available,
-        "available_capacity": available_capacity,
-        "total_allocation": total_allocation,
+        "available_capacity": round(available_capacity, 2),
+        "total_allocation": round(total_allocation, 2),
         "requisition_window": (start_date, end_date),
     }
