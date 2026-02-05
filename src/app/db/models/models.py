@@ -16,7 +16,10 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    text,
 )
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -237,3 +240,24 @@ class LangGraphCheckpoint(Base):
 
     # Relationships
     request = relationship("RequisitionRequest", back_populates="checkpoints")
+
+
+class LLMRequestLog(Base):
+    """Log of all LLM requests for auditing and cost tracking."""
+
+    __tablename__ = "llm_request_log"
+
+    id = Column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+        server_default=sa.text("gen_random_uuid()"),
+    )
+    request_id = Column(String(64), nullable=True)
+    agent_name = Column(String(255), nullable=False)
+    prompt_name = Column(String(255), nullable=False)
+    model = Column(String(255), nullable=False)
+    prompt_tokens = Column(Integer, nullable=False)
+    completion_tokens = Column(Integer, nullable=False)
+    total_tokens = Column(Integer, nullable=False)
+    cost_usd = Column(Numeric(precision=10, scale=6), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

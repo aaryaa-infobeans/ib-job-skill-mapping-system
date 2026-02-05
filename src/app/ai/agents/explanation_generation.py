@@ -150,6 +150,9 @@ def _generate_llm_explanation(
         return {
             "explanation_data": explanation_data,
             "token_count": token_count,
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "model": "gpt-4",
             "cost_usd": cost,
         }
         
@@ -255,6 +258,20 @@ def explanation_generation_node(state: GraphState) -> GraphState:
                 total_tokens += llm_result["token_count"]
                 total_cost += llm_result["cost_usd"]
                 explanations_generated += 1
+                
+                # Append to LLM logs for database persistence
+                if "llm_call_logs" not in state or state["llm_call_logs"] is None:
+                    state["llm_call_logs"] = []
+                
+                state["llm_call_logs"].append({
+                    "agent_name": "explanation_generation",
+                    "prompt_name": "detailed_candidate_explanation",
+                    "model": llm_result["model"],
+                    "prompt_tokens": llm_result["prompt_tokens"],
+                    "completion_tokens": llm_result["completion_tokens"],
+                    "total_tokens": llm_result["token_count"],
+                    "cost_usd": llm_result["cost_usd"]
+                })
             else:
                 # Fallback to template-based explanation on LLM failure
                 logger.warning(f"LLM failed for {team_member_id}, using template-based explanation")

@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.db.models.models import LangGraphCheckpoint
+from app.db.models.models import LangGraphCheckpoint, LLMRequestLog
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +117,63 @@ def calculate_total_tokens(db: Session, request_id: str) -> int:
     """
     checkpoints = get_checkpoints_for_request(db, request_id)
     return sum(cp.token_count or 0 for cp in checkpoints)
+
+
+def save_llm_request_log(
+    db: Session,
+    request_id: str,
+    agent_name: str,
+    prompt_name: str,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cost_usd: float,
+) -> None:
+    """Log an LLM request to the database for auditing and cost tracking.
+    
+    Args:
+        db: Database session
+        request_id: The originating request ID
+        agent_name: Name of the agent making the request
+        prompt_name: Name/type of the prompt being used
+        model: LLM model name
+        prompt_tokens: Number of prompt tokens
+        completion_tokens: Number of completion tokens
+        cost_usd: Computed cost in USD
+    """
+    try:
+        log_entry = LLMRequestLog(
+            request_id=request_id,
+            agent_name=agent_name,
+            prompt_name=prompt_name,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            cost_usd=cost_usd,
+            created_at=datetime.utcnow(),
+        )
+        db.add(log_entry)
+        db.commit()
+        
+        logger.info(
+            "Logged LLM request",
+            extra={
+                "request_id": request_id,
+                "agent_name": agent_name,
+                "model": model,
+                "total_tokens": prompt_tokens + completion_tokens,
+                "cost_usd": cost_usd,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to log LLM request",
+            extra={
+                "request_id": request_id,
+                "agent_name": agent_name,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+        db.rollback()

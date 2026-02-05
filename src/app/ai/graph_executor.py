@@ -136,6 +136,22 @@ def execute_graph_with_audit(
             token_count=None,
         )
     
+    # Save individual LLM request logs
+    llm_logs = final_state.get("llm_call_logs")
+    if llm_logs:
+        from app.ai.audit import save_llm_request_log
+        for log in llm_logs:
+            save_llm_request_log(
+                db=db,
+                request_id=request_id,
+                agent_name=log.get("agent_name"),
+                prompt_name=log.get("prompt_name"),
+                model=log.get("model"),
+                prompt_tokens=log.get("prompt_tokens"),
+                completion_tokens=log.get("completion_tokens"),
+                cost_usd=log.get("cost_usd"),
+            )
+    
     # Log final token summary
     cumulative_tokens = final_state.get("cumulative_tokens", 0)
     cumulative_cost = final_state.get("cumulative_cost_usd", 0.0)

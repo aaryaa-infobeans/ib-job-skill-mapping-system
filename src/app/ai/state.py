@@ -68,6 +68,18 @@ class TokenMetrics(TypedDict):
     model: str
 
 
+class LLMCallLog(TypedDict):
+    """Record of a single LLM call for database logging."""
+
+    agent_name: str
+    prompt_name: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost_usd: float
+
+
 class GraphState(TypedDict):
     """Complete state object passed through the LangGraph execution."""
 
@@ -92,6 +104,7 @@ class GraphState(TypedDict):
     
     # Token tracking (optional, for LLM observability)
     token_metrics: Optional[Dict[str, TokenMetrics]]
+    llm_call_logs: Optional[List[LLMCallLog]]  # Individual LLM calls
     cumulative_tokens: Optional[int]
     cumulative_cost_usd: Optional[float]
 
