@@ -56,54 +56,62 @@ class OAuth2Middleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """Validate OAuth2 token for incoming requests."""
         
-        # Skip authentication for exempt paths
-        if any(request.url.path.startswith(path) for path in self.EXEMPT_PATHS):
-            return await call_next(request)
-        
-        # Extract authorization header
-        auth_header = request.headers.get("Authorization")
-        
-        if not auth_header:
-            logger.warning(
-                "Missing Authorization header",
-                extra={"path": request.url.path, "method": request.method}
-            )
-            return self._unauthorized_response("Missing Authorization header")
-        
-        # Validate Bearer token format
-        if not auth_header.startswith("Bearer "):
-            logger.warning(
-                "Invalid Authorization header format",
-                extra={"path": request.url.path}
-            )
-            return self._unauthorized_response("Invalid Authorization header format")
-        
-        token = auth_header[7:]  # Remove "Bearer " prefix
-        
-        # Validate JWT token
         try:
-            payload = self._validate_token(token)
+            # Skip authentication for exempt paths
+            if any(request.url.path.startswith(path) for path in self.EXEMPT_PATHS):
+                logger.debug(f"Exempt path: {request.url.path}")
+                return await call_next(request)
             
-            # Add decoded token info to request state for downstream use
-            request.state.token_payload = payload
-            request.state.client_id = payload.get("client_id") or payload.get("sub")
+            logger.info(f"Authenticating request to: {request.url.path}")
             
-            logger.debug(
-                "Token validated successfully",
-                extra={
-                    "client_id": request.state.client_id,
-                    "path": request.url.path,
-                }
-            )
+            # Extract authorization header
+            auth_header = request.headers.get("Authorization")
             
-        except HTTPException as e:
-            logger.warning(
-                f"Token validation failed: {e.detail}",
-                extra={"path": request.url.path}
-            )
-            return self._unauthorized_response(e.detail)
-        
-        return await call_next(request)
+            if not auth_header:
+                logger.warning(
+                    "Missing Authorization header",
+                    extra={"path": request.url.path, "method": request.method}
+                )
+                return self._unauthorized_response("Missing Authorization header")
+            
+            # Validate Bearer token format
+            if not auth_header.startswith("Bearer "):
+                logger.warning(
+                    "Invalid Authorization header format",
+                    extra={"path": request.url.path}
+                )
+                return self._unauthorized_response("Invalid Authorization header format")
+            
+            token = auth_header[7:]  # Remove "Bearer " prefix
+            
+            # Validate JWT token
+            try:
+                payload = self._validate_token(token)
+                
+                # Add decoded token info to request state for downstream use
+                request.state.token_payload = payload
+                request.state.client_id = payload.get("client_id") or payload.get("sub")
+                
+                logger.debug(
+                    "Token validated successfully",
+                    extra={
+                        "client_id": request.state.client_id,
+                        "path": request.url.path,
+                    }
+                )
+                
+            except HTTPException as e:
+                logger.warning(
+                    f"Token validation failed: {e.detail}",
+                    extra={"path": request.url.path}
+                )
+                return self._unauthorized_response(e.detail)
+            
+            return await call_next(request)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in auth middleware: {e}", exc_info=True)
+            raise
     
     def _validate_token(self, token: str) -> dict:
         """
@@ -116,25 +124,17 @@ class OAuth2Middleware(BaseHTTPMiddleware):
             dict: Decoded token payload
             
         Raises:
-            HTTPException: If token is invalid
+            HTTPException: If token is invalid or secret key not configured
         """
         if not self.secret_key:
-            # If no secret key configured, skip signature validation
-            # (useful for development/testing with external OAuth provider)
-            try:
-                # Decode without verification - still validates structure
-                payload = jwt.decode(
-                    token,
-                    key="",  # Empty key for no verification
-                    options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
-                )
-                logger.debug("Token decoded without signature verification (dev mode)")
-                return payload
-            except JWTError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Invalid token format: {str(e)}",
-                )
+            logger.error(
+                "JWT secret key not configured - authentication cannot be validated",
+                extra={"recommendation": "Set JWT_SECRET_KEY environment variable"}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication service not properly configured",
+            )
         
         # Validate with signature
         try:
@@ -151,8 +151,21 @@ class OAuth2Middleware(BaseHTTPMiddleware):
                     detail="Token missing required claims (sub or client_id)",
                 )
             
+            # Validate expiration if present
+            # jwt.decode already handles 'exp' validation by default
+            
             return payload
             
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+            )
+        except jwt.JWTClaimsError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Token claims invalid: {str(e)}",
+            )
         except JWTError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

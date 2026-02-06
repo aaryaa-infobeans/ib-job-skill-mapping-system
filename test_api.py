@@ -484,12 +484,11 @@ def main():
     # Phase 2: Test with authentication
     tester.print_header("Testing with Authentication")
     
-    # Generate a simple test token (for dev mode)
-    # In production, this should be obtained from OAuth flow
+    # Generate a test token with the same secret key as the server
     import jwt
     test_token = jwt.encode(
-        {"sub": "test-client", "scopes": ["read", "write"]},
-        "dev-secret-key",
+        {"sub": "test-client", "client_id": "test-client", "scopes": ["read", "write"]},
+        "test-secret-key-for-development-only-change-in-production",
         algorithm="HS256"
     )
     
