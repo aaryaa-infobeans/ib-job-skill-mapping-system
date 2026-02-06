@@ -77,7 +77,7 @@ class CandidateAvailabilityResponse(BaseModel):
 
 # --- DB Access and Availability Engine ---
 from sqlalchemy.orm import Session
-from src.app.db.models.models import TeamMember, TeamMemberAllocation
+from app.db.models.models import TeamMember, TeamMemberAllocation
 from uuid import uuid4
 from typing import List
 from dateutil.relativedelta import relativedelta

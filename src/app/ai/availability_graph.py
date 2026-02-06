@@ -1,10 +1,10 @@
-from src.app.ai.agents.candidate_availability import (
+from app.ai.agents.candidate_availability import (
     CandidateAvailabilityRequest,
     evaluate_availability,
     CandidateAvailabilityResponse,
 )
-from src.app.db.session import get_db
-from langgraph.graph import StateGraph
+from app.db.session import get_db
+from langgraph.graph import StateGraph, START, END
 from typing import Dict, Any
 from fastapi import Depends
 
@@ -34,16 +34,16 @@ async def finalize_node(state: Dict[str, Any]) -> CandidateAvailabilityResponse:
 # Graph construction
 
 def create_availability_graph():
-    graph = StateGraph()
+    graph = StateGraph(Dict[str, Any])
     graph.add_node("prepare", prepare_node)
     graph.add_node("query_db", query_db_node)
     graph.add_node("decide", decide_node)
     graph.add_node("finalize", finalize_node)
-    graph.set_entry("prepare")
+    graph.add_edge(START, "prepare")
     graph.add_edge("prepare", "query_db")
     graph.add_edge("query_db", "decide")
     graph.add_edge("decide", "finalize")
-    graph.set_exit("finalize")
+    graph.add_edge("finalize", END)
     return graph
 
 # Singleton instance (compile once)

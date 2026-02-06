@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from src.app.ai.agents.candidate_availability import CandidateAvailabilityRequest
+from app.ai.agents.candidate_availability import CandidateAvailabilityRequest
 from datetime import date
 
 def test_single_team_member_id():
@@ -84,8 +84,8 @@ def test_invalid_expected_start_date():
 
 
 # --- PR#2: DB Access and Availability Engine Tests ---
-from src.app.ai.agents.candidate_availability import evaluate_availability, CandidateAvailabilityResult
-from src.app.db.models.models import TeamMember, TeamMemberAllocation
+from app.ai.agents.candidate_availability import evaluate_availability, CandidateAvailabilityResult
+from app.db.models.models import TeamMember, TeamMemberAllocation
 
 class DummyDB:
     def __init__(self, members, allocations):

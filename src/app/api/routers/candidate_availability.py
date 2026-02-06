@@ -1,9 +1,9 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from src.app.db.session import get_db
-from src.app.ai.availability_graph import availability_graph
-from src.app.ai.agents.candidate_availability import CandidateAvailabilityRequest, CandidateAvailabilityResponse
+from app.db.session import get_db
+from app.ai.availability_graph import availability_graph
+from app.ai.agents.candidate_availability import CandidateAvailabilityRequest, CandidateAvailabilityResponse
 from uuid import uuid4
 
 router = APIRouter(prefix="/agents", tags=["candidate-availability"])

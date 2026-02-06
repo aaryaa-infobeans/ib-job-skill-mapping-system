@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from tabulate import tabulate
 
-from src.app.ai.workflow.extended_state import ExtendedAgentState
+from app.ai.workflow.extended_state import ExtendedAgentState
 
 
 class CheckpointDisplay:
@@ -221,7 +221,7 @@ def display_checkpoints(state: ExtendedAgentState, logger: Optional[logging.Logg
 # Example usage and testing
 if __name__ == "__main__":
     import logging
-    from src.app.ai.workflow.extended_state import ExtendedAgentState, TokenMetadata
+    from app.ai.workflow.extended_state import ExtendedAgentState, TokenMetadata
     from datetime import datetime, timedelta
     
     logging.basicConfig(level=logging.INFO)

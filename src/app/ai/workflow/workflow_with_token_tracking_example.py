@@ -12,8 +12,8 @@ from typing import Optional
 from datetime import datetime
 from openai import OpenAI
 
-from src.app.ai.workflow.extended_state import ExtendedAgentState
-from src.app.ai.workflow.checkpoint_display import CheckpointDisplay
+from app.ai.workflow.extended_state import ExtendedAgentState
+from app.ai.workflow.checkpoint_display import CheckpointDisplay
 
 
 class WorkflowWithTokenTracking:
