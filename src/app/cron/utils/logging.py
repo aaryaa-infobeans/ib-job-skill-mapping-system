@@ -5,7 +5,7 @@ existing logging configuration from src.app.logging_config.
 """
 
 from datetime import datetime
-from src.app.logging_config import (
+from app.logging_config import (
     configure_logging,
     set_correlation_id,
     get_correlation_id
