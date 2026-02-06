@@ -475,6 +475,73 @@ Content-Type: application/json
 }
 ```
 
+### Candidate Availability Agent API
+
+#### Endpoint
+
+- **POST** `/api/v1/agents/candidate-availability`
+
+#### Description
+Checks the availability of one or more team members for a requisition window, applying all business rules and returning a deterministic, structured response.
+
+#### Sample Request Payloads
+
+##### Single Member
+```json
+{
+  "requisition_duration_month": 3,
+  "expected_start_date": "2026-02-15",
+  "team_member_id": "EMP_8842"
+}
+```
+
+##### Multiple Members
+```json
+{
+  "requisition_duration_month": 3,
+  "expected_start_date": "2026-02-15",
+  "team_member_ids": ["EMP_8842", "EMP_1201", "EMP_7788"]
+}
+```
+
+#### Sample Response
+```json
+{
+  "request_id": "<uuid>",
+  "expected_start_date": "2026-02-15",
+  "expected_end_date": "2026-05-15",
+  "requisition_duration_month": 3,
+  "results": [
+    {
+      "team_member_id": "EMP_8842",
+      "available": true,
+      "reason_code": "AVAILABLE",
+      "reason": "No conflicting billable allocations found in requested window.",
+      "conflicts": []
+    }
+  ],
+  "summary": {
+    "requested": 3,
+    "available_count": 1,
+    "unavailable_count": 2,
+    "not_found_count": 0
+  },
+  "errors": []
+}
+```
+
+#### How to Test with Postman
+- Set method to POST
+- URL: `http://localhost:8000/api/v1/agents/candidate-availability`
+- Body: raw, JSON, use one of the sample payloads above
+- Expected: 200 OK, response matches schema above
+
+#### Developer Notes
+- Set `DATABASE_URL` in your environment (see above)
+- Start the server: `uvicorn src.app.main:app --host 127.0.0.1 --port 8010 --reload`
+- Run tests: `pytest`
+- No DB migrations are required for this feature
+
 ### Monitoring Endpoints
 
 ```bash
