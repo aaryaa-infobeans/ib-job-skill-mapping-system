@@ -98,7 +98,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         else:
             # Fallback to structured summary if LLM explanation not available
             explanation.append(
-                f"Overall match score: {candidate['final_score']:.2f} ({fit_level} fit)"
+                f"Overall match score: {candidate['final_score']*100:.0f}% ({fit_level} fit)"
             )
             
             # Add skill match details
@@ -106,14 +106,14 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             matched_skills = candidate.get("match_reasons", {}).get("skills_matched", [])
             if matched_skills:
                 explanation.append(
-                    f"Skills matched: {', '.join(matched_skills)} (score: {skill_score:.2f})"
+                    f"Skills matched: {', '.join(matched_skills)} (score: {skill_score*100:.0f}%)"
                 )
             else:
-                explanation.append(f"Skill match score: {skill_score:.2f}")
+                explanation.append(f"Skill match score: {skill_score*100:.0f}%")
             
             # Add experience details
             experience_score = candidate.get("experience_score", 0.0)
-            explanation.append(f"Experience match score: {experience_score:.2f}")
+            explanation.append(f"Experience match score: {experience_score*100:.0f}%")
             
             # Add availability details
             is_available = candidate.get("is_available", False)
@@ -127,7 +127,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         # Create result entry with detailed explanation
         result_entry = {
             "team_member_id": candidate["team_member_id"],
-            "profile_score": round(candidate["final_score"], 2),
+            "profile_score": round(candidate["final_score"] * 100, 2),
             "fit_level": fit_level,
             "availability_match": candidate.get("is_available", False),
             "explanation": explanation,
