@@ -1,4 +1,4 @@
-/speckit.specify
+/speckit.specify 
 
 SYSTEM:
 You are a senior software architect and specification author.
