@@ -1,7 +1,7 @@
 """Utility modules for AI agents - helper functions, models, and validators."""
 
-from src.app.ai.utils.base import BaseAgent, ExecutionContext
-from src.app.ai.utils.models import (
+from app.ai.utils.base import BaseAgent, ExecutionContext
+from app.ai.utils.models import (
     RequisitionData,
     ValidationResult,
     NormalizedRequisition,
@@ -11,7 +11,7 @@ from src.app.ai.utils.models import (
     RankedCandidate,
     RankedCandidateList,
 )
-from src.app.ai.utils.explanation_prompt import format_explanation_prompt
+from app.ai.utils.explanation_prompt import format_explanation_prompt
 
 __all__ = [
     "BaseAgent",

@@ -1,6 +1,7 @@
 """LangGraph state schema definition."""
 
-from typing import Dict, List, Optional, TypedDict
+from typing import Dict, List, Optional, TypedDict, Any
+import numpy as np
 
 
 class RequisitionInput(TypedDict):
@@ -99,6 +100,12 @@ class GraphState(TypedDict):
 
     # Populated by Result_Aggregation_Agent
     final_results: Optional[List[FinalResult]]
+
+    # Populated by Embedding_Agent
+    embedding_result: Optional[Dict[str, Any]]  # Map of component names to vectors
+    
+    # Populated by RAG_Retrieval_Agent
+    retrieved_candidates: Optional[List[Dict[str, Any]]]  # Candidates from vector search
     
     # Tracking metrics
     total_evaluated: Optional[int]

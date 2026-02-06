@@ -94,11 +94,12 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
             total_evaluated=cached_metrics.get("total_evaluated"),
             total_qualified=cached_metrics.get("total_qualified"),
             token_count=cached_metrics.get("token_count"),
-            cost_usd=cached_metrics.get("cost_usd"),
+            cost_usd=round(cached_metrics.get("cost_usd", 0.0), 4) if cached_metrics.get("cost_usd") is not None else None,
         )
         # Calculate qualification rate if possible
         if metrics.total_evaluated and metrics.total_evaluated > 0:
-            metrics.qualification_rate = (metrics.total_qualified or 0) / metrics.total_evaluated
+            rate = (metrics.total_qualified or 0) / metrics.total_evaluated
+            metrics.qualification_rate = round(rate, 2)
     
     return MatchesResponse(
         correlation_id=correlation_id,

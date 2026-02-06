@@ -1,5 +1,7 @@
 """Database models for the job skill mapping system."""
 
+from pgvector.sqlalchemy import Vector
+
 import enum
 from datetime import datetime
 from sqlalchemy import (
@@ -274,3 +276,15 @@ class SkillOntology(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     core_skill = Column(String(255), nullable=False, unique=True)
     enriched_terms = Column(postgresql.ARRAY(String(255)), nullable=True)
+
+
+class TeamMemberEmbedding(Base):
+    """Embeddings for team member profiles."""
+
+    __tablename__ = "team_member_embeddings"
+
+    team_member_id = Column(String(50), ForeignKey("team_member.team_member_id"), primary_key=True)
+    embedding = Column(Vector(3072))
+    profile_text = Column(Text, nullable=True)
+    extra_metadata = Column("metadata", postgresql.JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

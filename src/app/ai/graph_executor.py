@@ -77,6 +77,33 @@ def execute_graph_with_audit(
             token_count=skill_norm_tokens,
         )
     
+    # Checkpoint: Embedding
+    if final_state.get("embedding_result"):
+        embedding_tokens = token_metrics.get("embedding", {}).get("total_tokens")
+        save_checkpoint(
+            db=db,
+            request_id=request_id,
+            node_name="embedding",
+            state={
+                "model": final_state.get("embedding_result", {}).get("model"),
+                "correlation_id": correlation_id,
+            },
+            token_count=embedding_tokens,
+        )
+    
+    # Checkpoint: RAG Retrieval
+    if final_state.get("retrieved_candidates") is not None:
+        save_checkpoint(
+            db=db,
+            request_id=request_id,
+            node_name="rag_retrieval",
+            state={
+                "candidate_count": len(final_state.get("retrieved_candidates", [])),
+                "correlation_id": correlation_id,
+            },
+            token_count=None,
+        )
+    
     # Checkpoint 3: Matching & Scoring
     if final_state.get("candidate_scores"):
         matching_tokens = token_metrics.get("matching_scoring", {}).get("total_tokens")
