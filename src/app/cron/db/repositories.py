@@ -12,7 +12,7 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.cron.db.metadata import (
+from app.cron.db.metadata import (
     category_master,
     skill_master,
     team_member,
