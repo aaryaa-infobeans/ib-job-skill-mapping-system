@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Tuple, Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.cron.db.repositories import TeamMemberRepository, BatchStateRepository
+from app.cron.db.repositories import TeamMemberRepository, BatchStateRepository
 
 
 logger = structlog.get_logger(__name__)
