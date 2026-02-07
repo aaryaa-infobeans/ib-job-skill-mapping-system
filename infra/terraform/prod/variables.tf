@@ -182,3 +182,58 @@ variable "additional_tags" {
   type        = map(string)
   default     = {}
 }
+
+# Secrets Configuration
+variable "oauth_client_id" {
+  description = "OAuth 2.0 client ID for Microsoft Graph"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oauth_client_secret" {
+  description = "OAuth 2.0 client secret for Microsoft Graph"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oauth_tenant_id" {
+  description = "OAuth 2.0 tenant ID"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "azure_openai_endpoint" {
+  description = "Azure OpenAI endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "azure_openai_api_key" {
+  description = "Azure OpenAI API key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "azure_openai_deployment" {
+  description = "Azure OpenAI deployment name"
+  type        = string
+  default     = ""
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

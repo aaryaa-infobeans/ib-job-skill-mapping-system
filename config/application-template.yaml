@@ -1,0 +1,284 @@
+# Application Configuration Template
+
+# This file should be copied to config/production.yaml and populated with actual values
+# Secrets should reference ARNs, not contain actual values
+
+application:
+  name: ib-job-skill-mapping-system
+  environment: production
+  log_level: INFO
+  debug: false
+
+database:
+  # Database connection - password retrieved from Secrets Manager
+  host: ${DATABASE_HOST}  # From Terraform output
+  port: 5432
+  name: ib_job_skill_mapping
+  user: postgres
+  password_secret_arn: ${DATABASE_PASSWORD_ARN}  # From Terraform output
+  
+  # Connection pool settings
+  pool:
+    min_size: 5
+    max_size: 20
+    timeout: 30
+    max_overflow: 10
+  
+  # Read replica for queries
+  read_replica:
+    enabled: true
+    host: ${DATABASE_READ_REPLICA_HOST}
+    port: 5432
+
+redis:
+  # Redis cache connection - auth token from Secrets Manager
+  host: ${REDIS_HOST}  # From Terraform output
+  port: 6379
+  auth_secret_arn: ${REDIS_AUTH_ARN}  # From Terraform output
+  db: 0
+  
+  # Connection settings
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  max_connections: 50
+  
+  # Cache TTL settings (seconds)
+  ttl:
+    default: 3600        # 1 hour
+    team_member: 86400   # 24 hours
+    skill_match: 7200    # 2 hours
+    oauth_token: 3300    # 55 minutes
+
+oauth:
+  # Microsoft Graph OAuth - credentials from Secrets Manager
+  secret_arn: ${OAUTH_SECRET_ARN}  # From Terraform output
+  authority: https://login.microsoftonline.com/${OAUTH_TENANT_ID}
+  scope: https://graph.microsoft.com/.default
+  
+  # Token caching
+  token_cache:
+    enabled: true
+    backend: redis
+    ttl: 3300  # 55 minutes
+
+llm:
+  # LLM Provider - API keys from Secrets Manager
+  secret_arn: ${LLM_KEYS_ARN}  # From Terraform output
+  provider: azure_openai  # or 'openai' or 'anthropic'
+  
+  # Azure OpenAI configuration
+  azure_openai:
+    endpoint: ${AZURE_OPENAI_ENDPOINT}
+    api_version: "2024-02-15-preview"
+    deployment: gpt-4
+    
+    # Model parameters
+    temperature: 0.0
+    max_tokens: 4000
+    top_p: 1.0
+  
+  # Fallback to OpenAI
+  openai:
+    model: gpt-4-turbo-preview
+    temperature: 0.0
+    max_tokens: 4000
+  
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 60
+    tokens_per_minute: 90000
+
+langgraph:
+  # AI Agent configuration
+  max_iterations: 10
+  recursion_limit: 25
+  timeout: 300  # 5 minutes
+  
+  # Checkpointing
+  checkpoint:
+    enabled: true
+    backend: postgres
+    
+  # Agent-specific settings
+  agents:
+    skill_extraction:
+      model: gpt-4
+      temperature: 0.0
+    
+    availability_evaluation:
+      model: gpt-4
+      temperature: 0.0
+    
+    scoring:
+      model: gpt-4
+      temperature: 0.0
+
+api:
+  # API Gateway settings
+  host: 0.0.0.0
+  port: 8080
+  workers: 4
+  
+  # CORS
+  cors:
+    enabled: true
+    origins:
+      - https://portal.infobeans.com
+      - https://api.infobeans.com
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+    allow_credentials: true
+  
+  # Rate limiting (per IP)
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+    burst: 200
+  
+  # Request timeouts
+  timeout:
+    read: 30
+    write: 30
+    keepalive: 5
+
+security:
+  # Application secrets from Secrets Manager
+  secrets_arn: ${APP_SECRETS_ARN}  # From Terraform output
+  
+  # JWT configuration
+  jwt:
+    algorithm: HS256
+    expiration: 3600  # 1 hour
+    refresh_expiration: 604800  # 7 days
+  
+  # API key authentication
+  api_key:
+    enabled: true
+    header_name: X-API-Key
+  
+  # TLS/SSL
+  tls:
+    enabled: false  # Handled by ALB
+    cert_file: ""
+    key_file: ""
+
+logging:
+  # CloudWatch Logs
+  log_group: ${CLOUDWATCH_LOG_GROUP}  # From Terraform output
+  stream_prefix: application
+  
+  # Log format
+  format: json
+  
+  # Log levels by component
+  levels:
+    root: INFO
+    app: INFO
+    db: WARNING
+    redis: WARNING
+    langchain: INFO
+    langgraph: DEBUG
+  
+  # Sensitive data filtering
+  filter_secrets: true
+  filter_pii: true
+
+monitoring:
+  # CloudWatch metrics
+  enabled: true
+  namespace: IB-JobSkillMapping-Prod
+  
+  # Metrics collection interval
+  interval: 60  # seconds
+  
+  # Custom metrics
+  metrics:
+    - request_count
+    - request_duration
+    - error_count
+    - batch_size
+    - processing_time
+    - llm_token_usage
+    - cache_hit_rate
+    - database_connections
+
+tracing:
+  # AWS X-Ray
+  enabled: true
+  sampling_rate: 0.1  # 10%
+  
+  # Trace details
+  capture:
+    http: true
+    sql: true
+    redis: true
+    llm_calls: true
+
+batch_processing:
+  # Bulk upsert settings
+  batch_size: 500
+  max_concurrent: 10
+  timeout: 1800  # 30 minutes
+  
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    initial_delay: 1.0
+    max_delay: 60.0
+    backoff_multiplier: 2.0
+    
+    # Retryable errors
+    retryable_categories:
+      - TRANSIENT_DEPENDENCY_ERROR
+      - RATE_LIMIT_ERROR
+
+storage:
+  # S3 buckets
+  artifacts_bucket: ${S3_ARTIFACTS_BUCKET}  # From Terraform output
+  backups_bucket: ${S3_BACKUPS_BUCKET}
+  
+  # Local storage
+  temp_dir: /tmp/ib-job-skill-mapping
+  max_upload_size: 104857600  # 100 MB
+
+feature_flags:
+  # Feature toggles
+  enable_async_processing: true
+  enable_llm_caching: true
+  enable_skill_synonyms: true
+  enable_fuzzy_matching: true
+  enable_audit_logging: true
+  enable_metrics: true
+
+performance:
+  # NFR targets
+  target:
+    throughput: 100  # requests/second
+    latency_p95: 2000  # milliseconds
+    error_rate: 0.005  # 0.5%
+    availability: 0.995  # 99.5%
+  
+  # Circuit breaker
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 60
+
+# Environment-specific overrides
+# These are applied based on ENVIRONMENT variable
+overrides:
+  development:
+    log_level: DEBUG
+    debug: true
+    
+  staging:
+    log_level: INFO
+    debug: false
+    
+  production:
+    log_level: WARNING
+    debug: false
+    monitoring.sampling_rate: 0.05

@@ -228,6 +228,32 @@ module "s3" {
   tags = local.common_tags
 }
 
+# Secrets Manager
+module "secrets" {
+  source = "./modules/secrets"
+  
+  name_prefix = local.name_prefix
+  aws_region  = var.aws_region
+  
+  # OAuth Configuration
+  oauth_client_id     = var.oauth_client_id
+  oauth_client_secret = var.oauth_client_secret
+  oauth_tenant_id     = var.oauth_tenant_id
+  
+  # LLM API Keys
+  openai_api_key          = var.openai_api_key
+  azure_openai_endpoint   = var.azure_openai_endpoint
+  azure_openai_api_key    = var.azure_openai_api_key
+  azure_openai_deployment = var.azure_openai_deployment
+  anthropic_api_key       = var.anthropic_api_key
+  
+  # Redis Configuration
+  redis_endpoint = module.redis.endpoint
+  redis_port     = module.redis.port
+  
+  tags = local.common_tags
+}
+
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/eks/${local.name_prefix}/application"

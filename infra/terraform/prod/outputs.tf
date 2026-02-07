@@ -121,6 +121,23 @@ output "s3_logs_bucket" {
   value       = module.s3.bucket_names["logs"]
 }
 
+# Secrets Outputs
+output "secrets_arns" {
+  description = "ARNs of all secrets in Secrets Manager"
+  value       = module.secrets.all_secret_arns
+  sensitive   = true
+}
+
+output "secrets_access_policy_arn" {
+  description = "ARN of IAM policy for accessing secrets"
+  value       = module.secrets.secrets_access_policy_arn
+}
+
+output "secrets_kms_key_arn" {
+  description = "ARN of KMS key for secrets encryption"
+  value       = module.secrets.kms_key_arn
+}
+
 # CloudWatch Outputs
 output "application_log_group" {
   description = "CloudWatch log group for application logs"
@@ -166,13 +183,19 @@ output "deployment_summary" {
 output "application_config" {
   description = "Configuration values for application deployment"
   value = {
-    database_host     = module.database.endpoint
-    database_port     = module.database.port
-    database_name     = var.db_name
-    redis_host        = module.redis.endpoint
-    redis_port        = module.redis.port
-    log_group         = aws_cloudwatch_log_group.application.name
-    artifacts_bucket  = module.s3.bucket_names["artifacts"]
+    database_host          = module.database.endpoint
+    database_port          = module.database.port
+    database_name          = var.db_name
+    database_password_arn  = module.secrets.database_password_arn
+    redis_host             = module.redis.endpoint
+    redis_port             = module.redis.port
+    redis_auth_arn         = module.secrets.redis_credentials_arn
+    oauth_secret_arn       = module.secrets.oauth_client_secret_arn
+    llm_keys_arn           = module.secrets.llm_api_keys_secret_arn
+    app_secrets_arn        = module.secrets.application_secrets_arn
+    log_group              = aws_cloudwatch_log_group.application.name
+    artifacts_bucket       = module.s3.bucket_names["artifacts"]
+    secrets_access_policy  = module.secrets.secrets_access_policy_arn
   }
   sensitive = true
 }
