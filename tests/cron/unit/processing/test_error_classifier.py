@@ -9,7 +9,7 @@ import requests
 import sqlalchemy.exc as sqla_exc
 from unittest.mock import MagicMock
 
-from src.app.cron.processing.error_classifier import (
+from app.cron.processing.error_classifier import (
     ErrorCategory,
     classify_error,
     is_retryable,

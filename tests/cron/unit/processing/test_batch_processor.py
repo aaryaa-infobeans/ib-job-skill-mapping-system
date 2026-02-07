@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
 
-from src.app.cron.processing.batch_processor import BatchProcessor
+from app.cron.processing.batch_processor import BatchProcessor
 
 
 @pytest.fixture

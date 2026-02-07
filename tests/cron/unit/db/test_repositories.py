@@ -10,8 +10,8 @@ from sqlalchemy import select, MetaData, Table, Column, String, Integer, SmallIn
 from sqlalchemy.dialects.postgresql import ENUM as SAEnum, JSON, JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from src.app.cron.db.repositories import TeamMemberRepository, BatchStateRepository
-from src.app.cron.db.metadata import WorkTypeEnum
+from app.cron.db.repositories import TeamMemberRepository, BatchStateRepository
+from app.cron.db.metadata import WorkTypeEnum
 
 
 # Test database URL (in-memory SQLite for unit tests)
