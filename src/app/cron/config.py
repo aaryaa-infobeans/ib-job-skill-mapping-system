@@ -19,16 +19,16 @@ class Settings(BaseSettings):
     db_port: int = 5433
     db_name: str = "ib_job_skill_mapping"
     db_user: str = "postgres"
-    db_password: str
+    db_password: str = "password"  # Default for unit tests
     
     # OAuth Configuration
-    oauth_token_url: str
-    oauth_client_id: str
-    oauth_client_secret: str
+    oauth_token_url: str = "http://localhost/oauth/token"
+    oauth_client_id: str = "test-client"
+    oauth_client_secret: str = "test-secret"
     oauth_scope: str = "read:team-data"
     
     # External API Configuration
-    api_base_url: str
+    api_base_url: str = "http://localhost/api"
     external_api_endpoint: str = "/api/v1/team-members/skill-availability"
     api_timeout: int = 30
     
