@@ -1,5 +1,6 @@
 """Test configuration and fixtures."""
 
+import os
 import pytest
 import sqlalchemy.pool
 import time
@@ -15,6 +16,9 @@ from app.main import app
 # Import all models to ensure they are registered with Base.metadata
 from app.db.models import models as _  # noqa: F401
 
+# Test JWT secret key (must match what app uses in test environment)
+TEST_JWT_SECRET = "test-secret-key-for-testing"
+
 # Use in-memory SQLite for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -26,16 +30,29 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment variables."""
+    # Set JWT secret key for test environment
+    os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
+    
+    yield
+    
+    # Cleanup
+    if "JWT_SECRET_KEY" in os.environ:
+        del os.environ["JWT_SECRET_KEY"]
+
+
 def create_test_token(client_id: str = "test-client"):
-    """Create a test JWT token."""
+    """Create a test JWT token using the test secret key."""
     payload = {
         "sub": client_id,
         "client_id": client_id,
         "iat": int(time.time()),
         "exp": int(time.time()) + 3600,
     }
-    # Use any secret key - dev mode doesn't validate signature
-    return jwt.encode(payload, "test-secret", algorithm="HS256")
+    # Use same secret key as test environment
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
 
 def override_get_db():

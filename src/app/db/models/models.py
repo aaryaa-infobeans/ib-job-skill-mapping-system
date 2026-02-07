@@ -120,7 +120,9 @@ class CategoryMaster(Base):
 
     __tablename__ = "category_master"
 
-    category_id = Column(SmallInteger, primary_key=True, autoincrement=True)
+    # Use Integer for SQLite compatibility (autoincrement requires INTEGER PRIMARY KEY)
+    # PostgreSQL will handle this as SMALLINT with autoincrement
+    category_id = Column(Integer, primary_key=True, autoincrement=True)
     category_name = Column(String(100), nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
