@@ -54,6 +54,11 @@ target-version = "py311"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "smoke: quick smoke tests for CI (<60s)",
+    "performance: performance benchmark tests",
+    "slow: tests that take significant time",
+]
 
 [tool.coverage.run]
 source = ["src/app/cron"]
