@@ -232,8 +232,10 @@ class TeamMemberRepository:
             self.db.query(CategoryMaster).filter(CategoryMaster.category_name == "General").first()
         )
         if not category:
-            # Let the database generate category_id automatically
-            category = CategoryMaster(category_name="General")
+            # Create category without explicitly setting ID (let DB handle it)
+            category = CategoryMaster(
+                category_name="General"
+            )
             self.db.add(category)
-            self.db.flush()  # Use flush instead of commit
+            self.db.flush()  # Flush to generate ID before returning
         return category
