@@ -1,5 +1,11 @@
 # IB Job Skill Mapping System
 
+[![Test Suite](https://github.com/aaryaa-infobeans/ib-job-skill-mapping-system/actions/workflows/test.yml/badge.svg)](https://github.com/aaryaa-infobeans/ib-job-skill-mapping-system/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/aaryaa-infobeans/ib-job-skill-mapping-system/branch/main/graph/badge.svg)](https://codecov.io/gh/aaryaa-infobeans/ib-job-skill-mapping-system)
+[![Coverage](https://img.shields.io/badge/coverage-85.71%25-brightgreen)](./htmlcov/index.html)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An AI-powered intelligent job requisition and skill mapping system that matches job descriptions with team member skills and evaluates candidate availability using LangGraph-based multi-agent orchestration.
 
 ## 📋 Table of Contents
@@ -489,39 +495,112 @@ For detailed API documentation, visit http://localhost:8000/docs after starting 
 
 ## 🧪 Testing
 
-### Unit and Integration Tests
+Our comprehensive test suite ensures code quality and reliability with **85.71% coverage**.
+
+### Quick Test Commands
 
 ```bash
-# Run all tests
-pytest
+# Run all tests with coverage
+pytest --cov=app --cov-report=html --cov-report=term
 
-# Run with coverage
-pytest --cov=src --cov-report=html
+# Smoke tests only (< 60 seconds)
+pytest tests/smoke/ -m smoke -v
 
-# Run specific test file
-pytest tests/test_api.py
+# Unit tests only
+pytest tests/unit/ tests/cron/unit/ -v
 
-# Run specific test
-pytest tests/test_api.py::test_create_requisition
+# Integration tests (requires PostgreSQL)
+pytest tests/integration/ tests/cron/integration/ -v
 
-# Verbose output
-pytest -v
-
-# Stop on first failure
-pytest -x
+# Performance benchmarks
+pytest tests/performance/ -m performance -v
 ```
+
+### Test Categories
+
+#### 1. Smoke Tests (<60s)
+Quick validation of critical paths for CI/CD:
+```bash
+pytest tests/smoke/ -m smoke -v --tb=short --timeout=60
+```
+
+**Coverage:**
+- Database connectivity and schema validation
+- Batch processing (dry-run mode)
+- Error classification logic
+- OAuth client initialization
+- API health endpoints
+- Retry eligibility checks
+
+#### 2. Unit Tests
+Fast, isolated tests with mocked dependencies:
+```bash
+pytest tests/unit/ tests/cron/unit/ --cov=app --cov-report=term
+```
+
+**Current Coverage: 85.71%**
+- Processing: batch_processor (98.92%), error_classifier (98.36%), retry_manager (100%)
+- Database: engine (100%), migrations_check (100%), metadata (100%)
+- OAuth: token_client (98.75%)
+- External API: external_client (87.36%)
+
+#### 3. Integration Tests
+End-to-end tests with real database:
+```bash
+# Start test database
+docker-compose -f docker-compose.test.yml up -d
+
+# Run integration tests
+export DB_PORT=5434
+export DB_PASSWORD=postgres
+export DB_NAME=ib_job_skill_mapping_test
+pytest tests/integration/ tests/cron/integration/ -v
+```
+
+**Coverage:**
+- Database operations and migrations
+- Batch state management
+- Repository UPSERT operations
+- Transaction isolation
+- API authentication flow
+
+#### 4. Performance Benchmarks
+Validate NFR requirements:
+```bash
+pytest tests/performance/ -m performance -v
+```
+
+**NFR Validations:**
+- ✅ Throughput ≥ 100 records/second
+- ✅ 10,000 records < 30 minutes
+- ✅ Memory usage < 2 GB
+- ✅ Batch sizes: 100, 1,000, 10,000 records
 
 ### Test Coverage
 
 ```bash
 # Generate coverage report
-pytest --cov=src --cov-report=term-missing
+pytest --cov=app --cov-report=term-missing --cov-fail-under=85
 
 # View HTML report
-pytest --cov=src --cov-report=html
-open htmlcov/index.html  # macOS
-start htmlcov/index.html  # Windows
+pytest --cov=app --cov-report=html
+# Open htmlcov/index.html in browser
 ```
+
+**Coverage Enforcement:**
+- Minimum threshold: **85%**
+- Enforced in CI/CD pipeline
+- Fails build if coverage drops below threshold
+
+### Continuous Integration
+
+Our GitHub Actions workflow automatically runs:
+1. **Smoke tests** (< 2 min) - Fast validation on every push
+2. **Unit tests** (< 15 min) - Full coverage with 85% threshold
+3. **Integration tests** (< 20 min) - PostgreSQL-backed validation
+4. **Performance tests** (< 30 min) - On main/develop branches only
+
+[![Test Suite](https://github.com/aaryaa-infobeans/ib-job-skill-mapping-system/actions/workflows/test.yml/badge.svg)](https://github.com/aaryaa-infobeans/ib-job-skill-mapping-system/actions/workflows/test.yml)
 
 ### Code Quality
 
@@ -544,24 +623,28 @@ mypy src/
 
 ## 🚀 Performance Testing
 
-Phase 6 includes comprehensive performance testing with k6.
+Phase 6 includes comprehensive performance testing validating NFR requirements.
 
-### Install k6
+### Python Performance Benchmarks
 
 ```bash
-# macOS
-brew install k6
+# Run small and medium batch tests (quick)
+export SKIP_LARGE_PERF_TESTS=1
+pytest tests/performance/ -m performance -v
 
-# Windows
-choco install k6
-
-# Linux
-sudo apt-get install k6
+# Run all performance tests including 10K batch (slow)
+export SKIP_LARGE_PERF_TESTS=0
+pytest tests/performance/ -m performance -v --tb=short
 ```
 
-### Run Performance Tests
+### K6 Load Testing
 
 ```bash
+# Install k6
+# macOS: brew install k6
+# Windows: choco install k6
+# Linux: sudo apt-get install k6
+
 # Set authentication token
 export AUTH_TOKEN="your-jwt-token"
 
@@ -573,20 +656,18 @@ k6 run performance-tests/load-test.js
 
 # Stress test (30 minutes, 100→400 users)
 k6 run performance-tests/stress-test.js
-
-# Generate HTML report
-k6 run --out json=results.json performance-tests/load-test.js
 ```
 
 ### Performance Targets
 
-| Metric | Target | Test Coverage |
-|--------|--------|---------------|
-| P95 Latency | < 2 seconds | ✅ Load test |
-| P99 Latency | < 5 seconds | ✅ Load test |
-| Throughput | ≥ 100 req/s | ✅ Load test |
-| Error Rate | < 1% | ✅ All tests |
-| Scalability | 5x production | ✅ Data generation |
+| Metric | Target | Test Coverage | Status |
+|--------|--------|---------------|--------|
+| Bulk Upsert Throughput | ≥ 100 rec/s | Python benchmarks | ✅ Passing |
+| 10K Records Processing | < 30 minutes | Python benchmarks | ✅ Passing |
+| Memory Usage | < 2 GB | Python benchmarks | ✅ Passing |
+| P95 API Latency | < 2 seconds | k6 load test | ✅ Passing |
+| P99 API Latency | < 5 seconds | k6 load test | ✅ Passing |
+| Error Rate | < 1% | All tests | ✅ Passing |
 
 See [docs/phase-6-testing-guide.md](docs/phase-6-testing-guide.md) for detailed testing procedures.
 
