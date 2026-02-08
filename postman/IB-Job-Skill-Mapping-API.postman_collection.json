@@ -1,0 +1,994 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7g8h-9i0j-1k2l3m4n5o6p",
+		"name": "IB Job Skill Mapping System API",
+		"description": "Comprehensive API collection for the IB Job Skill Mapping System. Tests all endpoints including requisition management, skill availability, matching, and monitoring.\n\n**Features:**\n- Job requisition submission (FR-1)\n- Match result retrieval (FR-2)\n- Bulk skill availability upsert (FR-3)\n- Health checks and metrics\n- OAuth2 JWT authentication\n\n**Base URL:** http://localhost:8080\n\n**Authentication:** JWT Bearer token required for protected endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "Health & Monitoring",
+			"item": [
+				{
+					"name": "Root Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has message and version\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"    pm.expect(jsonData).to.have.property('version');",
+									"    pm.expect(jsonData.message).to.include('IB Job Skill Mapping System');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Root endpoint - returns system information and version"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"System is healthy\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('healthy');",
+									"    pm.expect(jsonData.checks).to.have.property('database');",
+									"    pm.expect(jsonData.checks.database).to.eql('healthy');",
+									"});",
+									"",
+									"pm.test(\"Response time is less than 200ms\", function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Health check endpoint - verifies database connectivity and system status"
+					},
+					"response": []
+				},
+				{
+					"name": "Prometheus Metrics",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response is Prometheus format\", function () {",
+									"    pm.expect(pm.response.text()).to.include('# HELP');",
+									"    pm.expect(pm.response.text()).to.include('# TYPE');",
+									"});",
+									"",
+									"pm.test(\"Contains key metrics\", function () {",
+									"    var responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('http_requests_total');",
+									"    pm.expect(responseText).to.include('db_connections_active');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/metrics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"metrics"
+							]
+						},
+						"description": "Prometheus metrics endpoint - returns system and application metrics"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for system health monitoring and metrics collection"
+		},
+		{
+			"name": "FR-1: Job Requisition",
+			"item": [
+				{
+					"name": "Create Requisition - Success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202 Accepted\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Response contains correlation_id\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('correlation_id');",
+									"    pm.expect(jsonData).to.have.property('request_id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    ",
+									"    // Save correlation_id for later use",
+									"    pm.environment.set('correlation_id', jsonData.correlation_id);",
+									"    pm.environment.set('request_id', jsonData.request_id);",
+									"});",
+									"",
+									"pm.test(\"Response time is acceptable\", function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(3000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate unique request_id",
+									"const timestamp = Date.now();",
+									"const requestId = `REQ-${timestamp}-POSTMAN`;",
+									"pm.environment.set('unique_request_id', requestId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_id\": \"{{unique_request_id}}\",\n  \"schema_version\": \"v1\",\n  \"source_system\": \"POSTMAN_TEST\",\n  \"job_description\": {\n    \"client_name\": \"Acme Corporation\",\n    \"title\": \"Senior Backend Engineer\",\n    \"role\": \"Backend Development\",\n    \"priority\": \"HIGH\",\n    \"location\": [\"Bangalore\", \"Remote\"],\n    \"work_mode\": [\"Remote\", \"Hybrid\"],\n    \"jd_text\": \"We are seeking a highly skilled Senior Backend Engineer with 5+ years of experience in Python, FastAPI, and PostgreSQL. The ideal candidate will have strong expertise in REST API development, microservices architecture, and cloud platforms (AWS/Azure). Experience with Docker, Kubernetes, and CI/CD pipelines is essential. Must have excellent problem-solving skills and ability to work in an agile environment.\",\n    \"requisition_duration_month\": 6,\n    \"experience_range\": {\n      \"min_years\": 5,\n      \"max_years\": 10\n    }\n  },\n  \"metadata\": {\n    \"created_by\": \"postman_user\",\n    \"department\": \"Engineering\",\n    \"budget_code\": \"ENG-2026-Q1\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								""
+							]
+						},
+						"description": "Submit a new job requisition for skill matching. This triggers AI-powered skill extraction and candidate matching."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Requisition - Minimal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Response structure is valid\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('correlation_id');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.environment.set('minimal_request_id', `REQ-MIN-${Date.now()}`);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_id\": \"{{minimal_request_id}}\",\n  \"schema_version\": \"v1\",\n  \"source_system\": \"POSTMAN\",\n  \"job_description\": {\n    \"client_name\": \"Test Client\",\n    \"title\": \"Software Developer\",\n    \"role\": \"Development\",\n    \"priority\": \"MEDIUM\",\n    \"location\": [\"Bangalore\"],\n    \"work_mode\": [\"Office\"],\n    \"jd_text\": \"Looking for a software developer with Python experience.\"\n  },\n  \"metadata\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								""
+							]
+						},
+						"description": "Create requisition with minimal required fields"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Requisition - Duplicate (409)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 409 Conflict\", function () {",
+									"    pm.response.to.have.status(409);",
+									"});",
+									"",
+									"pm.test(\"Error message indicates duplicate\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.detail).to.include('already exists');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_id\": \"{{unique_request_id}}\",\n  \"schema_version\": \"v1\",\n  \"source_system\": \"POSTMAN\",\n  \"job_description\": {\n    \"client_name\": \"Test Client\",\n    \"title\": \"Duplicate Test\",\n    \"role\": \"Testing\",\n    \"priority\": \"LOW\",\n    \"location\": [\"Bangalore\"],\n    \"work_mode\": [\"Office\"],\n    \"jd_text\": \"Testing duplicate request_id handling.\"\n  },\n  \"metadata\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								""
+							]
+						},
+						"description": "Test duplicate request_id handling - should return 409 Conflict"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Requisition - Invalid (422)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 422 Unprocessable Entity\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});",
+									"",
+									"pm.test(\"Validation error is returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('detail');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_id\": \"INVALID-REQ\",\n  \"schema_version\": \"v1\",\n  \"source_system\": \"POSTMAN\",\n  \"job_description\": {\n    \"title\": \"Test\",\n    \"priority\": \"INVALID_PRIORITY\"\n  },\n  \"metadata\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								""
+							]
+						},
+						"description": "Test validation error handling with invalid payload"
+					},
+					"response": []
+				}
+			],
+			"description": "FR-1: Job requisition submission endpoints"
+		},
+		{
+			"name": "FR-2: Match Results",
+			"item": [
+				{
+					"name": "Get Matches - Success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has matches structure\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('correlation_id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('total_matches');",
+									"    pm.expect(jsonData).to.have.property('matches');",
+									"    pm.expect(jsonData.matches).to.be.an('array');",
+									"});",
+									"",
+									"pm.test(\"Match objects have required fields\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.matches.length > 0) {",
+									"        var match = jsonData.matches[0];",
+									"        pm.expect(match).to.have.property('team_member_id');",
+									"        pm.expect(match).to.have.property('profile_score');",
+									"        pm.expect(match).to.have.property('fit_level');",
+									"        pm.expect(match).to.have.property('availability_match');",
+									"        pm.expect(match).to.have.property('explanation');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/{{correlation_id}}/matches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								"{{correlation_id}}",
+								"matches"
+							]
+						},
+						"description": "Retrieve match results for a requisition using correlation_id from FR-1 response"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Matches - Processing",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Status is PROCESSING\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.be.oneOf(['PROCESSING', 'COMPLETED']);",
+									"    ",
+									"    if (jsonData.status === 'PROCESSING') {",
+									"        pm.expect(jsonData.total_matches).to.eql(0);",
+									"        pm.expect(jsonData.matches).to.be.empty;",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/{{correlation_id}}/matches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								"{{correlation_id}}",
+								"matches"
+							]
+						},
+						"description": "Check matches immediately after requisition creation - may return PROCESSING status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Matches - Not Found (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});",
+									"",
+									"pm.test(\"Error message is clear\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.detail).to.include('not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/INVALID-CORRELATION-ID/matches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								"INVALID-CORRELATION-ID",
+								"matches"
+							]
+						},
+						"description": "Test 404 error with invalid correlation_id"
+					},
+					"response": []
+				}
+			],
+			"description": "FR-2: Match result retrieval endpoints"
+		},
+		{
+			"name": "FR-3: Skill Availability",
+			"item": [
+				{
+					"name": "Bulk Upsert - Success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202 Accepted\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Response has batch_id and summary\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('batch_id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('summary');",
+									"    pm.expect(jsonData.summary).to.have.property('total_records');",
+									"    pm.expect(jsonData.summary).to.have.property('successful');",
+									"    pm.expect(jsonData.summary).to.have.property('failed');",
+									"});",
+									"",
+									"pm.test(\"All records processed successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.failed).to.eql(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.environment.set('batch_id', `BATCH-${Date.now()}`);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"metadata\": {\n    \"batch_id\": \"{{batch_id}}\",\n    \"timestamp\": \"2026-02-08T10:00:00Z\",\n    \"source_system\": \"POSTMAN_TEST\"\n  },\n  \"team_members\": [\n    {\n      \"team_member_id\": \"TM-POST-001\",\n      \"name\": \"Alice Johnson\",\n      \"email\": \"alice.johnson@example.com\",\n      \"department\": \"Engineering\",\n      \"designation\": \"Senior Engineer\",\n      \"location\": \"Bangalore\",\n      \"work_type\": \"wfh\",\n      \"is_active\": true,\n      \"profile_url\": \"https://example.com/profiles/alice\",\n      \"skills\": [\n        {\n          \"skill_name\": \"Python\",\n          \"category\": \"Programming Languages\",\n          \"rating\": 4.5,\n          \"experience_months\": 60,\n          \"last_used_date\": \"2026-02-01\",\n          \"is_deleted\": false\n        },\n        {\n          \"skill_name\": \"FastAPI\",\n          \"category\": \"Frameworks\",\n          \"rating\": 4.0,\n          \"experience_months\": 24,\n          \"last_used_date\": \"2026-02-01\",\n          \"is_deleted\": false\n        },\n        {\n          \"skill_name\": \"PostgreSQL\",\n          \"category\": \"Databases\",\n          \"rating\": 3.5,\n          \"experience_months\": 48,\n          \"last_used_date\": \"2026-02-01\",\n          \"is_deleted\": false\n        }\n      ],\n      \"allocations\": [\n        {\n          \"project_id\": \"PROJ-001\",\n          \"project_name\": \"Customer Portal\",\n          \"allocation_percentage\": 50,\n          \"start_date\": \"2026-01-01\",\n          \"end_date\": \"2026-06-30\",\n          \"is_billable\": true\n        }\n      ],\n      \"certifications\": [\n        {\n          \"certification_name\": \"AWS Solutions Architect\",\n          \"issued_by\": \"Amazon Web Services\",\n          \"issued_date\": \"2025-03-15\",\n          \"expiry_date\": \"2028-03-15\"\n        }\n      ]\n    },\n    {\n      \"team_member_id\": \"TM-POST-002\",\n      \"name\": \"Bob Smith\",\n      \"email\": \"bob.smith@example.com\",\n      \"department\": \"Engineering\",\n      \"designation\": \"Lead Engineer\",\n      \"location\": \"Remote\",\n      \"work_type\": \"hybrid\",\n      \"is_active\": true,\n      \"skills\": [\n        {\n          \"skill_name\": \"Java\",\n          \"category\": \"Programming Languages\",\n          \"rating\": 5.0,\n          \"experience_months\": 120,\n          \"last_used_date\": \"2026-02-01\",\n          \"is_deleted\": false\n        },\n        {\n          \"skill_name\": \"Kubernetes\",\n          \"category\": \"DevOps\",\n          \"rating\": 4.0,\n          \"experience_months\": 36,\n          \"last_used_date\": \"2026-02-01\",\n          \"is_deleted\": false\n        }\n      ],\n      \"allocations\": [\n        {\n          \"project_id\": \"PROJ-002\",\n          \"project_name\": \"Microservices Migration\",\n          \"allocation_percentage\": 75,\n          \"start_date\": \"2026-02-01\",\n          \"end_date\": \"2026-05-31\",\n          \"is_billable\": true\n        }\n      ],\n      \"certifications\": []\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/team-members/skill-availability/bulk-upsert",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"team-members",
+								"skill-availability",
+								"bulk-upsert"
+							]
+						},
+						"description": "Bulk upsert team member skill availability data with multiple team members"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Upsert - Single Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Single record processed\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.total_records).to.eql(1);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.environment.set('single_batch_id', `BATCH-SINGLE-${Date.now()}`);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"metadata\": {\n    \"batch_id\": \"{{single_batch_id}}\",\n    \"timestamp\": \"2026-02-08T10:00:00Z\",\n    \"source_system\": \"POSTMAN\"\n  },\n  \"team_members\": [\n    {\n      \"team_member_id\": \"TM-SINGLE-001\",\n      \"name\": \"Test User\",\n      \"email\": \"test@example.com\",\n      \"department\": \"Engineering\",\n      \"designation\": \"Engineer\",\n      \"location\": \"Bangalore\",\n      \"work_type\": \"wfo\",\n      \"is_active\": true,\n      \"skills\": [\n        {\n          \"skill_name\": \"JavaScript\",\n          \"category\": \"Programming\",\n          \"rating\": 3.0,\n          \"experience_months\": 24,\n          \"is_deleted\": false\n        }\n      ],\n      \"allocations\": [],\n      \"certifications\": []\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/team-members/skill-availability/bulk-upsert",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"team-members",
+								"skill-availability",
+								"bulk-upsert"
+							]
+						},
+						"description": "Bulk upsert with a single team member - minimal data"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Upsert - Idempotency Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Idempotent operation successful\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.successful).to.be.greaterThan(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"metadata\": {\n    \"batch_id\": \"{{batch_id}}\",\n    \"timestamp\": \"2026-02-08T10:05:00Z\",\n    \"source_system\": \"POSTMAN_TEST\"\n  },\n  \"team_members\": [\n    {\n      \"team_member_id\": \"TM-POST-001\",\n      \"name\": \"Alice Johnson Updated\",\n      \"email\": \"alice.johnson@example.com\",\n      \"department\": \"Engineering\",\n      \"designation\": \"Principal Engineer\",\n      \"location\": \"Bangalore\",\n      \"work_type\": \"hybrid\",\n      \"is_active\": true,\n      \"skills\": [\n        {\n          \"skill_name\": \"Python\",\n          \"category\": \"Programming Languages\",\n          \"rating\": 5.0,\n          \"experience_months\": 62,\n          \"last_used_date\": \"2026-02-08\",\n          \"is_deleted\": false\n        }\n      ],\n      \"allocations\": [],\n      \"certifications\": []\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/team-members/skill-availability/bulk-upsert",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"team-members",
+								"skill-availability",
+								"bulk-upsert"
+							]
+						},
+						"description": "Test idempotent upsert - updating existing team member data"
+					},
+					"response": []
+				}
+			],
+			"description": "FR-3: Bulk skill availability upsert endpoints"
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Protected Endpoint - No Auth (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401 Unauthorized\", function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_id\": \"TEST-NO-AUTH\",\n  \"schema_version\": \"v1\",\n  \"source_system\": \"TEST\",\n  \"job_description\": {\n    \"client_name\": \"Test\",\n    \"title\": \"Test\",\n    \"role\": \"Test\",\n    \"priority\": \"LOW\",\n    \"location\": [\"Test\"],\n    \"work_mode\": [\"Office\"],\n    \"jd_text\": \"Test\"\n  },\n  \"metadata\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								""
+							]
+						},
+						"description": "Test authentication enforcement - should return 401 without token"
+					},
+					"response": []
+				},
+				{
+					"name": "Protected Endpoint - Invalid Token (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401\", function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "invalid.token.here",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jd-skill-mapping/TEST-CORR-ID/matches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"jd-skill-mapping",
+								"TEST-CORR-ID",
+								"matches"
+							]
+						},
+						"description": "Test with invalid JWT token"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication and authorization test cases"
+		},
+		{
+			"name": "API Documentation",
+			"item": [
+				{
+					"name": "OpenAPI Spec",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/openapi.json",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"openapi.json"
+							]
+						},
+						"description": "Get OpenAPI specification in JSON format"
+					},
+					"response": []
+				},
+				{
+					"name": "Swagger UI",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/docs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"docs"
+							]
+						},
+						"description": "Access Swagger UI interactive documentation"
+					},
+					"response": []
+				}
+			],
+			"description": "API documentation endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiaWF0IjoxNzA2OTc2MDAwLCJleHAiOjE3Mzg1MTIwMDB9.test",
+			"type": "string"
+		},
+		{
+			"key": "correlation_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "request_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
