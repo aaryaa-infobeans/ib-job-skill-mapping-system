@@ -11,8 +11,9 @@ import uuid
 from typing import Optional
 import structlog
 from sqlalchemy.engine import Engine
+from sqlalchemy import text
 
-from app.cron.db.engine import create_engine
+from app.cron.db.engine import create_ingestion_engine
 from app.cron.db.migrations_check import validate_schema_version, SchemaMismatchError
 from app.cron.oauth.token_client import OAuthClient
 from app.cron.api.external_client import TeamDataClient
@@ -111,7 +112,7 @@ def pre_run_checks(engine: Engine, oauth_client: OAuthClient, correlation_id: st
     # Check 1: Database connection
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         logger.info(
             "Database connection check passed",
             correlation_id=correlation_id
@@ -292,7 +293,7 @@ async def main_async(args: argparse.Namespace, correlation_id: str) -> int:
     
     try:
         # Create database engine
-        engine = create_engine()
+        engine = create_ingestion_engine()
         
         # Initialize OAuth client
         oauth_client = OAuthClient()
