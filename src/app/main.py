@@ -1,10 +1,15 @@
 """FastAPI application entry point."""
 
 import logging
+import os
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI
 
-from app.api.routers import health, jd_skill_mapping, matches, metrics, skill_availability
+from app.api.routers import health, jd_skill_mapping, matches, metrics, skill_availability, candidate_availability
 from app.logging_config import configure_logging
 from app.middleware import CorrelationIdMiddleware
 from app.middleware.auth import OAuth2Middleware
@@ -40,6 +45,9 @@ app.include_router(health.router, tags=["health"])
 app.include_router(metrics.router, prefix=settings.api_v1_prefix, tags=["metrics"])
 app.include_router(
     skill_availability.router, prefix=settings.api_v1_prefix, tags=["skill-availability"]
+)
+app.include_router(
+    candidate_availability.router, prefix=settings.api_v1_prefix, tags=["candidate-availability"]
 )
 app.include_router(
     jd_skill_mapping.router, prefix=settings.api_v1_prefix, tags=["jd-skill-mapping"]

@@ -182,16 +182,16 @@ def calculate_candidate_score(
     
     return {
         "team_member_id": team_member_id,
-        "skill_score": skill_result["skill_score"],
-        "experience_score": experience_score,
-        "availability_score": available_capacity / 100.0,  # Normalize to 0-1
-        "final_score": final_score,
+        "skill_score": round(skill_result["skill_score"], 2),
+        "experience_score": round(experience_score, 2),
+        "availability_score": round(available_capacity / 100.0, 2),
+        "final_score": round(final_score, 2),
         "is_available": is_available,
         "match_reasons": {
             "skills_matched": skill_result["matched_mandatory"] + skill_result["matched_preferred"],
             "mandatory_matched": skill_result["matched_mandatory"],
             "preferred_matched": skill_result["matched_preferred"],
-            "mandatory_score": skill_result["mandatory_score"],
-            "preferred_score": skill_result["preferred_score"],
+            "mandatory_score": round(skill_result["mandatory_score"], 2),
+            "preferred_score": round(skill_result["preferred_score"], 2),
         },
     }

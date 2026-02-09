@@ -5,36 +5,40 @@ In production, this should be replaced with Redis or database storage.
 
 from typing import Dict, Optional
 
-# In-memory storage: correlation_id -> final_results
-_results_cache: Dict[str, list] = {}
+# In-memory storage: correlation_id -> {"results": List, "metrics": Dict}
+_execution_cache: Dict[str, dict] = {}
 
 
-def store_results(correlation_id: str, final_results: list) -> None:
-    """Store final results for a correlation ID.
+def store_results(correlation_id: str, final_results: list, metrics: Optional[dict] = None) -> None:
+    """Store final results and metrics for a correlation ID.
     
     Args:
         correlation_id: Unique correlation ID
         final_results: List of formatted match results
+        metrics: Dictionary of execution metrics (tokens, qualified count, etc.)
     """
-    _results_cache[correlation_id] = final_results
+    _execution_cache[correlation_id] = {
+        "results": final_results,
+        "metrics": metrics or {}
+    }
 
 
-def get_results(correlation_id: str) -> Optional[list]:
-    """Retrieve results for a correlation ID.
+def get_results(correlation_id: str) -> Optional[dict]:
+    """Retrieve execution data for a correlation ID.
     
     Args:
         correlation_id: Unique correlation ID
     
     Returns:
-        List of results or None if not found
+        Dictionary with "results" and "metrics", or None if not found
     """
-    return _results_cache.get(correlation_id)
+    return _execution_cache.get(correlation_id)
 
 
 def clear_results(correlation_id: str) -> None:
-    """Clear results for a correlation ID.
+    """Clear cached data for a correlation ID.
     
     Args:
         correlation_id: Unique correlation ID
     """
-    _results_cache.pop(correlation_id, None)
+    _execution_cache.pop(correlation_id, None)

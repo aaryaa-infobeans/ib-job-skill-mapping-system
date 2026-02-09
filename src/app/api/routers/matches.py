@@ -1,6 +1,6 @@
 """Matches router."""
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,13 +15,24 @@ router = APIRouter(prefix="/jd-skill-mapping", tags=["matches"])
 
 
 class MatchResult(BaseModel):
-    """Individual match result."""
+    """Individual match result with detailed explanation."""
 
     team_member_id: str
     profile_score: float
     fit_level: str
     availability_match: bool
     explanation: List[str]
+    detailed_breakdown: Optional[dict] = None
+
+
+class MatchesMetrics(BaseModel):
+    """Metrics about the matching process."""
+    
+    total_evaluated: Optional[int] = None
+    total_qualified: Optional[int] = None
+    qualification_rate: Optional[float] = None
+    token_count: Optional[int] = None
+    cost_usd: Optional[float] = None
 
 
 class MatchesResponse(BaseModel):
@@ -31,6 +42,7 @@ class MatchesResponse(BaseModel):
     status: str
     total_matches: int
     matches: List[MatchResult]
+    metrics: Optional[MatchesMetrics] = None
 
 
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
@@ -43,6 +55,7 @@ async def get_matches(
     Get match results for a requisition.
 
     Returns the ranked list of candidates with scores and explanations.
+    Includes metrics about evaluation and qualification rates (FIT_SCORE_THRESHOLD filtering).
     """
     try:
         repo = RequisitionRepository(db)
@@ -52,38 +65,53 @@ async def get_matches(
         if not requisition:
             raise HTTPException(status_code=404, detail="Requisition not found")
 
-        # Retrieve results from cache
-        final_results = get_results(correlation_id)
-        
-        if final_results is None:
-            # Results not yet available - still processing
-            return MatchesResponse(
-                correlation_id=correlation_id,
-                status="PROCESSING",
-                total_matches=0,
-                matches=[],
-            )
-        
-        # Format results for response
-        matches = [
-            MatchResult(
-                team_member_id=result["team_member_id"],
-                profile_score=result["profile_score"],
-                fit_level=result["fit_level"],
-                availability_match=result["availability_match"],
-                explanation=result["explanation"],
-            )
-            for result in final_results
-        ]
-        
+    # Retrieve results from cache
+    cached_data = get_results(correlation_id)
+    
+    if cached_data is None:
+        # Results not yet available - still processing
         return MatchesResponse(
             correlation_id=correlation_id,
-            status="COMPLETED",
-            total_matches=len(matches),
-            matches=matches,
+            status="PROCESSING",
+            total_matches=0,
+            matches=[],
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving matches: {str(e)}")
+    
+    final_results = cached_data.get("results", [])
+    cached_metrics = cached_data.get("metrics", {})
+    
+    # Format results for response
+    matches = [
+        MatchResult(
+            team_member_id=result["team_member_id"],
+            profile_score=result["profile_score"],
+            fit_level=result["fit_level"],
+            availability_match=result["availability_match"],
+            explanation=result["explanation"],
+            detailed_breakdown=result.get("detailed_breakdown"),
+        )
+        for result in final_results
+    ]
+    
+    # Get metrics from cache
+    metrics = None
+    if cached_metrics:
+        metrics = MatchesMetrics(
+            total_evaluated=cached_metrics.get("total_evaluated"),
+            total_qualified=cached_metrics.get("total_qualified"),
+            token_count=cached_metrics.get("token_count"),
+            cost_usd=round(cached_metrics.get("cost_usd", 0.0), 4) if cached_metrics.get("cost_usd") is not None else None,
+        )
+        # Calculate qualification rate if possible
+        if metrics.total_evaluated and metrics.total_evaluated > 0:
+            rate = (metrics.total_qualified or 0) / metrics.total_evaluated
+            metrics.qualification_rate = round(rate, 2)
+    
+    return MatchesResponse(
+        correlation_id=correlation_id,
+        status="COMPLETED",
+        total_matches=len(matches),
+        matches=matches,
+        metrics=metrics if any(getattr(metrics, f, None) is not None for f in metrics.__fields__) else None,
+    )
 

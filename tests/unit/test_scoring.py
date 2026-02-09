@@ -202,7 +202,7 @@ def test_calculate_candidate_score_partial_match():
     )
     
     assert result["team_member_id"] == "tm-002"
-    assert result["skill_score"] == pytest.approx(0.7 * (1/3))  # Only 1 of 3 mandatory
+    assert result["skill_score"] == 0.23  # round(0.7 * (1/3), 2)
     assert result["experience_score"] == 0.0  # Below minimum
     assert result["availability_score"] == 0.1  # 10/100
     assert result["is_available"] is False
