@@ -88,7 +88,7 @@ def execute_graph_with_audit(
                     checkpoint_state["parsed_jd"] = current_state.get("parsed_jd")
                     # Update status to MATCHING (3) after JD is parsed
                     if req_record:
-                        repo.update_requisition_status(req_record.id, 3)
+                        repo.update_requisition_status(req_record.id, 3) # MATCHING
                         db.commit()
                 elif node_name == "skill_normalization":
                     checkpoint_state["normalized_skills"] = current_state.get("normalized_skills")
@@ -102,7 +102,13 @@ def execute_graph_with_audit(
                     checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
                     checkpoint_state["qualified_count"] = current_state.get("total_qualified", 0)
                 elif node_name == "result_aggregation":
-                    checkpoint_state["result_count"] = len(current_state.get("final_results", []))
+                    checkpoint_state["final_results"] = current_state.get("final_results", [])
+                    checkpoint_state["metrics"] = {
+                        "total_evaluated": current_state.get("total_evaluated", 0),
+                        "total_qualified": current_state.get("total_qualified", 0),
+                        "token_count": current_state.get("cumulative_tokens", 0),
+                        "cost_usd": current_state.get("cumulative_cost_usd", 0.0),
+                    }
                     checkpoint_state["status"] = "completed"
                 
                 # Handle error state if node reported an error
@@ -126,7 +132,7 @@ def execute_graph_with_audit(
         final_state = current_state
         final_results = final_state.get("final_results", [])
         
-        if final_results and not final_state.get("error_message"):
+        if final_results is not None and not final_state.get("error_message"):
             from app.ai.results_cache import store_results
             metrics = {
                 "total_evaluated": final_state.get("total_evaluated", 0),
@@ -137,7 +143,7 @@ def execute_graph_with_audit(
             store_results(correlation_id, final_results, metrics=metrics)
             if req_record:
                 from datetime import datetime
-                repo.update_requisition_status(req_record.id, 4, completed_at=datetime.utcnow())
+                repo.update_requisition_status(req_record.id, 4, completed_at=datetime.utcnow()) # COMPLETED
                 db.commit()
         
         # 4. Final summary

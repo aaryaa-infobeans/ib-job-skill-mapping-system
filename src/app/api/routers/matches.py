@@ -63,13 +63,47 @@ async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
     cached_data = get_results(correlation_id)
     
     if cached_data is None:
-        # Results not yet available - still processing
-        return MatchesResponse(
-            correlation_id=correlation_id,
-            status="PROCESSING",
-            total_matches=0,
-            matches=[],
-        )
+        # Results not in cache, check if requisition is already finished in DB
+        if requisition.status == 4:  # COMPLETED
+            from app.db.models.models import LangGraphCheckpoint
+            from app.ai.results_cache import store_results
+            
+            # Attempt to recover results from checkpoint
+            checkpoint = db.query(LangGraphCheckpoint).filter(
+                LangGraphCheckpoint.request_id == requisition.request_id,
+                LangGraphCheckpoint.node_name == "result_aggregation"
+            ).first()
+            
+            if checkpoint and checkpoint.state_json and "final_results" in checkpoint.state_json:
+                final_results = checkpoint.state_json["final_results"]
+                metrics = checkpoint.state_json.get("metrics", {})
+                
+                # Re-populate cache for subsequent requests
+                store_results(correlation_id, final_results, metrics)
+                cached_data = {"results": final_results, "metrics": metrics}
+            else:
+                # No results checkpoint found - return completed with zero matches
+                return MatchesResponse(
+                    correlation_id=correlation_id,
+                    status="COMPLETED",
+                    total_matches=0,
+                    matches=[],
+                )
+        elif requisition.status == 5:  # FAILED
+            return MatchesResponse(
+                correlation_id=correlation_id,
+                status="FAILED",
+                total_matches=0,
+                matches=[],
+            )
+        else:
+            # Requisition is still being processed
+            return MatchesResponse(
+                correlation_id=correlation_id,
+                status="PROCESSING",
+                total_matches=0,
+                matches=[],
+            )
     
     final_results = cached_data.get("results", [])
     cached_metrics = cached_data.get("metrics", {})

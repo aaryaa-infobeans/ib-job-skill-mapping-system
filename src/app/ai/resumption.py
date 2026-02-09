@@ -175,10 +175,14 @@ def resume_requisition(request_id: str, db: Session) -> Optional[Dict[str, Any]]
                 checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
                 checkpoint_state["qualified_count"] = current_state.get("total_qualified", 0)
             elif node_name == "result_aggregation":
-                checkpoint_state["result_count"] = len(current_state.get("final_results", []))
+                checkpoint_state["final_results"] = current_state.get("final_results", [])
+                checkpoint_state["metrics"] = {
+                    "total_evaluated": current_state.get("total_evaluated", 0),
+                    "total_qualified": current_state.get("total_qualified", 0),
+                    "token_count": current_state.get("cumulative_tokens", 0),
+                    "cost_usd": current_state.get("cumulative_cost_usd", 0.0),
+                }
                 checkpoint_state["status"] = "completed"
-                checkpoint_state["total_evaluated"] = current_state.get("total_evaluated", 0)
-                checkpoint_state["total_qualified"] = current_state.get("total_qualified", 0)
             
             save_checkpoint(
                 db=db,
