@@ -58,6 +58,25 @@ def test_calculate_requisition_window_defaults():
     assert end_date == date.today() + timedelta(days=6 * 30)
 
 
+def test_calculate_requisition_window_iso_strings():
+    """Test requisition window calculation with ISO strings."""
+    # Test with YYYY-MM-DD string
+    start_str = "2026-05-20"
+    start_date, end_date = calculate_requisition_window(start_str, 6)
+    assert start_date == date(2026, 5, 20)
+    assert end_date == date(2026, 5, 20) + timedelta(days=6 * 30)
+
+    # Test with ISO datetime string
+    start_dt_str = "2026-06-15T10:30:00"
+    start_date, end_date = calculate_requisition_window(start_dt_str, 3)
+    assert start_date == date(2026, 6, 15)
+    assert end_date == date(2026, 6, 15) + timedelta(days=3 * 30)
+
+    # Test with invalid string (should fallback to today)
+    start_date, end_date = calculate_requisition_window("invalid-date", None)
+    assert start_date == date.today()
+
+
 def test_get_overlapping_allocations_no_overlap(db_session):
     """Test getting allocations with no overlaps."""
     # Create team member

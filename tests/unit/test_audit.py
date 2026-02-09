@@ -3,7 +3,12 @@
 import pytest
 from datetime import datetime
 
-from app.ai.audit import save_checkpoint, get_checkpoints_for_request, calculate_total_tokens
+from app.ai.audit import (
+    save_checkpoint,
+    get_checkpoints_for_request,
+    calculate_total_tokens,
+    convert_dates_to_iso,
+)
 from app.db.models.models import LangGraphCheckpoint, RequisitionRequest
 
 
@@ -157,3 +162,31 @@ def test_save_checkpoint_with_null_token_count(db):
     # Calculate total should handle None values
     total = calculate_total_tokens(db, "test-audit-req-005")
     assert total == 0
+
+
+def test_convert_dates_to_iso():
+    """Test recursive date conversion for JSON serialization."""
+    from datetime import date
+    now = datetime(2026, 2, 9, 12, 0, 0)
+    today = date(2026, 2, 9)
+    
+    input_data = {
+        "dt": now,
+        "d": today,
+        "nested": {
+            "dt_list": [now, today],
+            "other": "string"
+        }
+    }
+    
+    expected = {
+        "dt": now.isoformat(),
+        "d": today.isoformat(),
+        "nested": {
+            "dt_list": [now.isoformat(), today.isoformat()],
+            "other": "string"
+        }
+    }
+    
+    result = convert_dates_to_iso(input_data)
+    assert result == expected
