@@ -36,168 +36,123 @@ def execute_graph_with_audit(
         extra={"request_id": request_id}
     )
     
-    # Execute the graph
-    # Note: LangGraph doesn't expose node-by-node execution in the compiled form,
-    # so we'll save a checkpoint for the final state. In a production system,
-    # you'd use LangGraph's built-in persistence or implement custom callbacks.
-    final_state = graph.invoke(initial_state)
-    
-    # Save checkpoints for each major step we can infer from the state
-    # This is a simplified approach - ideally we'd hook into LangGraph's execution
+    # 1. Update status to PROCESSING (ID: 2)
+    from app.db.repositories.requisition_repository import RequisitionRepository
+    repo = RequisitionRepository(db)
+    req_record = repo.get_requisition_by_request_id(request_id)
+    if req_record:
+        repo.update_requisition_status(req_record.id, 2)
+        db.commit()
+
     correlation_id = initial_state.get("requisition_input", {}).get("correlation_id", "unknown")
+    current_state = initial_state
     
-    # Get token metrics from state if available
-    token_metrics = final_state.get("token_metrics", {})
-    
-    # Checkpoint 1: Requisition Parsing
-    if final_state.get("parsed_jd"):
-        req_parsing_tokens = token_metrics.get("requisition_parsing", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="requisition_parsing",
-            state={
-                "parsed_jd": final_state.get("parsed_jd"),
-                "correlation_id": correlation_id,
-            },
-            token_count=req_parsing_tokens,
-        )
-    
-    # Checkpoint 2: Skill Normalization
-    if final_state.get("normalized_skills"):
-        skill_norm_tokens = token_metrics.get("skill_normalization", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="skill_normalization",
-            state={
-                "normalized_skills": final_state.get("normalized_skills"),
-                "correlation_id": correlation_id,
-            },
-            token_count=skill_norm_tokens,
-        )
-    
-    # Checkpoint: Embedding
-    if final_state.get("embedding_result"):
-        embedding_tokens = token_metrics.get("embedding", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="embedding",
-            state={
-                "model": final_state.get("embedding_result", {}).get("model"),
-                "correlation_id": correlation_id,
-            },
-            token_count=embedding_tokens,
-        )
-    
-    # Checkpoint: RAG Retrieval
-    if final_state.get("retrieved_candidates") is not None:
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="rag_retrieval",
-            state={
-                "candidate_count": len(final_state.get("retrieved_candidates", [])),
-                "correlation_id": correlation_id,
-            },
-            token_count=None,
-        )
-    
-    # Checkpoint 3: Matching & Scoring
-    if final_state.get("candidate_scores"):
-        matching_tokens = token_metrics.get("matching_scoring", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="matching_scoring",
-            state={
-                "candidate_count": len(final_state.get("candidate_scores", [])),
-                "correlation_id": correlation_id,
-            },
-            token_count=matching_tokens,
-        )
-    
-    # Checkpoint 4: Explanation Generation
-    if final_state.get("candidate_scores"):
-        explanation_tokens = token_metrics.get("explanation_generation", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="explanation_generation",
-            state={
-                "candidate_count": len(final_state.get("candidate_scores", [])),
-                "correlation_id": correlation_id,
-                "qualified_count": final_state.get("total_qualified", 0),
-            },
-            token_count=explanation_tokens,
-        )
-    
-    # Checkpoint 5: Result Aggregation (final)
-    if final_state.get("final_results"):
-        result_tokens = token_metrics.get("result_aggregation", {}).get("total_tokens")
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="result_aggregation",
-            state={
-                "result_count": len(final_state.get("final_results", [])),
-                "correlation_id": correlation_id,
-                "status": "completed",
+    # 2. Execute the graph using stream to capture each node completion
+    try:
+        processed_logs_count = 0
+        for event in graph.stream(current_state):
+            for node_name, state_update in event.items():
+                logger.info(f"Node '{node_name}' completed, saving checkpoint.")
+                
+                # Update current state with node outputs
+                current_state.update(state_update)
+                
+                # Extract token metrics for this specific node
+                token_metrics = state_update.get("token_metrics", {}).get(node_name, {})
+                token_count = token_metrics.get("total_tokens")
+                
+                # 2a. Save any NEW LLM logs generated in this step
+                llm_logs = current_state.get("llm_call_logs", [])
+                if len(llm_logs) > processed_logs_count:
+                    from app.ai.audit import save_llm_request_log
+                    for i in range(processed_logs_count, len(llm_logs)):
+                        log = llm_logs[i]
+                        save_llm_request_log(
+                            db=db,
+                            request_id=request_id,
+                            agent_name=log.get("agent_name"),
+                            prompt_name=log.get("prompt_name"),
+                            model=log.get("model"),
+                            prompt_tokens=log.get("prompt_tokens"),
+                            completion_tokens=log.get("completion_tokens"),
+                            cost_usd=log.get("cost_usd"),
+                            status=log.get("status", "SUCCESS"),
+                            error_message=log.get("error_message"),
+                        )
+                    processed_logs_count = len(llm_logs)
+                
+                # 2b. Prepare and save checkpoint
+                checkpoint_state = {"correlation_id": correlation_id}
+                
+                if node_name == "requisition_parsing":
+                    checkpoint_state["parsed_jd"] = current_state.get("parsed_jd")
+                    # Update status to MATCHING (3) after JD is parsed
+                    if req_record:
+                        repo.update_requisition_status(req_record.id, 3)
+                        db.commit()
+                elif node_name == "skill_normalization":
+                    checkpoint_state["normalized_skills"] = current_state.get("normalized_skills")
+                elif node_name == "embedding":
+                    checkpoint_state["model"] = current_state.get("embedding_result", {}).get("model")
+                elif node_name == "rag_retrieval":
+                    checkpoint_state["candidate_count"] = len(current_state.get("retrieved_candidates", []))
+                elif node_name == "matching_scoring":
+                    checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
+                elif node_name == "explanation_generation":
+                    checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
+                    checkpoint_state["qualified_count"] = current_state.get("total_qualified", 0)
+                elif node_name == "result_aggregation":
+                    checkpoint_state["result_count"] = len(current_state.get("final_results", []))
+                    checkpoint_state["status"] = "completed"
+                
+                # Handle error state if node reported an error
+                if current_state.get("error_message"):
+                    checkpoint_state["error_message"] = current_state["error_message"]
+                    save_checkpoint(db, request_id, "error", checkpoint_state)
+                    if req_record:
+                        repo.update_requisition_status(req_record.id, 5) # FAILED
+                        db.commit()
+                else:
+                    # Save normal node checkpoint
+                    save_checkpoint(
+                        db=db,
+                        request_id=request_id,
+                        node_name=node_name,
+                        state=checkpoint_state,
+                        token_count=token_count
+                    )
+
+        # 3. Finalize and Store Results
+        final_state = current_state
+        final_results = final_state.get("final_results", [])
+        
+        if final_results and not final_state.get("error_message"):
+            from app.ai.results_cache import store_results
+            metrics = {
                 "total_evaluated": final_state.get("total_evaluated", 0),
                 "total_qualified": final_state.get("total_qualified", 0),
-            },
-            token_count=result_tokens,
-        )
-    
-    # Checkpoint for errors
-    if final_state.get("error_message"):
-        save_checkpoint(
-            db=db,
-            request_id=request_id,
-            node_name="error",
-            state={
-                "error_message": final_state.get("error_message"),
-                "correlation_id": correlation_id,
-            },
-            token_count=None,
-        )
-    
-    # Save individual LLM request logs
-    llm_logs = final_state.get("llm_call_logs")
-    if llm_logs:
-        from app.ai.audit import save_llm_request_log
-        for log in llm_logs:
-            save_llm_request_log(
-                db=db,
-                request_id=request_id,
-                agent_name=log.get("agent_name"),
-                prompt_name=log.get("prompt_name"),
-                model=log.get("model"),
-                prompt_tokens=log.get("prompt_tokens"),
-                completion_tokens=log.get("completion_tokens"),
-                cost_usd=log.get("cost_usd"),
-                status=log.get("status", "SUCCESS"),
-                error_message=log.get("error_message"),
-            )
-    
-    # Log final token summary
-    cumulative_tokens = final_state.get("cumulative_tokens", 0)
-    cumulative_cost = final_state.get("cumulative_cost_usd", 0.0)
-    if cumulative_tokens > 0:
-        logger.info(
-            f"Graph execution completed with token summary: "
-            f"{cumulative_tokens} total tokens, ${cumulative_cost:.6f} cost",
-            extra={
-                "request_id": request_id,
-                "cumulative_tokens": cumulative_tokens,
-                "cumulative_cost_usd": cumulative_cost,
+                "token_count": final_state.get("cumulative_tokens", 0),
+                "cost_usd": final_state.get("cumulative_cost_usd", 0.0),
             }
-        )
-    else:
+            store_results(correlation_id, final_results, metrics=metrics)
+            if req_record:
+                from datetime import datetime
+                repo.update_requisition_status(req_record.id, 4, completed_at=datetime.utcnow())
+                db.commit()
+        
+        # 4. Final summary
+        cumulative_tokens = final_state.get("cumulative_tokens", 0)
+        cumulative_cost = final_state.get("cumulative_cost_usd", 0.0)
         logger.info(
-            "Graph execution completed with audit",
+            f"Graph execution completed. Summary: {cumulative_tokens} tokens, ${cumulative_cost:.6f} cost",
             extra={"request_id": request_id}
         )
-    
-    return final_state
+        
+        return final_state
+
+    except Exception as e:
+        logger.exception(f"Fatal error during graph execution: {str(e)}", extra={"request_id": request_id})
+        if req_record:
+            repo.update_requisition_status(req_record.id, 5)
+            db.commit()
+        raise

@@ -2,8 +2,8 @@
 
 import hashlib
 import json
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, List
 
 from sqlalchemy.orm import Session
 
@@ -90,3 +90,22 @@ class RequisitionRepository:
             if completed_at:
                 req.completed_at = completed_at
             self.db.flush()
+
+    def get_stuck_requisitions(self, timeout_minutes: int = 30) -> List[RequisitionRequestModel]:
+        """
+        Find requisitions stuck in PROCESSING status for more than timeout_minutes.
+        
+        A requisition is considered stuck if its status is 2 (PROCESSING) OR 3 (MATCHING)
+        and it hasn't completed or had an update for more than the timeout.
+        """
+        threshold_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+        
+        return (
+            self.db.query(RequisitionRequestModel)
+            .filter(
+                RequisitionRequestModel.status.in_([2, 3]), # PROCESSING or MATCHING
+                RequisitionRequestModel.received_at < threshold_time,
+                RequisitionRequestModel.completed_at.is_(None)
+            )
+            .all()
+        )

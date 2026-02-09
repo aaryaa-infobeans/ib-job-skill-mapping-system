@@ -47,13 +47,13 @@ def calculate_skill_score(
     if len(mandatory_skills) > 0:
         mandatory_score = len(matched_mandatory) / len(mandatory_skills)
     else:
-        mandatory_score = 1.0  # No mandatory skills means full score
+        mandatory_score = 0  # No mandatory skills means full score
     
     # Calculate preferred score (avoid division by zero)
     if len(preferred_skills) > 0:
         preferred_score = len(matched_preferred) / len(preferred_skills)
     else:
-        preferred_score = 1.0  # No preferred skills means full score
+        preferred_score = 0  # No preferred skills means full score
     
     # Calculate combined skill score
     skill_score = (mandatory_weight * mandatory_score) + (preferred_weight * preferred_score)
