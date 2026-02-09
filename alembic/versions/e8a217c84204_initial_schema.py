@@ -20,16 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create work_type enum (skip if already exists)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE work_type_enum AS ENUM ('wfo', 'wfh', 'hybrid');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-
     # Create auth_clients table
     op.create_table(
         "auth_clients",

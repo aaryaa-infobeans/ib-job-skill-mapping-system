@@ -75,9 +75,9 @@ auth_clients = Table(
 category_master = Table(
     "category_master",
     metadata,
-    Column("category_id", SmallInteger, primary_key=True, autoincrement=True),
+    Column("category_id", SmallInteger, primary_key=True),
     Column("category_name", String(100), nullable=False, unique=True),
-    Column("created_at", DateTime, default=datetime.utcnow),
+    Column("created_at", DateTime),
     extend_existing=True,
 )
 
