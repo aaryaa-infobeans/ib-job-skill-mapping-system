@@ -275,7 +275,11 @@ class SkillOntology(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     core_skill = Column(String(255), nullable=False, unique=True)
-    enriched_terms = Column(postgresql.ARRAY(String(255)), nullable=True)
+    # Use JSON for SQLite compatibility, ARRAY for PostgreSQL
+    enriched_terms = Column(
+        JSON().with_variant(postgresql.ARRAY(String(255)), "postgresql"),
+        nullable=True
+    )
 
 
 class TeamMemberEmbedding(Base):
@@ -284,7 +288,11 @@ class TeamMemberEmbedding(Base):
     __tablename__ = "team_member_embeddings"
 
     team_member_id = Column(String(50), ForeignKey("team_member.team_member_id"), primary_key=True)
-    embedding = Column(Vector(3072))
+    # Use Text for SQLite/non-PG, Vector for PostgreSQL
+    embedding = Column(
+        Text().with_variant(Vector(3072), "postgresql")
+    )
     profile_text = Column(Text, nullable=True)
-    extra_metadata = Column("metadata", postgresql.JSONB, nullable=True)
+    # Use JSON for cross-compatibility
+    extra_metadata = Column("metadata", JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
