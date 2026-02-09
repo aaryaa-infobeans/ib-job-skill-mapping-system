@@ -1,6 +1,7 @@
 """LangGraph state schema definition."""
 
-from typing import Dict, List, Optional, TypedDict
+from typing import Dict, List, Optional, TypedDict, Any
+import numpy as np
 
 
 class RequisitionInput(TypedDict):
@@ -12,12 +13,21 @@ class RequisitionInput(TypedDict):
 
 
 class ParsedJD(TypedDict):
-    """Structured output from JD parsing."""
+    """Structured output from JD parsing, enriched with payload data."""
 
     normalized_title: str
     normalized_role: str
     extracted_mandatory_skills: List[str]
     extracted_preferred_skills: List[str]
+    client_name: Optional[str]
+    experience: Optional[Dict]
+    expected_start_date: Optional[str]
+    requisition_duration_month: Optional[int]
+    priority: Optional[str]
+    location: Optional[List[str]]
+    work_mode: Optional[List[str]]
+    jd_text: str
+    metadata: Optional[Dict]
 
 
 class NormalizedSkills(TypedDict):
@@ -25,6 +35,8 @@ class NormalizedSkills(TypedDict):
 
     mandatory_skill_ids: List[str]  # Mapped to skill_master
     preferred_skill_ids: List[str]  # Mapped to skill_master
+    mandatory_enriched: Optional[Dict[str, List[str]]]  # core_skill -> [terms]
+    preferred_enriched: Optional[Dict[str, List[str]]]  # core_skill -> [terms]
 
 
 class CandidateScores(TypedDict):
@@ -49,6 +61,28 @@ class FinalResult(TypedDict):
     explanation: List[str]
 
 
+class TokenMetrics(TypedDict):
+    """Token tracking metrics per checkpoint."""
+    
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost_usd: float
+    model: str
+
+
+class LLMCallLog(TypedDict):
+    """Record of a single LLM call for database logging."""
+
+    agent_name: str
+    prompt_name: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost_usd: float
+
+
 class GraphState(TypedDict):
     """Complete state object passed through the LangGraph execution."""
 
@@ -66,6 +100,22 @@ class GraphState(TypedDict):
 
     # Populated by Result_Aggregation_Agent
     final_results: Optional[List[FinalResult]]
+
+    # Populated by Embedding_Agent
+    embedding_result: Optional[Dict[str, Any]]  # Map of component names to vectors
+    
+    # Populated by RAG_Retrieval_Agent
+    retrieved_candidates: Optional[List[Dict[str, Any]]]  # Candidates from vector search
+    
+    # Tracking metrics
+    total_evaluated: Optional[int]
+    total_qualified: Optional[int]
+    
+    # Token tracking (optional, for LLM observability)
+    token_metrics: Optional[Dict[str, TokenMetrics]]
+    llm_call_logs: Optional[List[LLMCallLog]]  # Individual LLM calls
+    cumulative_tokens: Optional[int]
+    cumulative_cost_usd: Optional[float]
 
     # To track errors
     error_message: Optional[str]

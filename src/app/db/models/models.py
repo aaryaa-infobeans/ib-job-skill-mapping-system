@@ -1,5 +1,7 @@
 """Database models for the job skill mapping system."""
 
+from pgvector.sqlalchemy import Vector
+
 import enum
 from datetime import datetime
 from sqlalchemy import (
@@ -16,7 +18,11 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    Text,
+    text,
 )
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -237,3 +243,48 @@ class LangGraphCheckpoint(Base):
 
     # Relationships
     request = relationship("RequisitionRequest", back_populates="checkpoints")
+
+
+class LLMRequestLog(Base):
+    """Log of all LLM requests for auditing and cost tracking."""
+
+    __tablename__ = "llm_request_log"
+
+    id = Column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+        server_default=sa.text("gen_random_uuid()"),
+    )
+    request_id = Column(String(64), nullable=True)
+    agent_name = Column(String(255), nullable=False)
+    prompt_name = Column(String(255), nullable=False)
+    model = Column(String(255), nullable=False)
+    prompt_tokens = Column(Integer, nullable=False)
+    completion_tokens = Column(Integer, nullable=False)
+    total_tokens = Column(Integer, nullable=False)
+    cost_usd = Column(Numeric(precision=10, scale=6), nullable=False)
+    status = Column(String(50), nullable=False, default="SUCCESS")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SkillOntology(Base):
+    """Enriched skill ontology for expansion and normalization."""
+
+    __tablename__ = "skill_ontology"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    core_skill = Column(String(255), nullable=False, unique=True)
+    enriched_terms = Column(postgresql.ARRAY(String(255)), nullable=True)
+
+
+class TeamMemberEmbedding(Base):
+    """Embeddings for team member profiles."""
+
+    __tablename__ = "team_member_embeddings"
+
+    team_member_id = Column(String(50), ForeignKey("team_member.team_member_id"), primary_key=True)
+    embedding = Column(Vector(3072))
+    profile_text = Column(Text, nullable=True)
+    extra_metadata = Column("metadata", postgresql.JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

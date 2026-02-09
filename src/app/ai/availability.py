@@ -1,7 +1,7 @@
 """Availability evaluation logic for team members."""
 
-from datetime import date, timedelta
-from typing import Optional
+from datetime import date, timedelta, datetime
+from typing import Optional, Union
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.db.models import TeamMemberAllocation
 
 
 def calculate_requisition_window(
-    expected_start_date: Optional[date],
+    expected_start_date: Optional[Union[date, str]],
     requisition_duration_month: Optional[int],
 ) -> tuple[date, date]:
     """Calculate requisition start and end dates.
@@ -21,7 +21,20 @@ def calculate_requisition_window(
     Returns:
         Tuple of (start_date, end_date)
     """
-    start_date = expected_start_date or date.today()
+    start_date = expected_start_date
+    
+    if isinstance(start_date, str):
+        try:
+            # Try date format first (YYYY-MM-DD)
+            start_date = date.fromisoformat(start_date)
+        except ValueError:
+            try:
+                # Try full ISO datetime format
+                start_date = datetime.fromisoformat(start_date).date()
+            except ValueError:
+                start_date = None
+                
+    start_date = start_date or date.today()
     duration = requisition_duration_month or 6
     
     # Calculate end date (approximately duration * 30 days)
@@ -133,7 +146,7 @@ def evaluate_availability(
     
     return {
         "is_available": is_available,
-        "available_capacity": available_capacity,
-        "total_allocation": total_allocation,
+        "available_capacity": round(available_capacity, 2),
+        "total_allocation": round(total_allocation, 2),
         "requisition_window": (start_date, end_date),
     }

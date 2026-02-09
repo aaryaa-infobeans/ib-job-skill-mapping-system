@@ -52,12 +52,23 @@ def matching_scoring_node(state: GraphState) -> GraphState:
         expected_start_date = parsed_jd.get("expected_start_date")
         requisition_duration_month = parsed_jd.get("requisition_duration_month")
     
-    # Query database for all active team members
+    # Determine which team members to evaluate
+    retrieved_candidates = state.get("retrieved_candidates")
+    
     db: Session = SessionLocal()
     try:
-        team_members = db.query(TeamMember).filter(TeamMember.is_active == True).all()
-        
-        logger.info(f"Found {len(team_members)} active team members to evaluate")
+        if retrieved_candidates:
+            # Filter members by retrieved IDs
+            retrieved_ids = [c["team_member_id"] for c in retrieved_candidates]
+            team_members = db.query(TeamMember).filter(
+                TeamMember.team_member_id.in_(retrieved_ids),
+                TeamMember.is_active == True
+            ).all()
+            logger.info(f"Evaluating {len(team_members)} candidates filtered by RAG")
+        else:
+            # Fallback to all active members
+            team_members = db.query(TeamMember).filter(TeamMember.is_active == True).all()
+            logger.info(f"Found {len(team_members)} active team members to evaluate (No RAG filter)")
         
         candidate_scores = []
         
