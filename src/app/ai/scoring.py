@@ -43,13 +43,13 @@ def calculate_skill_score(
     if len(mandatory_skills) > 0:
         mandatory_score = len(matched_mandatory) / len(mandatory_skills)
     else:
-        mandatory_score = 0.0  # No mandatory skills means zero points
+        mandatory_score = 1.0  # No mandatory skills means full score for this component
     
     # Calculate preferred score (avoid division by zero)
     if len(preferred_skills) > 0:
         preferred_score = len(matched_preferred) / len(preferred_skills)
     else:
-        preferred_score = 0.0  # No preferred skills means zero points
+        preferred_score = 1.0  # No preferred skills means full score for this component
     
     # Calculate combined skill score
     skill_score = (mandatory_weight * mandatory_score) + (preferred_weight * preferred_score)
@@ -158,7 +158,7 @@ def calculate_certification_score(
     """
     if not required_certifications:
         return {
-            "certification_score": 0.0,
+            "certification_score": 1.0,
             "matched_certifications": [],
             "missing_certifications": [],
         }
