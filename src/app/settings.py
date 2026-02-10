@@ -34,16 +34,18 @@ class Settings(BaseSettings):
     openai_output_rate: Optional[float] = None
     
     # Agent Weights
-    weight_mandatory_skills: float = 0.35
-    weight_preferred_skills: float = 0.20
-    weight_experience: float = 0.15
+    weight_mandatory_skills: float = 0.30
+    weight_preferred_skills: float = 0.15
+    weight_experience: float = 0.10
     weight_semantic_similarity: float = 0.10
     weight_certification: float = 0.10
     weight_jd_text: float = 0.10
+    weight_location: float = 0.10
+    weight_work_mode: float = 0.05
     
     # Thresholds
     fit_score_threshold: float = 0.5
-    rag_similarity_threshold: float = 0.6
+    rag_similarity_threshold: float = 0.0
     
     # Retry Configuration
     max_retry_attempts: int = 3

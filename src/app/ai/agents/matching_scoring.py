@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.ai.availability import evaluate_availability
 from app.ai.scoring import calculate_candidate_score
 from app.ai.state import GraphState
-from app.db.models import TeamMember, TeamMemberSkill
+from app.db.models import TeamMember, TeamMemberSkill, SkillCertification
 from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,9 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     # Extract requisition parameters
     mandatory_skill_ids = normalized_skills.get("mandatory_skill_ids", [])
     preferred_skill_ids = normalized_skills.get("preferred_skill_ids", [])
+    required_certifications = parsed_jd.get("certifications_required", [])
+    required_locations = parsed_jd.get("location", [])
+    required_work_modes = parsed_jd.get("work_mode", [])
     
     # Extract experience requirements from parsed_jd
     min_experience_months = None
@@ -58,14 +61,17 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     db: Session = SessionLocal()
     try:
         if retrieved_candidates:
-            # Filter members by retrieved IDs
-            retrieved_ids = [c["team_member_id"] for c in retrieved_candidates]
+            # Filter members by retrieved IDs and store RAG results for lookup
+            retrieved_results = {c["team_member_id"]: c for c in retrieved_candidates}
+            retrieved_ids = list(retrieved_results.keys())
+            
             team_members = db.query(TeamMember).filter(
                 TeamMember.team_member_id.in_(retrieved_ids),
                 TeamMember.is_active == True
             ).all()
             logger.info(f"Evaluating {len(team_members)} candidates filtered by RAG")
         else:
+            retrieved_results = {}
             # Fallback to all active members
             team_members = db.query(TeamMember).filter(TeamMember.is_active == True).all()
             logger.info(f"Found {len(team_members)} active team members to evaluate (No RAG filter)")
@@ -82,6 +88,14 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     .all()
                 ]
                 
+                # Get member's certifications
+                member_certs = [
+                    cert.certificate
+                    for cert in db.query(SkillCertification)
+                    .filter(SkillCertification.team_member_id == member.team_member_id)
+                    .all()
+                ]
+                
                 # Evaluate availability
                 availability_result = evaluate_availability(
                     db,
@@ -90,6 +104,9 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     requisition_duration_month,
                     threshold_percentage=80.0,
                 )
+                
+                # Get RAG scores for this member if available
+                rag_scores = retrieved_results.get(member.team_member_id)
                 
                 # Calculate complete candidate score
                 score_result = calculate_candidate_score(
@@ -100,8 +117,15 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     preferred_skill_ids=preferred_skill_ids,
                     min_experience_months=min_experience_months,
                     max_experience_months=max_experience_months,
+                    candidate_certifications=member_certs,
+                    required_certifications=required_certifications,
+                    candidate_location=member.base_location,
+                    required_locations=required_locations,
+                    candidate_work_mode=member.work_type.value if member.work_type else None,
+                    required_work_modes=required_work_modes,
                     is_available=availability_result["is_available"],
                     available_capacity=availability_result["available_capacity"],
+                    rag_scores=rag_scores,
                 )
                 
                 candidate_scores.append(score_result)

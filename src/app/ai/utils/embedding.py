@@ -41,8 +41,8 @@ class EmbeddingAgent(BaseAgent):
         """
         # Prepare texts to embed
         jd_level_text = f"Job level: {normalized_requisition.original_requisition.jd_level}"
-        mandatory_text = f"Required skills: {', '.join(normalized_requisition.normalized_mandatory_skills)}"
-        preferred_text = f"Preferred skills: {', '.join(normalized_requisition.normalized_preferred_skills)}"
+        mandatory_text = f"Required skills: {', '.join(normalized_requisition.original_mandatory_skills)}"
+        preferred_text = f"Preferred skills: {', '.join(normalized_requisition.original_preferred_skills)}"
         certification_text = f"Certifications: {', '.join(normalized_requisition.original_requisition.certifications or [])}"
         
         # Generate embeddings
