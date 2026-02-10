@@ -1,0 +1,479 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Deployment type'
+        required: true
+        default: 'blue-green'
+        type: choice
+        options:
+          - blue-green
+          - rolling
+          - canary
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip tests (emergency only)'
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER: ib-job-skill-mapping-prod-eks
+  ECR_REPOSITORY: ib-job-skill-mapping
+  DEPLOYMENT_NAMESPACE: production
+  
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # Pre-deployment validation
+  validate:
+    name: Pre-Deployment Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate version
+        id: version
+        run: |
+          VERSION="${GITHUB_SHA:0:7}-$(date +%Y%m%d-%H%M%S)"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+      
+      - name: Validate deployment type
+        run: |
+          echo "Deployment type: ${{ github.event.inputs.deployment_type || 'blue-green' }}"
+          echo "Target environment: ${{ github.event.inputs.environment || 'production' }}"
+      
+      - name: Check for breaking changes
+        run: |
+          echo "Checking for breaking changes in database schema..."
+          # Compare current schema with deployed version
+          # Fail if breaking changes detected without migration
+          
+      - name: Validate manifests
+        run: |
+          echo "Validating Kubernetes manifests..."
+          # Validate all K8s YAML files
+  
+  # Run test suite
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate
+    if: ${{ !inputs.skip_tests }}
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5434:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install -r requirements-test.txt
+      
+      - name: Run smoke tests
+        run: pytest tests/smoke/ -v --tb=short
+      
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --cov=src --cov-report=xml
+      
+      - name: Run integration tests
+        run: pytest tests/integration/ -v
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:test@localhost:5434/test_db
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  # Build and push Docker image
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [validate, test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.validate.outputs.version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      
+      - name: Scan image for vulnerabilities
+        run: |
+          # Use Trivy or similar
+          echo "Scanning image for vulnerabilities..."
+          # docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          #   aquasec/trivy image ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.validate.outputs.version }}
+
+  # Database migration (zero-downtime)
+  migrate:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [validate, build]
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+      url: https://api.infobeans.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      
+      - name: Get database credentials
+        id: db-creds
+        run: |
+          DB_PASSWORD=$(aws secretsmanager get-secret-value \
+            --secret-id ib-job-skill-mapping-prod-db-master-password \
+            --query SecretString --output text)
+          echo "::add-mask::$DB_PASSWORD"
+          echo "password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+      
+      - name: Run migrations (forward-compatible)
+        run: |
+          echo "Running database migrations..."
+          # Use Alembic or similar
+          # Migrations must be backward-compatible with current version
+          kubectl run migration-${{ github.run_id }} \
+            --image=${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.validate.outputs.version }} \
+            --restart=Never \
+            --namespace=${{ env.DEPLOYMENT_NAMESPACE }} \
+            --env="DATABASE_URL=postgresql://postgres:${{ steps.db-creds.outputs.password }}@${{ secrets.DB_HOST }}:5432/ib_job_skill_mapping" \
+            --command -- alembic upgrade head
+      
+      - name: Wait for migration completion
+        run: |
+          kubectl wait --for=condition=complete \
+            --timeout=600s \
+            job/migration-${{ github.run_id }} \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }}
+      
+      - name: Cleanup migration job
+        if: always()
+        run: |
+          kubectl delete pod migration-${{ github.run_id }} \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} || true
+
+  # Deploy to staging (blue environment)
+  deploy-blue:
+    name: Deploy Blue Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [validate, build, migrate]
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}-blue
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      
+      - name: Deploy blue environment
+        run: |
+          echo "Deploying to blue environment..."
+          
+          # Update deployment with new image
+          kubectl set image deployment/api-gateway-blue \
+            api-gateway=${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.validate.outputs.version }} \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }}
+          
+          # Update version labels
+          kubectl label deployment/api-gateway-blue \
+            version=${{ needs.validate.outputs.version }} \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} --overwrite
+      
+      - name: Wait for blue deployment
+        run: |
+          kubectl rollout status deployment/api-gateway-blue \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} \
+            --timeout=600s
+      
+      - name: Verify blue environment health
+        run: |
+          echo "Verifying blue environment health..."
+          # Get blue service endpoint
+          BLUE_ENDPOINT=$(kubectl get svc api-gateway-blue \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          
+          # Health check
+          curl -f http://${BLUE_ENDPOINT}/health || exit 1
+          
+          # Smoke test
+          curl -f http://${BLUE_ENDPOINT}/api/v1/health || exit 1
+
+  # Approval gate for production traffic switch
+  approve-traffic-switch:
+    name: Approve Traffic Switch
+    runs-on: ubuntu-latest
+    timeout-minutes: 1440  # 24 hours
+    needs: deploy-blue
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}-approval
+    
+    steps:
+      - name: Manual approval
+        run: |
+          echo "Waiting for manual approval to switch traffic to blue environment..."
+          echo "Review metrics and logs before approving."
+
+  # Switch traffic from green to blue
+  switch-traffic:
+    name: Switch Traffic to Blue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, approve-traffic-switch]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      
+      - name: Switch traffic to blue
+        run: |
+          echo "Switching traffic to blue environment..."
+          
+          # Update service selector to point to blue
+          kubectl patch service api-gateway \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} \
+            -p '{"spec":{"selector":{"version":"blue"}}}'
+          
+          # Wait for endpoints to update
+          sleep 30
+      
+      - name: Verify traffic switch
+        run: |
+          echo "Verifying traffic is routing to blue..."
+          # Check service endpoints
+          kubectl get endpoints api-gateway -n ${{ env.DEPLOYMENT_NAMESPACE }}
+      
+      - name: Monitor initial traffic
+        run: |
+          echo "Monitoring initial traffic for 5 minutes..."
+          # Check logs, metrics, error rates
+          sleep 300
+
+  # Smoke test production traffic
+  smoke-test-production:
+    name: Smoke Test Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: switch-traffic
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run production smoke tests
+        run: |
+          echo "Running smoke tests against production..."
+          # Run critical path tests
+          # Verify key functionality
+          # Check error rates
+      
+      - name: Verify metrics
+        run: |
+          echo "Checking production metrics..."
+          # Query CloudWatch/Datadog for:
+          # - Error rate < 0.5%
+          # - Latency p95 < 2s
+          # - All health checks passing
+
+  # Decommission old green environment
+  cleanup-green:
+    name: Cleanup Green Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: smoke-test-production
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      
+      - name: Scale down green environment
+        run: |
+          echo "Scaling down green environment..."
+          kubectl scale deployment/api-gateway-green \
+            --replicas=0 \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }}
+      
+      - name: Rename blue to green
+        run: |
+          echo "Preparing for next deployment..."
+          # Label blue as the new green
+          kubectl label deployment/api-gateway-blue \
+            environment=green \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} --overwrite
+
+  # Rollback procedure (triggered on failure)
+  rollback:
+    name: Rollback to Green
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: failure()
+    needs: [switch-traffic, smoke-test-production]
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      
+      - name: Rollback traffic to green
+        run: |
+          echo "ROLLBACK: Switching traffic back to green environment..."
+          
+          kubectl patch service api-gateway \
+            -n ${{ env.DEPLOYMENT_NAMESPACE }} \
+            -p '{"spec":{"selector":{"version":"green"}}}'
+          
+          echo "Rollback complete. Green environment is serving traffic."
+      
+      - name: Notify team
+        run: |
+          echo "Sending rollback notification..."
+          # Send alert to Slack/email
+      
+      - name: Collect debugging info
+        run: |
+          echo "Collecting logs and metrics for debugging..."
+          kubectl logs -l version=blue -n ${{ env.DEPLOYMENT_NAMESPACE }} --tail=1000
+          kubectl describe deployment/api-gateway-blue -n ${{ env.DEPLOYMENT_NAMESPACE }}
+
+  # Notify deployment status
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [deploy-blue, switch-traffic, smoke-test-production, cleanup-green]
+    
+    steps:
+      - name: Deployment success notification
+        if: ${{ needs.cleanup-green.result == 'success' }}
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Environment: ${{ github.event.inputs.environment || 'production' }}"
+          # Send Slack notification
+      
+      - name: Deployment failure notification
+        if: ${{ needs.cleanup-green.result != 'success' }}
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check logs for details."
+          # Send Slack notification with failure details

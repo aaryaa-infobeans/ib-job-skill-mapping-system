@@ -20,8 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # work_type enum will be created by SQLAlchemy's Enum type definition
-
     # Create auth_clients table
     op.create_table(
         "auth_clients",

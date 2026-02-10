@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import verify_token
 from app.ai.results_cache import get_results
 from app.db.repositories.requisition_repository import RequisitionRepository
 from app.db.session import get_db
@@ -45,7 +46,11 @@ class MatchesResponse(BaseModel):
 
 
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
-async def get_matches(correlation_id: str, db: Session = Depends(get_db)):
+async def get_matches(
+    correlation_id: str,
+    db: Session = Depends(get_db),
+    token: dict = Depends(verify_token),
+):
     """
     Get match results for a requisition.
 

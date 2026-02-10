@@ -5,6 +5,9 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 
+class Config:
+    env_file = ".env"
+    extra = "ignore"  # Ignore extra fields in .env
 
 class Settings(BaseSettings):
     """Application settings with secure secrets handling."""
@@ -69,6 +72,7 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=False
     )
+
     
     def get_database_url(self) -> str:
         """

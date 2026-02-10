@@ -1,0 +1,1587 @@
+{
+  "metadata": {
+    "batch_id": "sync_2026_01_19_049",
+    "timestamp": "2026-01-19T02:00:00Z",
+    "total_records": 49,
+    "batch_number": 1,
+    "total_batches": 1,
+    "records_in_batch": 49,
+    "source_system": "EAGLE_v1",
+    "schema_version": "1.1",
+    "status": {
+      "code": 0,
+      "key": "SUCCESS",
+      "message": "Request successful"
+    }
+  },
+  "team_members": [
+    {
+      "team_member_id": "EMP_1001",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 30,
+      "full_name": "Employee 1001",
+      "designation": "QA Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1001.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1201",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1002",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 36,
+      "full_name": "Employee 1002",
+      "designation": "Business Analyst",
+      "base_location": "Indore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1002.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1202",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1003",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 42,
+      "full_name": "Employee 1003",
+      "designation": "Tech Lead",
+      "base_location": "Ahmedabad",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1003.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1203",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1004",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 48,
+      "full_name": "Employee 1004",
+      "designation": "Project Manager",
+      "base_location": "Pune",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1004.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1204",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1005",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 54,
+      "full_name": "Employee 1005",
+      "designation": "Software Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1005.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1205",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1006",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 60,
+      "full_name": "Employee 1006",
+      "designation": "QA Engineer",
+      "base_location": "Indore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1006.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1206",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1007",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 66,
+      "full_name": "Employee 1007",
+      "designation": "Business Analyst",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1007.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1207",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1008",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 24,
+      "full_name": "Employee 1008",
+      "designation": "Tech Lead",
+      "base_location": "Pune",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1008.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1208",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1009",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 30,
+      "full_name": "Employee 1009",
+      "designation": "Project Manager",
+      "base_location": "Bangalore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1009.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1209",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1010",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 36,
+      "full_name": "Employee 1010",
+      "designation": "Software Engineer",
+      "base_location": "Indore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1010.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1210",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1011",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 42,
+      "full_name": "Employee 1011",
+      "designation": "QA Engineer",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1011.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1211",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1012",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 48,
+      "full_name": "Employee 1012",
+      "designation": "Business Analyst",
+      "base_location": "Pune",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1012.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1212",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1013",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 54,
+      "full_name": "Employee 1013",
+      "designation": "Tech Lead",
+      "base_location": "Bangalore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1013.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1213",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1014",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 60,
+      "full_name": "Employee 1014",
+      "designation": "Project Manager",
+      "base_location": "Indore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1014.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1214",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1015",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 66,
+      "full_name": "Employee 1015",
+      "designation": "Software Engineer",
+      "base_location": "Ahmedabad",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1015.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1215",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1016",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 24,
+      "full_name": "Employee 1016",
+      "designation": "QA Engineer",
+      "base_location": "Pune",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1016.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1216",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1017",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 30,
+      "full_name": "Employee 1017",
+      "designation": "Business Analyst",
+      "base_location": "Bangalore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1017.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1217",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1018",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 36,
+      "full_name": "Employee 1018",
+      "designation": "Tech Lead",
+      "base_location": "Indore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1018.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1218",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1019",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 42,
+      "full_name": "Employee 1019",
+      "designation": "Project Manager",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1019.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1219",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1020",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 48,
+      "full_name": "Employee 1020",
+      "designation": "Software Engineer",
+      "base_location": "Pune",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1020.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1220",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1021",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 54,
+      "full_name": "Employee 1021",
+      "designation": "QA Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1021.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1221",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1022",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 60,
+      "full_name": "Employee 1022",
+      "designation": "Business Analyst",
+      "base_location": "Indore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1022.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1222",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1023",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 66,
+      "full_name": "Employee 1023",
+      "designation": "Tech Lead",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1023.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1223",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1024",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 24,
+      "full_name": "Employee 1024",
+      "designation": "Project Manager",
+      "base_location": "Pune",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1024.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1224",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1025",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 30,
+      "full_name": "Employee 1025",
+      "designation": "Software Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1025.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1225",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1026",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 36,
+      "full_name": "Employee 1026",
+      "designation": "QA Engineer",
+      "base_location": "Indore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1026.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1226",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1027",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 42,
+      "full_name": "Employee 1027",
+      "designation": "Business Analyst",
+      "base_location": "Ahmedabad",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1027.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1227",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1028",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 48,
+      "full_name": "Employee 1028",
+      "designation": "Tech Lead",
+      "base_location": "Pune",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1028.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1228",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1029",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 54,
+      "full_name": "Employee 1029",
+      "designation": "Project Manager",
+      "base_location": "Bangalore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1029.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1229",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1030",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 60,
+      "full_name": "Employee 1030",
+      "designation": "Software Engineer",
+      "base_location": "Indore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1030.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1230",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1031",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 66,
+      "full_name": "Employee 1031",
+      "designation": "QA Engineer",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1031.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1231",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1032",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 24,
+      "full_name": "Employee 1032",
+      "designation": "Business Analyst",
+      "base_location": "Pune",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1032.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1232",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1033",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 30,
+      "full_name": "Employee 1033",
+      "designation": "Tech Lead",
+      "base_location": "Bangalore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1033.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1233",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1034",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 36,
+      "full_name": "Employee 1034",
+      "designation": "Project Manager",
+      "base_location": "Indore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1034.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1234",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1035",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 42,
+      "full_name": "Employee 1035",
+      "designation": "Software Engineer",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1035.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1235",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1036",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 48,
+      "full_name": "Employee 1036",
+      "designation": "QA Engineer",
+      "base_location": "Pune",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1036.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1236",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1037",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 54,
+      "full_name": "Employee 1037",
+      "designation": "Business Analyst",
+      "base_location": "Bangalore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1037.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1237",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1038",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 60,
+      "full_name": "Employee 1038",
+      "designation": "Tech Lead",
+      "base_location": "Indore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1038.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1238",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1039",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 66,
+      "full_name": "Employee 1039",
+      "designation": "Project Manager",
+      "base_location": "Ahmedabad",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1039.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1239",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1040",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 24,
+      "full_name": "Employee 1040",
+      "designation": "Software Engineer",
+      "base_location": "Pune",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1040.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1240",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1041",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 30,
+      "full_name": "Employee 1041",
+      "designation": "QA Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1041.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1241",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1042",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 36,
+      "full_name": "Employee 1042",
+      "designation": "Business Analyst",
+      "base_location": "Indore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1042.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1242",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1043",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 42,
+      "full_name": "Employee 1043",
+      "designation": "Tech Lead",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1043.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1243",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1044",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 48,
+      "full_name": "Employee 1044",
+      "designation": "Project Manager",
+      "base_location": "Pune",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1044.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1244",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 24,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1045",
+      "team_member_status": "active",
+      "profile_type": "developer",
+      "experience_in_months": 54,
+      "full_name": "Employee 1045",
+      "designation": "Software Engineer",
+      "base_location": "Bangalore",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1045.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1245",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_DEVELOPER_001",
+          "skill_name": "Java",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 30,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1046",
+      "team_member_status": "active",
+      "profile_type": "qa",
+      "experience_in_months": 60,
+      "full_name": "Employee 1046",
+      "designation": "QA Engineer",
+      "base_location": "Indore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1046.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1246",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_QA_001",
+          "skill_name": "Manual Testing",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 36,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1047",
+      "team_member_status": "active",
+      "profile_type": "ba",
+      "experience_in_months": 66,
+      "full_name": "Employee 1047",
+      "designation": "Business Analyst",
+      "base_location": "Ahmedabad",
+      "work-mode": "wfo",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1047.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1247",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": false,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_BA_001",
+          "skill_name": "Business Analysis",
+          "category": "Primary",
+          "rating": 5,
+          "experience_in_months": 42,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1048",
+      "team_member_status": "active",
+      "profile_type": "lead",
+      "experience_in_months": 24,
+      "full_name": "Employee 1048",
+      "designation": "Tech Lead",
+      "base_location": "Pune",
+      "work-mode": "hybrid",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1048.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1248",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_LEAD_001",
+          "skill_name": "System Design",
+          "category": "Primary",
+          "rating": 3,
+          "experience_in_months": 12,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    },
+    {
+      "team_member_id": "EMP_1049",
+      "team_member_status": "active",
+      "profile_type": "pm",
+      "experience_in_months": 30,
+      "full_name": "Employee 1049",
+      "designation": "Project Manager",
+      "base_location": "Bangalore",
+      "work-mode": "wfh",
+      "profile": "https://www.infobeans.com/eagle/profiles/EMP_1049.docx",
+      "allocations": [
+        {
+          "project_id": "PRJ-1249",
+          "allocation_percentage": 100,
+          "start_date": "2025-10-01",
+          "end_date": null,
+          "billable": true,
+          "is_deleted": false
+        }
+      ],
+      "skills": [
+        {
+          "skill_id": "SKILL_PM_001",
+          "skill_name": "Agile Management",
+          "category": "Primary",
+          "rating": 4,
+          "experience_in_months": 18,
+          "certifications": [],
+          "is_deleted": false
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import verify_token
 from app.api.schemas.requisition import RequisitionRequest, RequisitionResponse
 from app.db.repositories.requisition_repository import RequisitionRepository
 from app.db.session import get_db, SessionLocal
@@ -84,6 +85,7 @@ async def create_jd_skill_mapping(
     request: RequisitionRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    token: dict = Depends(verify_token),
 ):
     """
     Create a job description to skill mapping requisition.
