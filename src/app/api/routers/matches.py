@@ -57,13 +57,12 @@ async def get_matches(
     Returns the ranked list of candidates with scores and explanations.
     Includes metrics about evaluation and qualification rates (FIT_SCORE_THRESHOLD filtering).
     """
-    try:
-        repo = RequisitionRepository(db)
+    repo = RequisitionRepository(db)
 
-        # Verify requisition exists
-        requisition = repo.get_requisition_by_correlation_id(correlation_id)
-        if not requisition:
-            raise HTTPException(status_code=404, detail="Requisition not found")
+    # Verify requisition exists
+    requisition = repo.get_requisition_by_correlation_id(correlation_id)
+    if not requisition:
+        raise HTTPException(status_code=404, detail="Requisition not found")
 
     # Retrieve results from cache
     cached_data = get_results(correlation_id)
