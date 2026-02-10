@@ -27,6 +27,7 @@ class ParsedJD(TypedDict):
     location: Optional[List[str]]
     work_mode: Optional[List[str]]
     jd_text: str
+    certifications_required: Optional[List[str]]
     metadata: Optional[Dict]
 
 
@@ -45,9 +46,11 @@ class CandidateScores(TypedDict):
     team_member_id: str
     skill_score: float
     experience_score: float
+    certification_score: float
     availability_score: float
     final_score: float
     is_available: bool
+    certifications: List[str]  # Candidate's actual certifications
     match_reasons: Dict  # Structured reasons for the match
 
 

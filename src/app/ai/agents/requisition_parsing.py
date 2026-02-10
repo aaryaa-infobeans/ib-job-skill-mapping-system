@@ -3,11 +3,35 @@
 import json
 import logging
 import os
+from datetime import datetime, date
 from typing import Optional
 
 from app.ai.state import GraphState
 
 logger = logging.getLogger(__name__)
+from app.settings import settings
+
+# Global client cache
+_client_cache = {}
+
+def _get_openai_client():
+    if "client" in _client_cache:
+        return _client_cache["client"], True
+        
+    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
+    logger.info(f"DEBUG REQ PARSING: api_key length: {len(api_key) if api_key else 0}")
+    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
+        logger.warning("⚠️  OPENAI_API_KEY not configured for parsing")
+        return None, False
+        
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        _client_cache["client"] = client
+        return client, True
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        return None, False
 
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
@@ -37,7 +61,8 @@ Return ONLY a valid JSON object with this exact structure:
     "max_months": number or null
   },
   "expected_start_date": "YYYY-MM-DD or null",
-  "requisition_duration_month": number or null
+  "requisition_duration_month": number or null,
+  "certifications_required": ["cert1", "cert2"]
 }
 
 Important:
@@ -62,34 +87,110 @@ def parse_requisition_with_llm(
     Returns:
         Enriched requisition dict (ParsedJD) or None on failure
     """
-    # For stub implementation, we'll simulate the LLM enrichment by merging
-    # In production, this would call the actual LLM API with REQUISITION_PARSING_PROMPT
+    client, llm_enabled = _get_openai_client()
+    if not llm_enabled:
+        logger.info("LLM not enabled, using fallback parsing logic")
+        return _fallback_parse(job_description), None
     
-    logger.info("Enriching requisition (stub implementation)")
-    
-    # Simulate LLM enrichment/normalization
-    llm_output = {
-        "normalized_title": job_description.get("title", "Software Engineer"),
-        "normalized_role": job_description.get("role", "Engineer"),
+    try:
+        # Prepare context for LLM
+        context = {
+            "title": job_description.get("title", "Unknown"),
+            "role": job_description.get("role", "Unknown"),
+            "client_name": job_description.get("client_name", "Unknown"),
+            "mandatory_skills": job_description.get("mandatory_skills", []),
+            "preferred_skills": job_description.get("preferred_skills", []),
+            "jd_text": job_description.get("jd_text", ""),
+            "experience": job_description.get("experience", {}),
+            "expected_start_date": job_description.get("expected_start_date"),
+            "requisition_duration_month": job_description.get("requisition_duration_month"),
+        }
+        
+        def json_serial(obj):
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        response = client.chat.completions.create(
+            model=settings.openai_model or "gpt-4",
+            messages=[
+                {"role": "system", "content": REQUISITION_PARSING_PROMPT},
+                {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0 # Deterministic extraction
+        )
+        
+        llm_output = json.loads(response.choices[0].message.content)
+        
+        # Merge LLM enrichment back into the full context
+        enriched_jd = {
+            "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
+            "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
+            "extracted_mandatory_skills": llm_output.get("extracted_mandatory_skills", []),
+            "extracted_preferred_skills": llm_output.get("extracted_preferred_skills", []),
+            "experience": llm_output.get("experience", job_description.get("experience")),
+            "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
+            "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
+            "certifications_required": list(set(llm_output.get("certifications_required", []) + job_description.get("certifications_required", []))),
+            
+            # Original Payload fields preserved
+            "client_name": job_description.get("client_name"),
+            "priority": job_description.get("priority"),
+            "location": job_description.get("location", []),
+            "work_mode": job_description.get("work_mode", []),
+            "jd_text": job_description.get("jd_text", ""),
+            "metadata": job_description.get("metadata", {}),
+        }
+        
+        # Track tokens and cost
+        usage = response.usage
+        cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
+        
+        # Add to LLM logs if request_id is available in a global way or passed
+        # For now, we will return the metrics along with enriched_jd
+        metrics = {
+            "agent_name": "requisition_parsing",
+            "prompt_name": "job_description_enrichment",
+            "model": settings.openai_model or "gpt-4",
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "total_tokens": usage.total_tokens,
+            "cost_usd": cost,
+            "status": "SUCCESS"
+        }
+        
+        logger.info(f"LLM successfully parsed requisition: {enriched_jd['normalized_title']}")
+        return enriched_jd, metrics
+        
+    except Exception as e:
+        logger.error(f"Error in LLM parsing: {str(e)}")
+        # Create failure metrics to log the error to DB
+        metrics = {
+            "agent_name": "requisition_parsing",
+            "prompt_name": "job_description_enrichment",
+            "model": settings.openai_model or "gpt-4",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0,
+            "status": "FAILED",
+            "error_message": str(e)
+        }
+        return _fallback_parse(job_description), metrics
+
+
+def _fallback_parse(job_description: dict) -> dict:
+    """Fallback logic when LLM is disabled or fails."""
+    return {
+        "normalized_title": job_description.get("title", "Unknown"),
+        "normalized_role": job_description.get("role", "Unknown"),
         "extracted_mandatory_skills": list(set(job_description.get("mandatory_skills", []))),
         "extracted_preferred_skills": list(set(job_description.get("preferred_skills", []))),
         "experience": job_description.get("experience", {"min_months": None, "max_months": None}),
         "expected_start_date": job_description.get("expected_start_date"),
         "requisition_duration_month": job_description.get("requisition_duration_month"),
-    }
-    
-    # Merge LLM enrichment back into the full context
-    enriched_jd = {
-        # LLM Enriched fields
-        "normalized_title": llm_output["normalized_title"],
-        "normalized_role": llm_output["normalized_role"],
-        "extracted_mandatory_skills": llm_output["extracted_mandatory_skills"],
-        "extracted_preferred_skills": llm_output["extracted_preferred_skills"],
-        "experience": llm_output["experience"],
-        "expected_start_date": llm_output["expected_start_date"],
-        "requisition_duration_month": llm_output["requisition_duration_month"],
-        
-        # Original Payload fields preserved
+        "certifications_required": job_description.get("certifications_required", []),
         "client_name": job_description.get("client_name"),
         "priority": job_description.get("priority"),
         "location": job_description.get("location", []),
@@ -97,9 +198,6 @@ def parse_requisition_with_llm(
         "jd_text": job_description.get("jd_text", ""),
         "metadata": job_description.get("metadata", {}),
     }
-    
-    logger.info(f"Enriched requisition: {enriched_jd['normalized_title']}")
-    return enriched_jd
 
 
 def requisition_parsing_node(state: GraphState) -> GraphState:
@@ -137,10 +235,17 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
     
     try:
         # Parse requisition using LLM
-        parsed_jd = parse_requisition_with_llm(job_description)
+        parsed_jd, metrics = parse_requisition_with_llm(job_description)
         
         if parsed_jd:
             state["parsed_jd"] = parsed_jd
+            if metrics:
+                if state.get("llm_call_logs") is None:
+                    state["llm_call_logs"] = []
+                state["llm_call_logs"].append(metrics)
+                state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + metrics["total_tokens"]
+                state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + metrics["cost_usd"]
+                
             logger.info("Requisition_Parsing_Agent completed successfully")
         else:
             logger.error("Failed to parse requisition after retries")

@@ -5,7 +5,7 @@ import numpy as np
 from typing import Any, List, Optional
 import os
 import sqlalchemy as sa
-from sqlalchemy import text
+from sqlalchemy import text, type_coerce, literal
 from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import EmbeddingResult, RAGCandidate
 
@@ -17,13 +17,15 @@ class RAGRetrievalAgent(BaseAgent):
         super().__init__("rag_retrieval", logger)
         self.db = db_connection
         
-        # Load weights from environment
-        self.weight_mandatory = float(os.getenv("RAG_WEIGHT_MANDATORY", "0.45"))
-        self.weight_preferred = float(os.getenv("RAG_WEIGHT_PREFERRED", "0.25"))
-        self.weight_jd_level = float(os.getenv("RAG_WEIGHT_JD_LEVEL", "0.20"))
-        self.weight_certification = float(os.getenv("RAG_WEIGHT_CERTIFICATION", "0.10"))
-        self.similarity_threshold = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.0"))
-        self.max_results = int(os.getenv("RAG_MAX_RESULTS", "100"))
+        # Load weights and thresholds from settings
+        from app.settings import settings
+        self.weight_mandatory = settings.weight_mandatory_skills
+        self.weight_preferred = settings.weight_preferred_skills
+        # Note: RAG uses slightly different weight names in settings, adjusting to match JD components
+        self.weight_jd_level = settings.weight_jd_text
+        self.weight_certification = settings.weight_certification
+        self.similarity_threshold = settings.rag_similarity_threshold
+        self.max_results = 100
     
     def execute(self, embedding_result: EmbeddingResult) -> List[RAGCandidate]:
         """
@@ -61,6 +63,7 @@ class RAGRetrievalAgent(BaseAgent):
         Query database for candidate embeddings using weighted multi-vector search.
         """
         from app.db.models.models import TeamMemberEmbedding
+        from pgvector.sqlalchemy import Vector
         
         # Multi-vector weighted search:
         # We compute similarity for each JD component against the single candidate embedding.
@@ -71,15 +74,15 @@ class RAGRetrievalAgent(BaseAgent):
         
         query = self.db.query(
             TeamMemberEmbedding.team_member_id,
-            (1 - TeamMemberEmbedding.embedding.cosine_distance(mandatory_vec)).label('mandatory_sim'),
-            (1 - TeamMemberEmbedding.embedding.cosine_distance(preferred_vec)).label('preferred_sim'),
-            (1 - TeamMemberEmbedding.embedding.cosine_distance(jd_level_vec)).label('jd_level_sim')
+            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(3072)).cosine_distance(mandatory_vec)).label('mandatory_sim'),
+            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(3072)).cosine_distance(preferred_vec)).label('preferred_sim'),
+            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(3072)).cosine_distance(jd_level_vec)).label('jd_level_sim')
         )
         
         if embedding_result.certification_vector is not None:
             cert_vec = embedding_result.certification_vector.tolist()
             query = query.add_columns(
-                (1 - TeamMemberEmbedding.embedding.cosine_distance(cert_vec)).label('cert_sim')
+                (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(3072)).cosine_distance(cert_vec)).label('cert_sim')
             )
         else:
             query = query.add_columns(sa.literal(0.0).label('cert_sim'))
@@ -115,11 +118,10 @@ class RAGRetrievalAgent(BaseAgent):
         certification_sim: float = 0.0
     ) -> float:
         """Compute weighted final similarity."""
-        # Handle None values from DB
-        m = mandatory_sim or 0.0
-        p = preferred_sim or 0.0
-        j = jd_level_sim or 0.0
-        c = certification_sim or 0.0
+        m = mandatory_sim if mandatory_sim is not None and not np.isnan(mandatory_sim) else 0.0
+        p = preferred_sim if preferred_sim is not None and not np.isnan(preferred_sim) else 0.0
+        j = jd_level_sim if jd_level_sim is not None and not np.isnan(jd_level_sim) else 0.0
+        c = certification_sim if certification_sim is not None and not np.isnan(certification_sim) else 0.0
         
         final_similarity = (
             (self.weight_mandatory * m) +

@@ -115,6 +115,14 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             experience_score = candidate.get("experience_score", 0.0)
             explanation.append(f"Experience match score: {experience_score*100:.0f}%")
             
+            # Add certification details
+            certification_score = candidate.get("certification_score", 0.0)
+            cert_details = candidate.get("match_reasons", {}).get("certification_matched", [])
+            if cert_details:
+                explanation.append(f"Certifications matched: {', '.join(cert_details)} (score: {certification_score*100:.0f}%)")
+            else:
+                explanation.append(f"Certification match score: {certification_score*100:.0f}%")
+            
             # Add availability details
             is_available = candidate.get("is_available", False)
             availability_score = candidate.get("availability_score", 0.0)
@@ -133,6 +141,8 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             "explanation": explanation,
             "detailed_breakdown": {
                 "llm_explanation": detailed_explanation if detailed_explanation else None,
+                "match_reasons": candidate.get("match_reasons", {}),
+                "certifications": candidate.get("certifications", []),
             }
         }
         
