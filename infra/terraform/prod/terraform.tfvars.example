@@ -1,0 +1,52 @@
+# Production Environment Configuration Example
+# Copy this file to terraform.tfvars and update with actual values
+
+# General Configuration
+aws_region   = "us-east-1"
+environment  = "prod"
+project_name = "ib-job-skill-mapping"
+owner_team   = "platform-team"
+cost_center  = "engineering"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+private_subnets  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnets   = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+database_subnets = ["10.0.201.0/24", "10.0.202.0/24", "10.0.203.0/24"]
+
+# Database Configuration
+db_engine_version          = "15.4"
+db_instance_class          = "db.r6g.xlarge"  # 4 vCPU, 32 GB RAM
+db_allocated_storage       = 100
+db_max_allocated_storage   = 1000
+db_name                    = "ib_job_skill_mapping"
+db_master_username         = "postgres"
+db_backup_retention_period = 30
+db_backup_window           = "03:00-04:00"
+db_maintenance_window      = "mon:04:00-mon:05:00"
+
+# EKS Configuration
+eks_cluster_version = "1.28"
+eks_desired_nodes   = 3
+eks_min_nodes       = 3
+eks_max_nodes       = 10
+eks_instance_types  = ["t3.xlarge"]  # 4 vCPU, 16 GB RAM
+
+# Redis Configuration
+redis_node_type           = "cache.r6g.large"  # 2 vCPU, 13.07 GB RAM
+redis_num_nodes           = 2
+redis_snapshot_retention  = 7
+
+# SSL Configuration
+# IMPORTANT: Create an ACM certificate before deployment
+# ssl_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
+ssl_certificate_arn = ""
+
+# Logging
+log_retention_days = 90
+
+# Additional Tags
+additional_tags = {
+  Compliance = "GDPR"
+  Criticality = "High"
+}

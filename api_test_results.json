@@ -1,0 +1,112 @@
+{
+  "test_date": "2026-02-06T07:51:31.702121",
+  "base_url": "http://localhost:8001",
+  "results": [
+    {
+      "test": "Health Check",
+      "endpoint": "GET /health",
+      "status_code": 200,
+      "result": "PASS",
+      "response": {
+        "status": "healthy",
+        "checks": {
+          "database": "healthy"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-02-06T07:51:12.166482"
+    },
+    {
+      "test": "Metrics",
+      "endpoint": "GET /api/v1/metrics",
+      "status_code": 200,
+      "result": "PASS",
+      "response": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{endpoint=\"/api/v1/team-members/skill-availability/bulk-upsert\",method=\"POST\",status_code=\"202\"} 1.",
+      "error": null,
+      "timestamp": "2026-02-06T07:51:14.191208"
+    },
+    {
+      "test": "Bulk Upsert (No Auth)",
+      "endpoint": "POST /api/v1/team-members/skill-availability/bulk-upsert",
+      "status_code": 401,
+      "result": "PASS (Expected 401)",
+      "response": null,
+      "error": null,
+      "timestamp": "2026-02-06T07:51:16.233167"
+    },
+    {
+      "test": "Requisition Request (No Auth)",
+      "endpoint": "POST /api/v1/jd-skill-mapping/",
+      "status_code": 401,
+      "result": "PASS (Expected 401)",
+      "response": null,
+      "error": null,
+      "timestamp": "2026-02-06T07:51:18.320708"
+    },
+    {
+      "test": "Get Matches (No Auth)",
+      "endpoint": "GET /api/v1/jd-skill-mapping/{correlation_id}/matches",
+      "status_code": 401,
+      "result": "PASS (Expected 401)",
+      "response": null,
+      "error": null,
+      "timestamp": "2026-02-06T07:51:20.365796"
+    },
+    {
+      "test": "Bulk Upsert (With Auth)",
+      "endpoint": "POST /api/v1/team-members/skill-availability/bulk-upsert",
+      "status_code": 202,
+      "result": "PASS",
+      "response": {
+        "status": "ACCEPTED",
+        "message": "Batch TEST-BATCH-002 processed successfully",
+        "summary": {
+          "records_received": 1,
+          "team_members_inserted": 1,
+          "team_members_updated": 0,
+          "skills_inserted": 2,
+          "skills_updated": 0,
+          "allocations_inserted": 1,
+          "allocations_updated": 0,
+          "records_failed": 0,
+          "batch_id": "TEST-BATCH-002",
+          "processed_at": "2026-02-06T07:51:22.524315"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-02-06T07:51:22.525699"
+    },
+    {
+      "test": "Requisition Request (With Auth)",
+      "endpoint": "POST /api/v1/jd-skill-mapping/",
+      "status_code": 202,
+      "result": "PASS",
+      "response": {
+        "correlation_id": "CORR-20260206075124-REQ-TEST",
+        "status": "QUEUED_FOR_PROCESSING",
+        "received_at": "2026-02-06T07:51:24.588964"
+      },
+      "error": null,
+      "timestamp": "2026-02-06T07:51:24.605646"
+    },
+    {
+      "test": "Get Matches (With Auth)",
+      "endpoint": "GET /api/v1/jd-skill-mapping/{correlation_id}/matches",
+      "status_code": 200,
+      "result": "PASS",
+      "response": {
+        "correlation_id": "CORR-20260206075124-REQ-TEST",
+        "status": "PROCESSING",
+        "total_matches": 0,
+        "matches": []
+      },
+      "error": null,
+      "timestamp": "2026-02-06T07:51:31.694119"
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0
+  }
+}

@@ -1,10 +1,12 @@
 """Integration test for LangGraph triggering via API."""
 
 import logging
+import time
 from unittest.mock import patch, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,6 +16,9 @@ from app.db.session import get_db
 from app.main import app
 
 
+# Test JWT secret key (must match conftest.py)
+TEST_JWT_SECRET = "test-secret-key-for-testing"
+
 # Configure test database with StaticPool
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
@@ -22,6 +27,17 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def create_test_token(client_id: str = "test-client"):
+    """Create a test JWT token using the test secret key."""
+    payload = {
+        "sub": client_id,
+        "client_id": client_id,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 3600,
+    }
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
 
 @pytest.fixture
@@ -38,7 +54,7 @@ def db_session():
 
 @pytest.fixture
 def client(db_session):
-    """Create test client with database dependency override."""
+    """Create test client with database dependency override and auth token."""
 
     def override_get_db():
         try:
@@ -48,6 +64,9 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
+        # Add auth token to client headers
+        token = create_test_token()
+        c.headers = {**c.headers, "Authorization": f"Bearer {token}"}
         yield c
     app.dependency_overrides.clear()
 

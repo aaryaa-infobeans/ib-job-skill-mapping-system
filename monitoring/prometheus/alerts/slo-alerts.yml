@@ -1,0 +1,312 @@
+# SLO-based Alert Rules
+# Based on Service Level Objectives defined in NFRs
+
+groups:
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # API Availability SLO: 99.5% (4.38 hours downtime/year)
+      - alert: APIAvailabilityBelowSLO
+        expr: |
+          (
+            sum(rate(http_requests_total{job="api-gateway",status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="api-gateway"}[5m]))
+          ) < 0.995
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "API availability below SLO (99.5%)"
+          description: "Current availability: {{ $value | humanizePercentage }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/api-availability"
+
+      # API Latency SLO: p95 < 2 seconds
+      - alert: APILatencyAboveSLO
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "API p95 latency above SLO (2 seconds)"
+          description: "Current p95 latency: {{ $value }}s"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/api-latency"
+
+      # API Latency SLO: p99 < 5 seconds
+      - alert: APILatencyP99AboveSLO
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+          slo: latency
+        annotations:
+          summary: "API p99 latency above SLO (5 seconds)"
+          description: "Current p99 latency: {{ $value }}s"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/api-latency"
+
+      # Throughput SLO: > 100 req/s
+      - alert: APIThroughputBelowSLO
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway"}[5m])) < 100
+        for: 10m
+        labels:
+          severity: warning
+          slo: throughput
+        annotations:
+          summary: "API throughput below SLO (100 req/s)"
+          description: "Current throughput: {{ $value | humanize }} req/s"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/api-throughput"
+
+      # Error Budget Burn Rate (Fast burn: 2% error budget in 1 hour)
+      - alert: ErrorBudgetFastBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[1h]))
+            /
+            sum(rate(http_requests_total{job="api-gateway"}[1h]))
+          ) > 0.01  # 1% error rate = 2x SLO burn
+        for: 5m
+        labels:
+          severity: critical
+          slo: error_budget
+        annotations:
+          summary: "Error budget burning too fast"
+          description: "Error rate: {{ $value | humanizePercentage }} (target: 0.5%)"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/error-budget"
+
+      # Error Budget Burn Rate (Slow burn: 10% error budget in 6 hours)
+      - alert: ErrorBudgetSlowBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[6h]))
+            /
+            sum(rate(http_requests_total{job="api-gateway"}[6h]))
+          ) > 0.00833  # 0.833% over 6 hours
+        for: 30m
+        labels:
+          severity: warning
+          slo: error_budget
+        annotations:
+          summary: "Error budget depleting steadily"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/error-budget"
+
+      # Database Query SLO: p95 < 500ms
+      - alert: DatabaseQueryLatencyAboveSLO
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(db_query_duration_seconds_bucket{job="api-gateway"}[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: database_latency
+        annotations:
+          summary: "Database query p95 latency above SLO (500ms)"
+          description: "Current p95 latency: {{ $value | humanizeDuration }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/database-latency"
+
+      # Redis Cache Hit Rate SLO: > 80%
+      - alert: RedisCacheHitRateBelowSLO
+        expr: |
+          (
+            sum(rate(redis_cache_hits_total{job="api-gateway"}[5m]))
+            /
+            (sum(rate(redis_cache_hits_total{job="api-gateway"}[5m])) + sum(rate(redis_cache_misses_total{job="api-gateway"}[5m])))
+          ) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          slo: cache_performance
+        annotations:
+          summary: "Redis cache hit rate below SLO (80%)"
+          description: "Current hit rate: {{ $value | humanizePercentage }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/cache-performance"
+
+      # LLM API Success Rate SLO: > 95%
+      - alert: LLMAPISuccessRateBelowSLO
+        expr: |
+          (
+            sum(rate(llm_api_requests_total{job="api-gateway",status="success"}[5m]))
+            /
+            sum(rate(llm_api_requests_total{job="api-gateway"}[5m]))
+          ) < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          slo: llm_availability
+        annotations:
+          summary: "LLM API success rate below SLO (95%)"
+          description: "Current success rate: {{ $value | humanizePercentage }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/llm-integration"
+
+      # Matching Engine Timeout Rate SLO: < 1%
+      - alert: MatchingTimeoutRateAboveSLO
+        expr: |
+          (
+            sum(rate(matching_timeouts_total{job="api-gateway"}[5m]))
+            /
+            sum(rate(matching_requests_total{job="api-gateway"}[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          slo: matching_performance
+        annotations:
+          summary: "Matching timeout rate above SLO (1%)"
+          description: "Current timeout rate: {{ $value | humanizePercentage }}"
+          runbook: "https://github.com/infobeans/ib-job-skill-mapping/wiki/runbooks/matching-timeouts"
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # High CPU on EKS nodes
+      - alert: NodeCPUHigh
+        expr: |
+          (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} CPU usage above 80%"
+          description: "Current CPU usage: {{ $value | humanize }}%"
+
+      # High memory on EKS nodes
+      - alert: NodeMemoryHigh
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} memory usage above 85%"
+          description: "Current memory usage: {{ $value | humanize }}%"
+
+      # Disk space low
+      - alert: NodeDiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} disk space below 15%"
+          description: "Available: {{ $value | humanize }}%"
+
+      # Pod restart rate high
+      - alert: PodRestartRateHigh
+        expr: |
+          rate(kube_pod_container_status_restarts_total{namespace="production"}[15m]) * 3600 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} restarting frequently"
+          description: "Restart rate: {{ $value | humanize }} per hour"
+
+      # Pod CrashLoopBackOff
+      - alert: PodCrashLooping
+        expr: |
+          kube_pod_container_status_waiting_reason{namespace="production",reason="CrashLoopBackOff"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} in CrashLoopBackOff"
+          description: "Pod is crash looping in namespace {{ $labels.namespace }}"
+
+      # Database connections high
+      - alert: DatabaseConnectionsHigh
+        expr: |
+          pg_stat_database_numbackends{datname="ib_job_skill_mapping"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connections above 80"
+          description: "Current connections: {{ $value }}"
+
+      # Database replication lag
+      - alert: DatabaseReplicationLagHigh
+        expr: |
+          pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database replication lag above 30 seconds"
+          description: "Current lag: {{ $value | humanizeDuration }}"
+
+  - name: application_alerts
+    interval: 30s
+    rules:
+      # High 4xx rate (client errors)
+      - alert: HighClientErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="api-gateway",status=~"4.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="api-gateway"}[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of 4xx responses (> 10%)"
+          description: "Current 4xx rate: {{ $value | humanizePercentage }}"
+
+      # Authentication failures spike
+      - alert: AuthenticationFailureSpike
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",endpoint="/api/v1/auth/token",status="401"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of authentication failures"
+          description: "Failures per second: {{ $value | humanize }}"
+
+      # Bulk upsert queue backed up
+      - alert: BulkUpsertQueueBackedUp
+        expr: |
+          bulk_upsert_queue_size{job="api-gateway"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Bulk upsert queue size exceeds 1000"
+          description: "Current queue size: {{ $value }}"
+
+      # Graph execution failures
+      - alert: GraphExecutionFailureRate
+        expr: |
+          (
+            sum(rate(langgraph_execution_total{job="api-gateway",status="failure"}[5m]))
+            /
+            sum(rate(langgraph_execution_total{job="api-gateway"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LangGraph execution failure rate above 5%"
+          description: "Current failure rate: {{ $value | humanizePercentage }}"
+
+      # Token bucket rate limiting active
+      - alert: RateLimitingActive
+        expr: |
+          sum(rate(rate_limit_exceeded_total{job="api-gateway"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Rate limiting actively blocking requests"
+          description: "Blocked requests per second: {{ $value | humanize }}"

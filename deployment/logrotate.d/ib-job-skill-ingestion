@@ -1,0 +1,76 @@
+# Log rotation configuration for IB Job Skill Mapping System
+# Team Data Ingestion logs
+#
+# Location: /etc/logrotate.d/ib-job-skill-ingestion
+# Installation: sudo cp deployment/logrotate.d/ib-job-skill-ingestion /etc/logrotate.d/
+# Test: sudo logrotate -d /etc/logrotate.d/ib-job-skill-ingestion
+# Force rotation: sudo logrotate -f /etc/logrotate.d/ib-job-skill-ingestion
+#
+# Rotation schedule: Daily
+# Retention period: 30 days
+# Compression: gzip (after 1 day)
+# Permissions: 640 (app:app)
+
+/var/log/ib-job-skill-ingestion/*.log {
+    # Rotate daily
+    daily
+    
+    # Keep 30 days of logs
+    rotate 30
+    
+    # Don't error if log file is missing
+    missingok
+    
+    # Don't rotate empty log files
+    notifempty
+    
+    # Compress old log files
+    compress
+    
+    # Delay compression until next rotation
+    # This allows current day's log to remain uncompressed
+    delaycompress
+    
+    # Create new log file with specified permissions
+    # Owner: app, Group: app, Mode: 640 (rw-r-----)
+    create 640 app app
+    
+    # Use date extension for rotated files
+    # Example: ingestion_20260207_143022.log-20260208
+    dateext
+    dateformat -%Y%m%d
+    
+    # Append .gz extension after compression
+    extension .log
+    
+    # Rotate even if multiple processes have the file open
+    copytruncate
+    
+    # Run post-rotate scripts
+    postrotate
+        # Optional: Send notification or log to monitoring system
+        # echo "Rotated IB Job Skill Ingestion logs on $(date)" | logger -t logrotate
+        
+        # Optional: Clean up very old compressed logs (older than retention period)
+        find /var/log/ib-job-skill-ingestion -name "*.log.*.gz" -mtime +30 -delete 2>/dev/null || true
+    endscript
+    
+    # Share rotation state with other log rotation configs
+    sharedscripts
+}
+
+# Rotate the main ingestion directory itself if it contains any other logs
+/var/log/ib-job-skill-ingestion/ingestion.log {
+    # Same configuration as above, but for any static log file names
+    daily
+    rotate 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 640 app app
+    dateext
+    dateformat -%Y%m%d
+    copytruncate
+    sharedscripts
+}

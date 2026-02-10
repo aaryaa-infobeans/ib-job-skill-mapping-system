@@ -1,0 +1,29 @@
+# IB Job Skill Mapping System - Team Data Ingestion Cron
+#
+# Scheduled execution: 2:00 AM IST (8:30 PM UTC previous day)
+#
+# IST is UTC+5:30, so:
+# 2:00 AM IST = 8:30 PM UTC (previous day)
+# 
+# Cron format: minute hour day month weekday user command
+#
+# Minute: 30 (8:30 PM)
+# Hour: 20 (8 PM in 24-hour format)
+# Day: * (every day)
+# Month: * (every month)
+# Weekday: * (every day of week)
+# User: app (application service account)
+# Command: /opt/ib-job-skill-mapping-system/scripts/run_ingestion.sh
+#
+# The script will:
+# - Load environment variables
+# - Execute Python ingestion module
+# - Log to /var/log/ib-job-skill-ingestion/
+# - Send email on failure (if MAILTO is set)
+
+# Run daily at 2:00 AM IST (8:30 PM UTC)
+30 20 * * * app /opt/ib-job-skill-mapping-system/scripts/run_ingestion.sh
+
+# Optional: Retry failed batches at 3:00 AM IST (9:30 PM UTC)
+# Uncomment the line below to enable automatic retry of failed batches
+# 30 21 * * * app /opt/ib-job-skill-mapping-system/scripts/run_ingestion.sh --retry-failed

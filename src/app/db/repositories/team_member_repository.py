@@ -258,8 +258,10 @@ class TeamMemberRepository:
             self.db.query(CategoryMaster).filter(CategoryMaster.category_name == "General").first()
         )
         if not category:
-            # Use category_id=1 for the default category
-            category = CategoryMaster(category_id=1, category_name="General")
+            # Create category without explicitly setting ID (let DB handle it)
+            category = CategoryMaster(
+                category_name="General"
+            )
             self.db.add(category)
-            self.db.commit()
+            self.db.flush()  # Flush to generate ID before returning
         return category
