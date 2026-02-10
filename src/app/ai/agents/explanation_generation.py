@@ -5,36 +5,33 @@ import logging
 import os
 from typing import Optional, Dict, Any
 
+from app.settings import settings
 from app.ai.state import GraphState
 from app.ai.utils.explanation_prompt import format_explanation_prompt
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client (graceful fallback if key not set)
-try:
-    from openai import OpenAI
-    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    
-    # Check if API key is valid (not empty, not placeholder, starts with sk-)
-    is_valid_key = (
-        openai_api_key and 
-        len(openai_api_key) > 20 and
-        openai_api_key.startswith("sk-") and
-        openai_api_key != "sk-your-openai-api-key-here"
-    )
-    
-    if is_valid_key:
-        client = OpenAI(api_key=openai_api_key)
-        llm_enabled = True
-        logger.info(f"✅ OpenAI client initialized with API key (starts with {openai_api_key[:20]}...)")
-    else:
-        client = None
-        llm_enabled = False
+# Global client cache
+_client_cache = {}
+
+def _get_openai_client():
+    if "client" in _client_cache:
+        return _client_cache["client"], True
+        
+    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
         logger.warning("⚠️  OPENAI_API_KEY not configured or invalid - using template-based explanations")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
-    client = None
-    llm_enabled = False
+        return None, False
+        
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        _client_cache["client"] = client
+        logger.info(f"✅ OpenAI client initialized for explanation generation")
+        return client, True
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        return None, False
 
 
 def _generate_llm_explanation(
@@ -56,8 +53,8 @@ def _generate_llm_explanation(
     Returns:
         Dictionary with detailed explanation or None if LLM call fails or not enabled
     """
-    # Check if LLM is enabled
-    if not llm_enabled or not client:
+    client, llm_enabled = _get_openai_client()
+    if not llm_enabled:
         logger.debug(f"LLM not enabled, skipping LLM explanation for {team_member_id}")
         return None
     
@@ -87,11 +84,16 @@ def _generate_llm_explanation(
             candidate_experience=candidate_data.get("experience_in_months", 0),
             experience_score=candidate_data.get("experience_score", 0.0),
             required_certifications=parsed_jd.get("certifications_required", []),
-            candidate_certifications=match_reasons.get("certifications", []),
-            certification_score=match_reasons.get("certification_score", 0.0),
+            candidate_certifications=candidate_data.get("certifications", []),
+            matched_certifications=match_reasons.get("certification_matched", []),
+            missing_certifications=match_reasons.get("certification_missing", []),
+            certification_score=candidate_data.get("certification_score", 0.0),
             candidate_location=candidate_data.get("location", "Unknown"),
             candidate_work_mode=candidate_data.get("work_mode", "Unknown"),
             location_score=match_reasons.get("location_score", 0.0),
+            work_mode_score=match_reasons.get("work_mode_score", 0.0),
+            semantic_similarity=match_reasons.get("semantic_similarity", 0.0),
+            jd_level_similarity=match_reasons.get("jd_level_similarity", 0.0),
             required_start_date=parsed_jd.get("expected_start_date", "Not specified"),
             requisition_duration=parsed_jd.get("requisition_duration_month", 0),
             available_capacity=candidate_data.get("availability_score", 0.0) * 100,
@@ -345,6 +347,11 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
     mandatory_score = match_reasons.get("mandatory_score", 0.0)
     preferred_score = match_reasons.get("preferred_score", 0.0)
     experience_score = candidate.get("experience_score", 0.0)
+    certification_score = candidate.get("certification_score", 0.0)
+    location_score = match_reasons.get("location_score", 0.0)
+    work_mode_score = match_reasons.get("work_mode_score", 0.0)
+    semantic_similarity = match_reasons.get("semantic_similarity", 0.0)
+    jd_level_similarity = match_reasons.get("jd_level_similarity", 0.0)
     
     strengths = []
     gaps = []
@@ -356,6 +363,12 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
         strengths.append("Good match on preferred skills (50%+ coverage)")
     if experience_score >= 0.8:
         strengths.append("Experience level exceeds requirements")
+    if certification_score >= 0.8:
+        strengths.append("Strong match on required certifications")
+    if location_score >= 1.0:
+        strengths.append("Candidate location aligns with requirements")
+    if work_mode_score >= 1.0:
+        strengths.append("Work mode preference matches requisition")
     if candidate.get("is_available", False):
         strengths.append("Available for assignment immediately")
     
@@ -366,6 +379,12 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
         gaps.append("Few preferred skills present (<30%)")
     if experience_score < 0.5:
         gaps.append("Experience below ideal level")
+    if certification_score < 0.5:
+        gaps.append("Missing or incomplete certifications")
+    if location_score < 1.0:
+        gaps.append("Location mismatch with requisition")
+    if work_mode_score < 1.0:
+        gaps.append("Work mode preference differs from requirement")
     if not candidate.get("is_available", False):
         gaps.append("Limited availability during required period")
     
@@ -373,6 +392,12 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
         "summary": f"Candidate is a {('strong', 'moderate', 'light')[min(2, int(final_score * 3))]} fit for the role with a match score of {final_score:.0%}",
         "strengths": strengths if strengths else ["Basic skill coverage"],
         "gaps": gaps if gaps else ["No major gaps identified"],
-        "fit_analysis": f"The match score reflects {mandatory_score:.0%} mandatory skill coverage, {preferred_score:.0%} preferred skills, and {experience_score:.0%} experience alignment.",
+        "fit_analysis": (
+            f"The match score reflects {mandatory_score:.0%} mandatory skill coverage, "
+            f"{preferred_score:.0%} preferred skills, {certification_score:.0%} certification alignment, "
+            f"and {experience_score:.0%} experience alignment. "
+            f"Additionally, it considers location match ({location_score:.0%}), "
+            f"work mode fit ({work_mode_score:.0%}), and semantic JD relevance ({semantic_similarity:.0%})."
+        ),
         "recommendation": "Review detailed profile for skill-specific matches" if gaps else "Good candidate for consideration"
     }

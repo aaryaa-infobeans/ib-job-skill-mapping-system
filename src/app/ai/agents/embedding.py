@@ -29,7 +29,7 @@ def embedding_node(state: GraphState) -> GraphState:
             experience_requirements=str(parsed_jd.get("experience", "")),
             jd_level=parsed_jd.get("normalized_role", ""),
             location=", ".join(parsed_jd.get("location", [])),
-            certifications=[], # TODO: Extract from JD if needed
+            certifications=parsed_jd.get("certifications_required", []),
             raw_requisition=state["requisition_input"].get("job_description")
         )
         

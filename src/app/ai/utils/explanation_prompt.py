@@ -38,13 +38,20 @@ Required Location: {job_location}
 **Certifications:**
 - Required Certifications: {required_certifications}
 - Candidate's Certifications: {candidate_certifications}
-- Certification Match Score: {certification_score:.2%}
+- Match Rate: {certification_score:.2%}
+- Matched: {matched_certifications}
+- Missing: {missing_certifications}
 
 **Location/Work Mode:**
 - Required Location: {job_location}
 - Candidate's Location: {candidate_location}
 - Work Mode Preference: {candidate_work_mode}
 - Location Match Score: {location_score:.2%}
+- Work Mode Match Score: {work_mode_score:.2%}
+
+**JD Content & Role Match:**
+- Overall Semantic Similarity: {semantic_similarity:.2%}
+- Role Responsibility Match: {jd_level_similarity:.2%}
 
 **Availability:**
 - Start Date: {required_start_date}
@@ -57,7 +64,7 @@ Generate a detailed, professional explanation (3-5 sentences) that:
 1. Summarizes the overall fit and how they rank
 2. Highlights the key strengths (matched mandatory skills, relevant experience, etc.)
 3. Clearly identifies critical gaps or missing skills
-4. Explains how the different factors (skills, experience, certifications, location, availability) 
+4. Explains how the different factors (skills, experience, certifications, location, work mode, JD similarity, availability) 
    contributed to their match score
 5. Provides actionable context that helps the recruiter make a decision
 
@@ -105,10 +112,15 @@ def format_explanation_prompt(
     experience_score: float,
     required_certifications: list,
     candidate_certifications: list,
+    matched_certifications: list,
+    missing_certifications: list,
     certification_score: float,
     candidate_location: str,
     candidate_work_mode: str,
     location_score: float,
+    work_mode_score: float,
+    semantic_similarity: float,
+    jd_level_similarity: float,
     required_start_date: str,
     requisition_duration: int,
     available_capacity: float,
@@ -138,10 +150,15 @@ def format_explanation_prompt(
         experience_score=experience_score,
         required_certifications=", ".join(required_certifications) if required_certifications else "None",
         candidate_certifications=", ".join(candidate_certifications) if candidate_certifications else "None",
+        matched_certifications=", ".join(matched_certifications) if matched_certifications else "None",
+        missing_certifications=", ".join(missing_certifications) if missing_certifications else "None",
         certification_score=certification_score,
         candidate_location=candidate_location,
         candidate_work_mode=candidate_work_mode,
         location_score=location_score,
+        work_mode_score=work_mode_score,
+        semantic_similarity=semantic_similarity,
+        jd_level_similarity=jd_level_similarity,
         required_start_date=required_start_date,
         requisition_duration=requisition_duration,
         available_capacity=available_capacity,

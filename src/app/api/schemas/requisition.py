@@ -46,6 +46,7 @@ class JobDescription(BaseModel):
     experience: Optional[ExperienceRange] = None
     mandatory_skills: Optional[List[str]] = None
     preferred_skills: Optional[List[str]] = None
+    certifications_required: Optional[List[str]] = None
     jd_text: str
 
 
