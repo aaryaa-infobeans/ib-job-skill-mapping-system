@@ -105,7 +105,9 @@ class TestPreRunChecks:
                 pre_run_checks(mock_engine, mock_oauth_client, "corr-1")
     
     def test_pre_run_checks_oauth_failure(self, mock_engine, mock_oauth_client):
-        """OAuth authentication failure should raise exception."""
+        """OAuth authentication failure should raise exception (STUB: always succeeds)."""
+        # NOTE: Stub implementation always returns valid token
+        # This test kept for compatibility but OAuth failure not possible with stub
         mock_oauth_client.get_access_token.return_value = None
         
         with patch('app.cron.main.validate_schema_version'):
@@ -113,7 +115,9 @@ class TestPreRunChecks:
                 pre_run_checks(mock_engine, mock_oauth_client, "corr-1")
     
     def test_pre_run_checks_oauth_exception(self, mock_engine, mock_oauth_client):
-        """OAuth exception should be raised."""
+        """OAuth exception should be raised (STUB: exceptions manually mocked)."""
+        # NOTE: Stub implementation doesn't raise real OAuth errors
+        # This test kept for compatibility but manually mocks exceptions
         mock_oauth_client.get_access_token.side_effect = Exception("Auth error")
         
         with patch('app.cron.main.validate_schema_version'):

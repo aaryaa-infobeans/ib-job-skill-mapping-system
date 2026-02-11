@@ -23,7 +23,7 @@ This document provides a **phase-wise, execution-ready implementation plan** for
 - [specs/cron/architecture.md](./architecture.md) - System architecture
 - [specs/cron/alembic-migrations.md](./alembic-migrations.md) - Migration strategy
 - [specs/cron/database-mapping.md](./database-mapping.md) - Payload mappings
-- [specs/cron/api-integration.md](./api-integration.md) - OAuth & API client
+- ~~[specs/cron/api-integration.md](./api-integration.md)~~ - **REMOVED** (OAuth & API client replaced with stubs)
 - [specs/cron/batch-processing.md](./batch-processing.md) - Batch lifecycle
 - [specs/cron/scheduler.md](./scheduler.md) - Scheduling configuration
 - [specs/cron/error-handling.md](./error-handling.md) - Error taxonomy & logging
@@ -843,14 +843,17 @@ alembic upgrade head
 
 ---
 
-## Phase 2: OAuth & External API Integration
+## Phase 2: OAuth & External API Integration (OBSOLETE - REPLACED WITH STUBS)
 
-**Purpose:** Implement OAuth 2.0 Client Credentials authentication and external API client with token caching.
+**Purpose:** ~~Implement OAuth 2.0 Client Credentials authentication and external API client with token caching.~~ 
+**Status:** **REMOVED** - OAuth and external API integration replaced with stub implementations.
 
 **Specification Reference:** 
-- [api-integration.md](./api-integration.md) - Sections 2-4 (OAuth & API Client)
+- ~~[api-integration.md](./api-integration.md)~~ - **DELETED** (Sections 2-4 OAuth & API Client)
 
-**Duration:** 5 days
+**Note:** The OAuth client and external API client have been replaced with minimal stub implementations that return mock data. This phase is no longer applicable.
+
+**Duration:** ~~5 days~~ N/A
 
 ### Tasks
 
