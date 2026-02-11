@@ -19,7 +19,7 @@ class TokenCache:
 
     def __init__(self):
         """Initialize mock token cache."""
-        self._access_token = "STUB_TOKEN_mock_auth_removed"
+        self._access_token = "dev-token-12345"
 
     def is_valid(self) -> bool:
         """Always returns True for stub implementation."""

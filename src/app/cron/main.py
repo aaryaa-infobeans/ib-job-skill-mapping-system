@@ -173,6 +173,8 @@ async def run_ingestion(
     """
     Run new batch ingestion from external API.
     
+    Fetches all batches from the external API and processes them sequentially.
+    
     Args:
         api_client: Team data API client
         batch_processor: Batch processor instance
@@ -189,28 +191,73 @@ async def run_ingestion(
     )
     
     try:
-        # Fetch team member data from API
-        payload = await api_client.fetch_team_members()
+        # Fetch first batch to get total batch count
+        first_payload = await api_client.fetch_team_members(page=1)
         
-        if not payload:
+        if not first_payload:
             logger.warning(
                 "No data received from API",
                 correlation_id=correlation_id
             )
             return EXIT_SUCCESS
         
-        # Process all batches
-        successful, failed = await batch_processor.process_all_batches(payload)
+        # Extract pagination metadata
+        metadata = first_payload.get("metadata", {})
+        total_batches = metadata.get("total_batches", 1)
+        
+        logger.info(
+            "Discovered batch pagination",
+            correlation_id=correlation_id,
+            total_batches=total_batches
+        )
+        
+        # Process first batch
+        successful, failed = await batch_processor.process_all_batches(first_payload)
+        all_successful = list(successful)
+        all_failed = list(failed)
+        
+        # Fetch and process remaining batches
+        for page in range(2, total_batches + 1):
+            logger.info(
+                "Fetching next batch",
+                correlation_id=correlation_id,
+                page=page,
+                total_batches=total_batches
+            )
+            
+            try:
+                payload = await api_client.fetch_team_members(page=page)
+                
+                if payload:
+                    successful, failed = await batch_processor.process_all_batches(payload)
+                    all_successful.extend(successful)
+                    all_failed.extend(failed)
+                else:
+                    logger.warning(
+                        "Empty payload received",
+                        correlation_id=correlation_id,
+                        page=page
+                    )
+            
+            except Exception as error:
+                logger.error(
+                    "Failed to fetch/process batch",
+                    correlation_id=correlation_id,
+                    page=page,
+                    error=str(error)
+                )
+                all_failed.append(f"page_{page}")
         
         logger.info(
             "Batch ingestion completed",
             correlation_id=correlation_id,
-            successful_count=len(successful),
-            failed_count=len(failed),
+            successful_count=len(all_successful),
+            failed_count=len(all_failed),
+            total_batches=total_batches,
             dry_run=dry_run
         )
         
-        if failed:
+        if all_failed:
             return EXIT_PARTIAL_SUCCESS
         
         return EXIT_SUCCESS

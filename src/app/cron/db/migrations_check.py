@@ -12,6 +12,12 @@ logger = structlog.get_logger(__name__)
 EXPECTED_REVISION = "ba97cf8e4fdf"
 EXPECTED_REVISION_SHORT = "0002"
 
+# Acceptable revisions (includes merge revisions that contain the expected revision)
+ACCEPTABLE_REVISIONS = {
+    "ba97cf8e4fdf",  # Direct revision with ingestion tables
+    "045d300d07a8",  # Merge revision that includes ba97cf8e4fdf
+}
+
 
 class SchemaMismatchError(Exception):
     """Raised when database schema version doesn't match expected version."""
@@ -51,10 +57,11 @@ def get_migration_info(engine: Engine) -> Tuple[str, str]:
             )
 
             # Extract short version from revision history
-            # Revision sequence: None -> e8a217c84204 (0001) -> ba97cf8e4fdf (0002)
+            # Revision sequence: None -> e8a217c84204 (0001) -> ba97cf8e4fdf (0002) -> 045d300d07a8 (merge)
             revision_map = {
                 "e8a217c84204": "0001",
                 "ba97cf8e4fdf": "0002",
+                "045d300d07a8": "0002-merge",
             }
             short_version = revision_map.get(version_num, "unknown")
 
@@ -89,7 +96,7 @@ def validate_schema_version(engine: Engine, strict: bool = True) -> bool:
     try:
         full_revision, short_version = get_migration_info(engine)
 
-        if full_revision == EXPECTED_REVISION:
+        if full_revision in ACCEPTABLE_REVISIONS:
             logger.info(
                 "Schema version validated successfully",
                 correlation_id=correlation_id,
@@ -100,7 +107,7 @@ def validate_schema_version(engine: Engine, strict: bool = True) -> bool:
 
         # Version mismatch
         error_msg = (
-            f"Schema version mismatch: expected '{EXPECTED_REVISION}' ({EXPECTED_REVISION_SHORT}), "
+            f"Schema version mismatch: expected one of {ACCEPTABLE_REVISIONS}, "
             f"found '{full_revision}' ({short_version})"
         )
 
