@@ -60,11 +60,11 @@ The implementation will be broken down into six sequential phases to ensure incr
 
 ### Phase 2: Core Data & API Layer
 - **Task**: Implement FastAPI application structure and base request validation.
-  - **Specs**: `fr-1`, `fr-2`, `fr-3`
+  - **Specs**: `fr-1`, `fr-2`, ~~`fr-3`~~ **FR-3 REMOVED**
   - **Dependencies**: Phase 1
-- **Task**: Implement `POST /api/v1/team-members/skill-availability/bulk-upsert` endpoint.
-  - **Specs**: `fr-3`, `idempotency-rules.md` (FR-3.4)
-  - **Dependencies**: DB schema
+- **Task**: ~~Implement `POST /api/v1/team-members/skill-availability/bulk-upsert` endpoint~~ **REMOVED 2026-02-11**
+  - **Specs**: ~~`fr-3`, `idempotency-rules.md` (FR-3.4)~~ **OBSOLETE**
+  - **Dependencies**: ~~DB schema~~ **N/A**
 - **Task**: Implement `POST /api/v1/jd-skill-mapping` endpoint (without triggering the AI pipeline).
   - **Specs**: `fr-1`, `idempotency-rules.md` (FR-1.1)
   - **Dependencies**: DB schema
