@@ -1,4 +1,23 @@
-# FR-3: Team Member Skills & Availability Upsert API
+# FR-3: Team Member Skills & Availability Upsert API (OBSOLETE - REMOVED)
+
+**Status:** REMOVED  
+**Date Removed:** 2026-02-11  
+**Reason:** Bulk upsert endpoint and all related functionality have been removed from the system.
+
+---
+
+## ⚠️ THIS SPECIFICATION IS NO LONGER APPLICABLE
+
+The `/api/v1/team-members/skill-availability/bulk-upsert` endpoint has been permanently removed along with:
+- Router: `src/app/api/routers/skill_availability.py` (DELETED)
+- All bulk upsert test files (DELETED)
+- Related integration tests (DELETED)
+
+This functionality is no longer part of the IB Job Skill Mapping System.
+
+---
+
+## Original Specification (For Historical Reference Only)
 
 ## 1. Purpose
 This document specifies the requirements for the Team Member Skills & Availability Upsert API, which allows for bulk updates of team member data from source systems.

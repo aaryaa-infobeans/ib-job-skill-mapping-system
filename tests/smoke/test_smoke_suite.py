@@ -151,22 +151,26 @@ class TestBatchProcessingSmoke:
 
 
 class TestOAuthSmoke:
-    """OAuth client smoke tests."""
+    """OAuth client smoke tests (STUB IMPLEMENTATION)."""
     
     @pytest.mark.smoke
     def test_oauth_client_initialization(self):
-        """Test OAuth client can be initialized."""
+        """Test OAuth client stub can be initialized."""
         start = time.time()
         
-        # Initialize with test credentials
+        # Initialize stub client (credentials ignored)
         client = OAuthClient(
             client_id='smoke-test-client',
             client_secret='smoke-test-secret',
             token_url='https://example.com/oauth/token'
         )
         
+        # Verify stub returns mock token
+        token = client.get_access_token()
+        assert token == "STUB_TOKEN_mock_auth_removed"
+        
         duration = time.time() - start
-        print(f"\nOAuth client init: {duration:.3f}s")
+        print(f"\nOAuth stub client init: {duration:.3f}s")
         
         assert client is not None, "OAuth client initialization failed"
         assert client.client_id == 'smoke-test-client', "Client ID mismatch"
