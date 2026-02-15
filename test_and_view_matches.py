@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-"""Script to create a requisition and view the matches."""
+"""Script to create a requisition and view the matches with full authentication and detailed scoring."""
 
 import sys
 import json
 import os
+import time
 from datetime import date, datetime
-from sqlalchemy.orm import Session
+from typing import Dict, Any
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -15,9 +16,11 @@ load_dotenv()
 sys.path.insert(0, "src")
 
 from app.main import app
-from app.db.session import SessionLocal
-from app.db.models.models import RequisitionRequest, RequisitionDetail, LangGraphCheckpoint
 from fastapi.testclient import TestClient
+
+# API Authentication Token
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiZXhwIjoxODAyNTk0MTE3fQ.AbwiHnkMJfs7YB7nf1zoQfx7CVzQiYCB_I02AVV-R8M"
+headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 # Create test client
 client = TestClient(app)
@@ -25,9 +28,18 @@ client = TestClient(app)
 # Generate unique request ID
 unique_id = datetime.now().strftime("%Y%m%d%H%M%S%f")[-6:]
 
+def format_score(val):
+    if not isinstance(val, (int, float)):
+        return "N/A"
+    # If val > 1.0, assume it's already a percentage (e.g. 56.0)
+    # If val <= 1.0, assume it's a ratio (e.g. 0.56)
+    if val > 1.0:
+        return f"{val:.1f}%"
+    return f"{val*100:.1f}%"
+
 # Step 1: Create a requisition
 print("\n" + "="*60)
-print("STEP 1: Creating a new requisition")
+print("STEP 1: Creating a new requisition (Authenticated)")
 print("="*60)
 
 payload = {
@@ -37,105 +49,114 @@ payload = {
     "client_name": "LM",
     "job_description": {
         "client_name": "SMBC",
-        "title": "AWS Engineer",
-        "role": "Jr Cloud Engineer",
+        "title": "Salesforce Engineer",
+        "role": "Salesforce Engineer",
         "requisition_duration_month": 6,
         "expected_start_date": date.today().isoformat(),
         "priority": "HIGH",
         "location": ["Remote", "Pune", "Indore", "Bangalore"],
         "work_mode": ["Hybrid", "Remote", "WFO"],
         "experience": {"min_months": 24, "max_months": 240},
-        "mandatory_skills": ["AWS", "Docker", "Terraform"],
-        "preferred_skills": ["Docker", "AWS"],
-        "certifications_required": ["AWS Solutions Architect"],
-        "jd_text": "We are looking for an experienced AWS engineer to build and deploy app in the cloud. Candidates MUST have AWS Solutions Architect certification.",
+        "mandatory_skills": ["salesforce",  "Docker", "AWS"],
+        "preferred_skills": ["salesforce"],
+        "certifications_required": ["AWS Solutions Architect", "PHP Certified", "AI Certified"],
+        "jd_text": "We are looking for an experienced Salesforce engineer to build and deploy app in the cloud. Candidates MUST have AWS Solutions Architect certification.",
     },
     "metadata": {"submitted_by": "recruiter@test.com", "department": "Engineering"},
 }
 
-response = client.post("/api/v1/jd-skill-mapping", json=payload)
+response = client.post("/api/v1/jd-skill-mapping", json=payload, headers=headers)
 print(f"\nStatus Code: {response.status_code}")
-print(f"Response:\n{json.dumps(response.json(), indent=2)}")
 
 if response.status_code == 202:
     correlation_id = response.json()["correlation_id"]
     print(f"\n✅ Requisition created successfully!")
     print(f"Correlation ID: {correlation_id}")
 
-    # Step 2: Get matches
+    # Step 2: Poll for matches
     print("\n" + "="*60)
-    print("STEP 2: Fetching matches for the requisition")
+    print("STEP 2: Polling for matches (Asynchronous Processing)")
     print("="*60)
 
-    matches_response = client.get(f"/api/v1/jd-skill-mapping/{correlation_id}/matches")
-    print(f"\nStatus Code: {matches_response.status_code}")
+    max_attempts = 12
+    wait_time = 5
+    matches_data = {}
     
-    matches_data = matches_response.json()
-    print(f"\nMatches Response:")
-    print(json.dumps(matches_data, indent=2))
-    
-    # Display summary
-    if "total_matches" in matches_data:
-        print(f"\n📊 Summary:")
-        print(f"  - Total matches: {matches_data['total_matches']}")
-        if "total_evaluated" in matches_data:
-            print(f"  - Total candidates evaluated: {matches_data['total_evaluated']}")
-        if "total_qualified" in matches_data:
-            print(f"  - Total candidates qualified (FIT_SCORE_THRESHOLD): {matches_data['total_qualified']}")
-            qualified_pct = (matches_data['total_qualified'] / matches_data['total_evaluated'] * 100) if matches_data['total_evaluated'] > 0 else 0
-            print(f"  - Qualification rate: {qualified_pct:.1f}%")
-
-    # Step 3: Check database
-    print("\n" + "="*60)
-    print("STEP 3: Database records & Checkpoint Analysis")
-    print("="*60)
-
-    db: Session = SessionLocal()
-    try:
-        # Get requisition
-        req = db.query(RequisitionRequest).filter(
-            RequisitionRequest.correlation_id == correlation_id
-        ).first()
-
-        if req:
-            print(f"\nRequisition Record:")
-            print(f"  - ID: {req.id}")
-            print(f"  - Request ID: {req.request_id}")
-            print(f"  - Correlation ID: {req.correlation_id}")
-            print(f"  - Status: {req.status}")
-            print(f"  - Received At: {req.received_at}")
-            print(f"  - Client: {req.client_name}")
-
-            # Get requisition detail
-            detail = db.query(RequisitionDetail).filter(
-                RequisitionDetail.requisition_request_id == req.id
-            ).first()
-
-            if detail:
-                print(f"\nRequisition Detail:")
-                print(f"  - ID: {detail.id}")
-                print(f"  - Payload Hash: {detail.payload_hash}")
-
-            # Step 4: Check LLM Request Logs
-            from app.db.models.models import LLMRequestLog
-            llm_logs = db.query(LLMRequestLog).filter(
-                LLMRequestLog.request_id == req.request_id
-            ).all()
-
-            if llm_logs:
-                print(f"\n📜 LLM Request Logs: {len(llm_logs)}")
-                for log in llm_logs:
-                    print(f"  - Agent: {log.agent_name}")
-                    print(f"    Prompt: {log.prompt_name}")
-                    print(f"    Tokens: {log.total_tokens} (P: {log.prompt_tokens}, C: {log.completion_tokens})")
-                    print(f"    Cost: ${log.cost_usd:.6f}")
-            else:
-                print("\n📜 LLM Request Logs: None found in llm_request_log table")
+    for attempt in range(1, max_attempts + 1):
+        print(f"Attempt {attempt}/{max_attempts}: Fetching results...")
+        matches_response = client.get(f"/api/v1/jd-skill-mapping/{correlation_id}/matches", headers=headers)
+        
+        if matches_response.status_code != 200:
+            print(f"❌ Error fetching matches: {matches_response.status_code}")
+            break
+            
+        matches_data = matches_response.json()
+        status = matches_data.get("status", "UNKNOWN")
+        
+        if status == "COMPLETED":
+            print(f"✅ Processing completed!")
+            break
+        elif status == "FAILED":
+            print(f"❌ Processing failed!")
+            break
         else:
-            print("❌ Requisition not found in database")
-    finally:
-        db.close()
+            print(f"⏳ Status: {status}. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+    
+    if matches_data.get("status") == "COMPLETED":
+        # Display summary
+        print(f"\n📊 Summary Metrics:")
+        metrics = matches_data.get("metrics", {})
+        if metrics:
+            print(f"  - Total evaluated: {metrics.get('total_evaluated')}")
+            print(f"  - Total qualified: {metrics.get('total_qualified')}")
+            print(f"  - Qualification rate: {format_score(metrics.get('qualification_rate', 0))}")
+            print(f"  - Processing Cost: ${metrics.get('cost_usd', 0.0):.4f}")
 
+        # Display top matches
+        print(f"\n🏆 Top Candidates:")
+        for idx, match in enumerate(matches_data.get("matches", [])[:3]):
+            print(f"\n  [{idx+1}] ID: {match['team_member_id']} | Score: {format_score(match['profile_score'])} | Fit: {match['fit_level']}")
+            
+            # Show Detailed Breakdown
+            db = match.get("detailed_breakdown", {})
+            if db:
+                mr = db.get("match_reasons", {})
+                print("    Breakdown:")
+                print(f"      - Mandatory Skills: {format_score(mr.get('mandatory_score'))}")
+                print(f"      - Preferred Skills: {format_score(mr.get('preferred_score'))}")
+                print(f"      - Certifications:   {format_score(mr.get('certification_score'))}")
+                print(f"      - Experience:       {format_score(mr.get('experience_score'))}")
+                print(f"      - Location Match:   {'✅' if mr.get('location_matched') else '❌'}")
+                print(f"      - Work Mode Match:  {'✅' if mr.get('work_mode_matched') else '❌'}")
+                print(f"      - Semantic Match:   {format_score(mr.get('semantic_similarity'))}")
+            
+            # Show Explanation Summary
+            exp = match.get("explanation", [])
+            if exp:
+                print(f"    Reasoning: {exp[0] if isinstance(exp, list) else exp}")
+
+    # Step 3: Database Analysis
     print("\n" + "="*60)
+    print("STEP 3: Checkpoint & Audit Analysis")
+    print("="*60)
+
+    from app.db.session import SessionLocal
+    from app.db.models.models import RequisitionRequest, LLMRequestLog
+    
+    try:
+        db_sess = SessionLocal()
+        req = db_sess.query(RequisitionRequest).filter(RequisitionRequest.correlation_id == correlation_id).first()
+        if req:
+            logs = db_sess.query(LLMRequestLog).filter(LLMRequestLog.request_id == req.request_id).all()
+            print(f"Audit Trail: Found {len(logs)} LLM calls for this request.")
+            for log in logs:
+                print(f"  - {log.agent_name:25} | Tokens: {log.total_tokens:5} | Status: {log.status}")
+        db_sess.close()
+    except Exception as e:
+        print(f"Warning: Could not fetch DB audit: {e}")
+
 else:
     print(f"❌ Failed to create requisition: {response.json()}")
+
+print("\n" + "="*60 + "\n")

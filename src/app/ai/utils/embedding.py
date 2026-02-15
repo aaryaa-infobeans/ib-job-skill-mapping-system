@@ -43,7 +43,13 @@ class EmbeddingAgent(BaseAgent):
         jd_level_text = f"Job level: {normalized_requisition.original_requisition.jd_level}"
         mandatory_text = f"Required skills: {', '.join(normalized_requisition.original_mandatory_skills)}"
         preferred_text = f"Preferred skills: {', '.join(normalized_requisition.original_preferred_skills)}"
-        certification_text = f"Certifications: {', '.join(normalized_requisition.original_requisition.certifications or [])}"
+        
+        # Build certification text using both original names and enriched terms
+        cert_names = normalized_requisition.normalized_certifications or normalized_requisition.original_certifications
+        enriched_certs = normalized_requisition.expanded_certification_terms
+        certification_text = f"Certifications: {', '.join(cert_names)}"
+        if enriched_certs:
+            certification_text += f". Related concepts: {', '.join(enriched_certs)}"
         
         # Generate embeddings
         jd_level_vec = self._embed_text(jd_level_text)

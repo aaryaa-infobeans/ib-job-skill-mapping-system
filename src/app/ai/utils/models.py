@@ -35,6 +35,9 @@ class NormalizedRequisition:
     original_preferred_skills: List[str]
     normalized_preferred_skills: List[str]
     expanded_preferred_terms: List[str]
+    original_certifications: List[str] = field(default_factory=list)
+    normalized_certifications: List[str] = field(default_factory=list)
+    expanded_certification_terms: List[str] = field(default_factory=list)
     original_requisition: RequisitionData = None
 
 
@@ -72,6 +75,27 @@ class RAGCandidate:
 
 
 @dataclass
+class ScoringBreakdown:
+    """Detailed breakdown of scoring components."""
+    skills_matched: List[str] = field(default_factory=list)
+    mandatory_matched: List[str] = field(default_factory=list)
+    preferred_matched: List[str] = field(default_factory=list)
+    mandatory_score: float = 0.0
+    preferred_score: float = 0.0
+    certification_matched: List[str] = field(default_factory=list)
+    certification_missing: List[str] = field(default_factory=list)
+    certification_score: float = 0.0
+    location_matched: bool = False
+    location_score: float = 0.0
+    work_mode_matched: bool = False
+    work_mode_score: float = 0.0
+    experience_matched: bool = False
+    experience_score: float = 0.0
+    semantic_similarity: float = 0.0
+    jd_level_similarity: float = 0.0
+
+
+@dataclass
 class ScoringResult:
     """Scoring result for a candidate."""
     team_member_id: str
@@ -79,6 +103,9 @@ class ScoringResult:
     confidence: float
     score_breakdown: Dict[str, float] = field(default_factory=dict)
     weighted_components: Dict[str, float] = field(default_factory=dict)
+    detailed_breakdown: Optional[ScoringBreakdown] = None
+    is_available: bool = True
+    available_capacity: float = 100.0
 
 
 @dataclass

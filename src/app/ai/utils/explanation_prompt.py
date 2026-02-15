@@ -49,6 +49,10 @@ Required Location: {job_location}
 - Location Match Score: {location_score:.2%}
 - Work Mode Match Score: {work_mode_score:.2%}
 
+**Semantic Enrichment Insight:**
+- Enriched Skill Concepts: {enriched_skills}
+- Enriched Cert Concepts: {enriched_certifications}
+
 **JD Content & Role Match:**
 - Overall Semantic Similarity: {semantic_similarity:.2%}
 - Role Responsibility Match: {jd_level_similarity:.2%}
@@ -125,6 +129,8 @@ def format_explanation_prompt(
     requisition_duration: int,
     available_capacity: float,
     is_available: bool,
+    enriched_skills: list = None,
+    enriched_certifications: list = None,
 ) -> str:
     """Format the detailed explanation prompt with candidate data."""
     
@@ -163,4 +169,6 @@ def format_explanation_prompt(
         requisition_duration=requisition_duration,
         available_capacity=available_capacity,
         is_available="Yes" if is_available else "No",
+        enriched_skills=", ".join(enriched_skills) if enriched_skills else "None",
+        enriched_certifications=", ".join(enriched_certifications) if enriched_certifications else "None",
     )

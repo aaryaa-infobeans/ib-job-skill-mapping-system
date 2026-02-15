@@ -26,6 +26,16 @@ class RAGRetrievalAgent(BaseAgent):
         self.weight_certification = settings.weight_certification
         self.similarity_threshold = settings.rag_similarity_threshold
         self.max_results = 100
+        
+        # Calculate total weight for normalization
+        self.total_weight = (
+            self.weight_mandatory + 
+            self.weight_preferred + 
+            self.weight_jd_level + 
+            self.weight_certification
+        )
+        if self.total_weight == 0:
+            self.total_weight = 1.0 # Avoid division by zero
     
     def execute(self, embedding_result: EmbeddingResult) -> List[RAGCandidate]:
         """
@@ -107,7 +117,12 @@ class RAGRetrievalAgent(BaseAgent):
                     jd_level_similarity=float(row.jd_level_sim),
                     certification_similarity=float(row.cert_sim)
                 ))
-        
+        if rows:
+            max_sim = max([float(self._compute_weighted_similarity(r.mandatory_sim, r.preferred_sim, r.jd_level_sim, r.cert_sim)) for r in rows])
+            self.logger.info(f"Max similarity found among {len(rows)} candidates: {max_sim:.4f} (Threshold: {self.similarity_threshold})")
+        else:
+            self.logger.info("No candidates found in DB to score.")
+
         return candidates
     
     def _compute_weighted_similarity(
@@ -129,7 +144,9 @@ class RAGRetrievalAgent(BaseAgent):
             (self.weight_jd_level * j) +
             (self.weight_certification * c)
         )
-        return final_similarity
+        
+        # Normalize to 0-1 range based on the weights used
+        return final_similarity / self.total_weight
     
     def validate_input(self, input_data: Any) -> bool:
         """Validate that input is EmbeddingResult."""

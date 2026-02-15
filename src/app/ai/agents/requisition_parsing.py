@@ -114,10 +114,9 @@ def parse_requisition_with_llm(
         response = client.chat.completions.create(
             model=settings.openai_model or "gpt-4",
             messages=[
-                {"role": "system", "content": REQUISITION_PARSING_PROMPT},
+                {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
                 {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
             ],
-            response_format={"type": "json_object"},
             temperature=0.0 # Deterministic extraction
         )
         
