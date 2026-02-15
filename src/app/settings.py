@@ -5,9 +5,9 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 
-class Config:
-    env_file = ".env"
-    extra = "ignore"  # Ignore extra fields in .env
+# Determine the absolute path to the .env file (root directory)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 class Settings(BaseSettings):
     """Application settings with secure secrets handling."""
@@ -31,45 +31,45 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4"
-    openai_embedding_model: str = "text-embedding-3-large"
-    openai_input_rate: Optional[float] = None
-    openai_output_rate: Optional[float] = None
+    openai_model: str
+    openai_embedding_model: str
+    openai_input_rate: Optional[float]
+    openai_output_rate: Optional[float]
     
     # Agent Weights
-    weight_mandatory_skills: float = 0.30
-    weight_preferred_skills: float = 0.15
-    weight_experience: float = 0.10
-    weight_semantic_similarity: float = 0.10
-    weight_certification: float = 0.10
-    weight_jd_text: float = 0.10
-    weight_location: float = 0.10
-    weight_work_mode: float = 0.05
+    weight_mandatory_skills: float
+    weight_preferred_skills: float
+    weight_experience: float
+    weight_semantic_similarity: float
+    weight_certification: float
+    weight_jd_text: float
+    weight_location: float
+    weight_work_mode: float
     
     # Thresholds
-    fit_score_threshold: float = 0.5
-    rag_similarity_threshold: float = 0.0
+    fit_score_threshold: float
+    rag_similarity_threshold: float
     
     # Retry Configuration
-    max_retry_attempts: int = 3
-    retry_backoff_factor: float = 2.0
+    max_retry_attempts: int
+    retry_backoff_factor: float
     
     # pgvector Configuration
-    pgvector_dimension: int = 3072
+    pgvector_dimension: int
     
     # Application Configuration
-    app_env: str = "development"
-    host: str = "0.0.0.0"
-    port: int = 8000
-    reload: bool = True
+    app_env: str
+    host: str
+    port: int
+    reload: bool
     
     # Security Configuration
     secret_key: Optional[str] = None
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int
     
     model_config = ConfigDict(
         extra="ignore",
-        env_file=".env",
+        env_file=ENV_PATH,
         case_sensitive=False
     )
 

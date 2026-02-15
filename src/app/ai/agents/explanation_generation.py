@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from app.settings import settings
 from app.ai.state import GraphState
@@ -40,6 +40,8 @@ def _generate_llm_explanation(
     fit_level: str,
     parsed_jd: Dict[str, Any],
     candidate_data: Dict[str, Any],
+    enriched_skills: List[str] = None,
+    enriched_certifications: List[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Generate detailed explanation using OpenAI LLM.
     
@@ -98,16 +100,18 @@ def _generate_llm_explanation(
             requisition_duration=parsed_jd.get("requisition_duration_month", 0),
             available_capacity=candidate_data.get("availability_score", 0.0) * 100,
             is_available=candidate_data.get("is_available", False),
+            enriched_skills=enriched_skills,
+            enriched_certifications=enriched_certifications,
         )
         
         # Call OpenAI API
         logger.info(f"Generating LLM explanation for {team_member_id}")
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=settings.openai_model or "gpt-4",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert recruiter. Generate detailed, professional explanations for candidate matching decisions. Always respond with valid JSON."
+                    "content": "You are an expert HR recruitment assistant. Provide professional, evidence-based candidate evaluations."
                 },
                 {
                     "role": "user",
@@ -115,7 +119,7 @@ def _generate_llm_explanation(
                 }
             ],
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=1000,
         )
         
         # Parse response
@@ -222,6 +226,25 @@ def explanation_generation_node(state: GraphState) -> GraphState:
     explanations_failed = 0
     templates_used = 0
     
+    # Extract enrichment data once for all candidates
+    normalized_skills = state.get("normalized_skills", {})
+    mandatory_enriched = normalized_skills.get("mandatory_enriched", {})
+    preferred_enriched = normalized_skills.get("preferred_enriched", {})
+    
+    # Flatten enrichment terms for the prompt
+    all_enriched_skills = []
+    for terms in mandatory_enriched.values():
+        all_enriched_skills.extend(terms)
+    for terms in preferred_enriched.values():
+        all_enriched_skills.extend(terms)
+    all_enriched_skills = list(set(all_enriched_skills))
+    
+    all_enriched_certs = []
+    cert_enriched_map = normalized_skills.get("certification_enriched", {})
+    for terms in cert_enriched_map.values():
+        all_enriched_certs.extend(terms)
+    all_enriched_certs = list(set(all_enriched_certs))
+    
     # Process all candidates
     for i, candidate in enumerate(candidate_scores):
         team_member_id = candidate.get("team_member_id")
@@ -249,6 +272,8 @@ def explanation_generation_node(state: GraphState) -> GraphState:
                 fit_level=fit_level,
                 parsed_jd=parsed_jd,
                 candidate_data=candidate,
+                enriched_skills=all_enriched_skills,
+                enriched_certifications=all_enriched_certs
             )
             
             if llm_result:

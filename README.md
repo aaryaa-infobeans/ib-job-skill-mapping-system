@@ -291,6 +291,33 @@ DATABASE_URL=postgresql://user:password@localhost:5432/ib_job_skill_mapping
 # OpenAI API Configuration
 OPENAI_API_KEY=sk-your-openai-api-key-here
 OPENAI_MODEL=gpt-4-turbo-preview
+OPENAI_EMBEDDING_MODEL=text-embedding-3-large
+
+# LLM Cost Tracking Configuration
+OPENAI_INPUT_RATE=0.003
+OPENAI_OUTPUT_RATE=0.006
+
+# Agent Scoring Weights
+WEIGHT_MANDATORY_SKILLS=0.25
+WEIGHT_PREFERRED_SKILLS=0.20
+WEIGHT_EXPERIENCE=0.10
+WEIGHT_SEMANTIC_SIMILARITY=0.10
+WEIGHT_CERTIFICATION=0.10
+WEIGHT_JD_TEXT=0.10
+WEIGHT_LOCATION=0.10
+WEIGHT_WORK_MODE=0.05
+
+# Thresholds
+FIT_SCORE_THRESHOLD=0.55
+# Lowered to 0.3 to improve candidate retrieval recall
+RAG_SIMILARITY_THRESHOLD=0.3
+
+# Retry Configuration
+MAX_RETRY_ATTEMPTS=3
+RETRY_BACKOFF_FACTOR=2
+
+# pgvector Configuration
+PGVECTOR_DIMENSION=3072
 
 # Application Configuration
 APP_ENV=development

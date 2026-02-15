@@ -41,6 +41,9 @@ def embedding_node(state: GraphState) -> GraphState:
             original_preferred_skills=parsed_jd.get("extracted_preferred_skills", []),
             normalized_preferred_skills=normalized_skills.get("preferred_skill_ids", []),
             expanded_preferred_terms=list(normalized_skills.get("preferred_enriched", {}).keys()),
+            original_certifications=normalized_skills.get("original_certifications", []),
+            normalized_certifications=normalized_skills.get("normalized_certifications", []),
+            expanded_certification_terms=list(normalized_skills.get("certification_enriched", {}).keys()),
             original_requisition=requisition_data
         )
         
