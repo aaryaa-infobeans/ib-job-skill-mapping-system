@@ -16,12 +16,37 @@ from app.ai.agents.result_aggregation import result_aggregation_node
 logger = logging.getLogger(__name__)
 
 
+def should_continue_after_parsing(state: GraphState) -> str:
+    """
+    Determine if the graph should continue after requisition parsing.
+    
+    If there's an error (e.g., validation failure), stop the graph.
+    Otherwise, continue to skill normalization.
+    
+    Args:
+        state: Current graph state
+        
+    Returns:
+        "END" if error exists, "skill_normalization" otherwise
+    """
+    error_message = state.get("error_message")
+    
+    if error_message:
+        logger.warning(f"Stopping graph execution due to error: {error_message}")
+        return "END"
+    
+    return "skill_normalization"
+
+
 def create_graph():
     """Create the LangGraph for JD-Skill matching.
     
-    Linear topology:
-    START → JD_Parsing → Skill_Normalization → Matching_Scoring → 
-    Explanation_Generation → Result_Aggregation → END
+    Topology with error handling:
+    START → JD_Parsing → [Check for errors]
+                         ↓ (if error) → END
+                         ↓ (if success) → Skill_Normalization → Embedding → 
+                         RAG_Retrieval → Matching_Scoring → Explanation_Generation → 
+                         Result_Aggregation → END
     """
     workflow = StateGraph(GraphState)
     
@@ -34,9 +59,20 @@ def create_graph():
     workflow.add_node("explanation_generation", explanation_generation_node)
     workflow.add_node("result_aggregation", result_aggregation_node)
     
-    # Define linear edges
+    # Define edges with conditional routing after parsing
     workflow.set_entry_point("requisition_parsing")
-    workflow.add_edge("requisition_parsing", "skill_normalization")
+    
+    # Add conditional edge after parsing to check for errors
+    workflow.add_conditional_edges(
+        "requisition_parsing",
+        should_continue_after_parsing,
+        {
+            "END": END,
+            "skill_normalization": "skill_normalization"
+        }
+    )
+    
+    # Continue with linear edges for successful path
     workflow.add_edge("skill_normalization", "embedding")
     workflow.add_edge("embedding", "rag_retrieval")
     workflow.add_edge("rag_retrieval", "matching_scoring")
@@ -46,5 +82,5 @@ def create_graph():
     
     # Compile and return
     graph = workflow.compile()
-    logger.info("LangGraph compiled successfully")
+    logger.info("LangGraph compiled successfully with error handling")
     return graph
