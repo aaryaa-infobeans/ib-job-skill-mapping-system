@@ -43,6 +43,8 @@ class MatchesResponse(BaseModel):
     total_matches: int
     matches: List[MatchResult]
     metrics: Optional[MatchesMetrics] = None
+    error_message: Optional[str] = None
+    validation_errors: Optional[List[str]] = None
 
 
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
@@ -95,11 +97,35 @@ async def get_matches(
                     matches=[],
                 )
         elif requisition.status == 5:  # FAILED
+            from app.db.models.models import LangGraphCheckpoint
+            
+            # Retrieve error message from checkpoint
+            error_checkpoint = db.query(LangGraphCheckpoint).filter(
+                LangGraphCheckpoint.request_id == requisition.request_id,
+                LangGraphCheckpoint.node_name == "error"
+            ).first()
+            
+            error_message = None
+            validation_errors = None
+            
+            if error_checkpoint and error_checkpoint.state_json:
+                error_message = error_checkpoint.state_json.get("error_message")
+                
+                # Extract validation errors if stored as a list in state
+                validation_errors = error_checkpoint.state_json.get("validation_errors")
+                
+                # Fallback: Parse from error_message if not in state
+                if not validation_errors and error_message and error_message.startswith("VALIDATION_FAILED:"):
+                    error_text = error_message.replace("VALIDATION_FAILED: ", "")
+                    validation_errors = [e.strip() for e in error_text.split(";") if e.strip()]
+            
             return MatchesResponse(
                 correlation_id=correlation_id,
                 status="FAILED",
                 total_matches=0,
                 matches=[],
+                error_message=error_message,
+                validation_errors=validation_errors,
             )
         else:
             # Requisition is still being processed
