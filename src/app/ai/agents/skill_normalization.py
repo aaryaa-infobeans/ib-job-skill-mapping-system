@@ -6,7 +6,8 @@ import os
 from typing import Dict, List, Any, Optional
 
 from sqlalchemy.orm import Session
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.ai.state import GraphState
 from app.db.models import SkillMaster, SkillOntology
@@ -189,45 +190,50 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "ontology": ontology_data
         }
         
-        # Initialize OpenAI client
+        # Initialize ChatOpenAI
         api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found in environment or settings")
             
-        client = OpenAI(api_key=api_key)
-        
-        # Call LLM for fuzzy-logic normalization and enrichment
-        logger.info("Calling LLM for skill normalization")
-        response = client.chat.completions.create(
+        llm = ChatOpenAI(
+            api_key=api_key,
             model=settings.openai_model or "gpt-4",
-            messages=[
-                {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
-                {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
-            ],
             temperature=0.0
         )
         
+        # Call LLM for fuzzy-logic normalization and enrichment
+        logger.info("Calling LLM for skill normalization")
+        messages = [
+            SystemMessage(content=NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."),
+            HumanMessage(content=f"Normalize these skills: {json.dumps(raw_input)}")
+        ]
+        
+        response = llm.invoke(messages)
+        
         # Parse result
-        result_text = response.choices[0].message.content
+        result_text = response.content
         result = json.loads(result_text)
         
         # Extract metadata for logging
-        usage = response.usage
-        cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
+        usage = response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
         
         # Add to LLM logs for observability
         state["llm_call_logs"].append({
             "agent_name": "skill_normalization",
             "prompt_name": "skill_ontology_normalization",
             "model": "gpt-4",
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "total_tokens": usage.total_tokens,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
             "cost_usd": cost
         })
         
         # Update cumulative metrics
-        state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + usage.total_tokens
+        state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + total_tokens
         state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + cost
 
         # Map results to skill IDs and enriched terms

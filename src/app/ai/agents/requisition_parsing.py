@@ -14,23 +14,28 @@ from app.settings import settings
 # Global client cache
 _client_cache = {}
 
-def _get_openai_client():
-    if "client" in _client_cache:
-        return _client_cache["client"], True
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+
+def _get_llm():
+    if "llm" in _client_cache:
+        return _client_cache["llm"], True
         
     api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    logger.info(f"DEBUG REQ PARSING: api_key length: {len(api_key) if api_key else 0}")
     if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
         logger.warning("⚠️  OPENAI_API_KEY not configured for parsing")
         return None, False
         
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        _client_cache["client"] = client
-        return client, True
+        llm = ChatOpenAI(
+            api_key=api_key,
+            model=settings.openai_model or "gpt-4",
+            temperature=0.0
+        )
+        _client_cache["llm"] = llm
+        return llm, True
     except Exception as e:
-        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
         return None, False
 
 # System prompt for requisition parsing
@@ -87,7 +92,7 @@ def parse_requisition_with_llm(
     Returns:
         Enriched requisition dict (ParsedJD) or None on failure
     """
-    client, llm_enabled = _get_openai_client()
+    llm, llm_enabled = _get_llm()
     if not llm_enabled:
         logger.info("LLM not enabled, using fallback parsing logic")
         return _fallback_parse(job_description), None
@@ -111,16 +116,13 @@ def parse_requisition_with_llm(
                 return obj.isoformat()
             raise TypeError(f"Type {type(obj)} not serializable")
 
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4",
-            messages=[
-                {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
-                {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
-            ],
-            temperature=0.0 # Deterministic extraction
-        )
+        messages = [
+            SystemMessage(content=REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."),
+            HumanMessage(content=f"Please parse this job description:\n{json.dumps(context, default=json_serial)}")
+        ]
         
-        llm_output = json.loads(response.choices[0].message.content)
+        response = llm.invoke(messages)
+        llm_output = json.loads(response.content)
         
         # Merge LLM enrichment back into the full context
         enriched_jd = {
@@ -143,8 +145,11 @@ def parse_requisition_with_llm(
         }
         
         # Track tokens and cost
-        usage = response.usage
-        cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
+        usage = response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
         
         # Add to LLM logs if request_id is available in a global way or passed
         # For now, we will return the metrics along with enriched_jd
@@ -152,9 +157,9 @@ def parse_requisition_with_llm(
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
             "model": settings.openai_model or "gpt-4",
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "total_tokens": usage.total_tokens,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
             "cost_usd": cost,
             "status": "SUCCESS"
         }

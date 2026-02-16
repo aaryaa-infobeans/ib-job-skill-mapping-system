@@ -15,6 +15,8 @@ def execute_graph_with_audit(
     initial_state: Dict[str, Any],
     request_id: str,
     db: Session,
+    tags: list[str] = None,
+    metadata: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """Execute LangGraph pipeline with checkpoint auditing.
     
@@ -50,7 +52,8 @@ def execute_graph_with_audit(
     # 2. Execute the graph using stream to capture each node completion
     try:
         processed_logs_count = 0
-        for event in graph.stream(current_state):
+        config = {"tags": tags or [], "metadata": metadata or {}}
+        for event in graph.stream(current_state, config=config):
             for node_name, state_update in event.items():
                 logger.info(f"Node '{node_name}' completed, saving checkpoint.")
                 

@@ -4,6 +4,8 @@ import json
 import logging
 import os
 from typing import Dict, List, Tuple
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +13,10 @@ logger = logging.getLogger(__name__)
 _client_cache = {}
 
 
-def _get_openai_client():
-    """Get or create OpenAI client."""
-    if "client" in _client_cache:
-        return _client_cache["client"], True
+def _get_llm():
+    """Get or create ChatOpenAI."""
+    if "llm" in _client_cache:
+        return _client_cache["llm"], True
         
     from app.settings import settings
     api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -24,12 +26,16 @@ def _get_openai_client():
         return None, False
         
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        _client_cache["client"] = client
-        return client, True
+        llm = ChatOpenAI(
+            api_key=api_key,
+            model=settings.openai_model or "gpt-4o-mini",
+            temperature=0.0,
+            max_tokens=500
+        )
+        _client_cache["llm"] = llm
+        return llm, True
     except Exception as e:
-        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
         return None, False
 
 
@@ -76,7 +82,7 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         - is_valid: True if data appears valid, False if garbage detected
         - validation_errors: List of semantic validation error messages
     """
-    client, llm_enabled = _get_openai_client()
+    llm, llm_enabled = _get_llm()
     
     if not llm_enabled:
         logger.warning("⚠️  LLM not available for semantic validation - skipping quality check")
@@ -99,18 +105,15 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         logger.info("🔍 Running LLM semantic validation...")
         
         from app.settings import settings
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SEMANTIC_VALIDATION_PROMPT},
-                {"role": "user", "content": f"Validate this requisition data:\n{json.dumps(validation_context, indent=2)}"}
-            ],
-            temperature=0.0,  # Deterministic validation
-            max_tokens=500
-        )
+        messages = [
+            SystemMessage(content=SEMANTIC_VALIDATION_PROMPT),
+            HumanMessage(content=f"Validate this requisition data:\n{json.dumps(validation_context, indent=2)}")
+        ]
+        
+        response = llm.invoke(messages)
         
         # Parse LLM response
-        llm_output = json.loads(response.choices[0].message.content)
+        llm_output = json.loads(response.content)
         
         is_valid = llm_output.get("is_valid", True)
         validation_errors = llm_output.get("validation_errors", [])

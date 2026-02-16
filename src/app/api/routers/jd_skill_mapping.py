@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
+from langchain_core.tracers.context import tracing_v2_enabled
 
 from app.api.dependencies import verify_token
 from app.api.schemas.requisition import RequisitionRequest, RequisitionResponse
@@ -47,7 +48,18 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         }
         
         # Run graph with audit trail
-        final_state = execute_graph_with_audit(initial_state, request_id, db)
+        with tracing_v2_enabled(project_name="ib-job-skill-mapping-system"):
+            final_state = execute_graph_with_audit(
+                initial_state=initial_state,
+                request_id=request_id,
+                db=db,
+                tags=["requisition_processing"],
+                metadata={
+                    "correlation_id": correlation_id,
+                    "request_id": request_id,
+                    "min_availability_percentage": getattr(request, "min_availability_percentage", 50)
+                }
+            )
         
         logger.info(f"Graph processing completed for correlation_id={correlation_id}")
         

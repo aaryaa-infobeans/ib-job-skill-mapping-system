@@ -5,6 +5,8 @@ import logging
 import os
 from typing import Optional, Dict, Any, List
 
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 from app.settings import settings
 from app.ai.state import GraphState
 from app.ai.utils.explanation_prompt import format_explanation_prompt
@@ -14,9 +16,9 @@ logger = logging.getLogger(__name__)
 # Global client cache
 _client_cache = {}
 
-def _get_openai_client():
-    if "client" in _client_cache:
-        return _client_cache["client"], True
+def _get_llm():
+    if "llm" in _client_cache:
+        return _client_cache["llm"], True
         
     api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
     if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
@@ -24,13 +26,17 @@ def _get_openai_client():
         return None, False
         
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        _client_cache["client"] = client
-        logger.info(f"✅ OpenAI client initialized for explanation generation")
-        return client, True
+        llm = ChatOpenAI(
+            api_key=api_key,
+            model=settings.openai_model or "gpt-4",
+            temperature=0.7,
+            max_tokens=1000
+        )
+        _client_cache["llm"] = llm
+        logger.info(f"✅ ChatOpenAI initialized for explanation generation")
+        return llm, True
     except Exception as e:
-        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
         return None, False
 
 
@@ -55,7 +61,7 @@ def _generate_llm_explanation(
     Returns:
         Dictionary with detailed explanation or None if LLM call fails or not enabled
     """
-    client, llm_enabled = _get_openai_client()
+    llm, llm_enabled = _get_llm()
     if not llm_enabled:
         logger.debug(f"LLM not enabled, skipping LLM explanation for {team_member_id}")
         return None
@@ -104,26 +110,17 @@ def _generate_llm_explanation(
             enriched_certifications=enriched_certifications,
         )
         
-        # Call OpenAI API
+        # Call ChatOpenAI
         logger.info(f"Generating LLM explanation for {team_member_id}")
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert HR recruitment assistant. Provide professional, evidence-based candidate evaluations."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.7,
-            max_tokens=1000,
-        )
+        messages = [
+            SystemMessage(content="You are an expert HR recruitment assistant. Provide professional, evidence-based candidate evaluations."),
+            HumanMessage(content=prompt)
+        ]
+        
+        response = llm.invoke(messages)
         
         # Parse response
-        explanation_text = response.choices[0].message.content
+        explanation_text = response.content
         logger.debug(f"Raw LLM response for {team_member_id}: {explanation_text}")
         
         # Try to parse as JSON
@@ -142,22 +139,22 @@ def _generate_llm_explanation(
             }
         
         # Track tokens
-        token_count = response.usage.prompt_tokens + response.usage.completion_tokens
-        cost = (
-            (response.usage.prompt_tokens / 1_000_000 * 0.03) +
-            (response.usage.completion_tokens / 1_000_000 * 0.06)
-        )
+        usage = response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
         
         logger.info(
             f"LLM explanation generated for {team_member_id}: "
-            f"tokens={token_count}, cost=${cost:.6f}"
+            f"tokens={total_tokens}, cost=${cost:.6f}"
         )
         
         return {
             "explanation_data": explanation_data,
-            "token_count": token_count,
-            "prompt_tokens": response.usage.prompt_tokens,
-            "completion_tokens": response.usage.completion_tokens,
+            "token_count": total_tokens,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
             "model": "gpt-4",
             "cost_usd": cost,
         }
