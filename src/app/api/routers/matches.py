@@ -44,6 +44,7 @@ class MatchesResponse(BaseModel):
     matches: List[MatchResult]
     metrics: Optional[MatchesMetrics] = None
     error_message: Optional[str] = None
+    validation_errors: Optional[List[str]] = None
 
 
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
@@ -105,8 +106,18 @@ async def get_matches(
             ).first()
             
             error_message = None
+            validation_errors = None
+            
             if error_checkpoint and error_checkpoint.state_json:
                 error_message = error_checkpoint.state_json.get("error_message")
+                
+                # Extract validation errors if stored as a list in state
+                validation_errors = error_checkpoint.state_json.get("validation_errors")
+                
+                # Fallback: Parse from error_message if not in state
+                if not validation_errors and error_message and error_message.startswith("VALIDATION_FAILED:"):
+                    error_text = error_message.replace("VALIDATION_FAILED: ", "")
+                    validation_errors = [e.strip() for e in error_text.split(";") if e.strip()]
             
             return MatchesResponse(
                 correlation_id=correlation_id,
@@ -114,6 +125,7 @@ async def get_matches(
                 total_matches=0,
                 matches=[],
                 error_message=error_message,
+                validation_errors=validation_errors,
             )
         else:
             # Requisition is still being processed

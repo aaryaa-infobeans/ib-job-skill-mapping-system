@@ -233,6 +233,47 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
             return state
     
     try:
+        # ========================================
+        # STEP 1: BASIC VALIDATION
+        # ========================================
+        from app.ai.agents.requisition_validation import validate_requisition_input
+        
+        logger.info("🔍 Step 1: Validating requisition input (basic checks)...")
+        is_valid, validation_reasons = validate_requisition_input(job_description)
+        
+        if not is_valid:
+            # Basic validation failed - set error and return immediately
+            error_msg = "VALIDATION_FAILED: " + "; ".join(validation_reasons)
+            state["error_message"] = error_msg
+            state["validation_errors"] = validation_reasons  # Store as list for structured access
+            logger.error(f"❌ Basic validation failed for request_id={state['requisition_input']['request_id']}")
+            logger.error(f"   Validation errors: {validation_reasons}")
+            return state
+        
+        logger.info("✅ Basic validation passed")
+        
+        # ========================================
+        # STEP 2: SEMANTIC VALIDATION (LLM-based)
+        # ========================================
+        from app.ai.agents.semantic_validation import validate_requisition_semantics
+        
+        logger.info("🔍 Step 2: Validating data quality (semantic checks)...")
+        is_semantically_valid, semantic_errors = validate_requisition_semantics(job_description)
+        
+        if not is_semantically_valid:
+            # Semantic validation failed - data appears to be garbage
+            error_msg = "SEMANTIC_VALIDATION_FAILED: " + "; ".join(semantic_errors)
+            state["error_message"] = error_msg
+            state["validation_errors"] = semantic_errors  # Store as list for structured access
+            logger.error(f"❌ Semantic validation failed for request_id={state['requisition_input']['request_id']}")
+            logger.error(f"   Semantic errors: {semantic_errors}")
+            return state
+        
+        logger.info("✅ Semantic validation passed, proceeding with LLM parsing")
+        
+        # ========================================
+        # STEP 3: PARSE REQUISITION USING LLM
+        # ========================================
         # Parse requisition using LLM
         parsed_jd, metrics = parse_requisition_with_llm(job_description)
         
