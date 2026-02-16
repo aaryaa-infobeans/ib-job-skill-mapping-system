@@ -1,16 +1,23 @@
 # Agent Specification: JD Parsing Agent
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This agent is responsible for taking the raw job description text and other details from the requisition and converting them into a structured format.
+
+**Note (CR-PII-001):** This agent receives PII-scrubbed data from Node 0 (`PII_Scrubber_Agent`). All personal identifiers have been redacted/masked/tokenized before this agent processes the data.
 
 ## 2. Inputs
 - The agent receives the entire `GraphState` as input.
 - It specifically operates on:
-  - `state.requisition_input.job_description.jd_text`
-  - `state.requisition_input.job_description.title`
-  - `state.requisition_input.job_description.role`
+  - `state.requisition_input.job_description.jd_text` (PII-scrubbed)
+  - `state.requisition_input.job_description.title` (PII-scrubbed)
+  - `state.requisition_input.job_description.role` (PII-scrubbed)
   - `state.requisition_input.job_description.mandatory_skills`
   - `state.requisition_input.job_description.preferred_skills`
+- **PII Safety (CR-PII-001)**: All input fields have been processed by `PII_Scrubber_Agent`. Names, contact information, and business-sensitive data are already sanitized.
 
 ## 3. Core Logic (LLM Prompt)
 The agent will use an LLM with a prompt engineered to perform the following actions:

@@ -1,5 +1,9 @@
 # LangGraph State Schema
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This document defines the schema for the state object that is passed through the LangGraph execution graph. This state is mutated by each agent/node in the pipeline.
 
@@ -9,10 +13,20 @@ The state will be a Pydantic or TypedDict object with the following structure. T
 ```python
 from typing import List, Dict, TypedDict, Optional
 
+class PIIScrubMetadata(TypedDict):  # NEW: CR-PII-001
+    """Metadata about PII scrubbing operations."""
+    scrubbed: bool
+    pii_detected: List[Dict]  # [{"type": "email", "confidence": 1.0, "action": "hash"}]
+    rule_version: str
+    scrubber_version: str
+    timestamp: str
+    audit_id: str  # Reference to pii_scrub_audit.audit_id
+
 class RequisitionInput(TypedDict):
     request_id: str
     correlation_id: str
     job_description: Dict # The original job_description payload
+    pii_scrub_metadata: Optional[PIIScrubMetadata]  # NEW: CR-PII-001
     # ... other metadata from the original request
 
 class ParsedJD(TypedDict):
@@ -64,7 +78,8 @@ class GraphState(TypedDict):
 ## 3. State Lifecycle
 
 1.  **Initialization**: The graph is initialized with the `requisition_input` state populated from the API request (FR-1).
-2.  **`JD_Parsing_Agent`**: Populates the `parsed_jd` field.
+2.  **`PII_Scrubber_Agent` (NEW: CR-PII-001)**: First node (Node 0) scrubs all PII from requisition data. Populates `pii_scrub_metadata` with scrubbing details and audit trail reference. Validates all data is scrubbed before proceeding.
+3.  **`JD_Parsing_Agent`**: Populates the `parsed_jd` field. Receives only PII-scrubbed data.
 3.  **`Skill_Normalization_Agent`**: Populates the `normalized_skills` field.
 4.  **`Availability_Evaluation_Agent` & `Matching_Scoring_Agent`**: These deterministic nodes work together to populate the `candidate_scores` list. They retrieve team member data from the database and perform all calculations.
 5.  **`Explanation_Generation_Agent`**: Takes the `candidate_scores` (specifically the `match_reasons`) and generates the human-readable `explanation` strings.

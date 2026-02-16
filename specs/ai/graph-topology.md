@@ -1,11 +1,18 @@
 # LangGraph Graph Topology
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This document defines the structure of the LangGraph execution graph, outlining the nodes and edges that orchestrate the AI agent pipeline.
 
 ## 2. Graph Visualization (Conceptual)
 ```
 [START]
+   |
+   v
+[PII_Scrubber_Agent] ← NODE 0 (NEW: CR-PII-001)
    |
    v
 [JD_Parsing_Agent]
@@ -31,9 +38,18 @@ This document defines the structure of the LangGraph execution graph, outlining 
 
 ## 3. Node Descriptions
 
+### 3.0. `PII_Scrubber_Agent` (NEW: CR-PII-001)
+- **Purpose**: To detect and scrub Personally Identifiable Information (PII) from all incoming data before any processing or storage.
+- **Type**: Deterministic Python function with pattern-based (regex) and NER-based detection.
+- **Input**: Raw requisition data, team member profiles, or any text entering the RAG pipeline.
+- **Output**: Scrubbed data with PII redacted/masked/tokenized, plus scrubbing metadata.
+- **Processing**: Applies FR-PII-001 through FR-PII-006 requirements from CR-PII-001.
+- **Audit**: Creates immutable record in `pii_scrub_audit` table.
+
 ### 3.1. `JD_Parsing_Agent`
 - **Purpose**: To parse the raw `jd_text` from the requisition and structure the key components.
 - **Type**: LLM-based.
+- **Note**: Receives only PII-scrubbed data from Node 0.
 
 ### 3.2. `Skill_Normalization_Agent`
 - **Purpose**: To take the skills extracted by the parsing agent and map them to the canonical `skill_master` dictionary.

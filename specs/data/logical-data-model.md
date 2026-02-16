@@ -1,11 +1,16 @@
 # Logical Data Model
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This document specifies the logical data model for the Job Description to Team Member Skill Mapping System. This model is derived from the `ib-job-skill-mapping-system.sql` schema file.
 
 ## 2. Traceability
 - **Source Schema**: `specs-data/ib-job-skill-mapping-system.sql`
 - **SRS Section**: 4. Data Requirements (Logical View)
+- **Change Requests**: CR-PII-001 (PII Scrubber)
 
 ## 3. Entity Relationship Diagram (ERD) - Conceptual
 -   A `team_member` has many `team_member_skill` records and many `team_member_allocation` records.
@@ -137,3 +142,30 @@ This document specifies the logical data model for the Job Description to Team M
   - `state_json` (JSONB, Not Null)
   - `token_count` (INT, Nullable)
   - `created_at` (TIMESTAMP, Not Null, Default: CURRENT_TIMESTAMP)
+
+### `pii_scrub_audit` (NEW: CR-PII-001)
+- **Purpose**: Immutable audit trail for all PII scrubbing operations.
+- **Columns**:
+  - `audit_id` (UUID, PK, Default: gen_random_uuid())
+  - `timestamp` (TIMESTAMP, Not Null, Default: NOW())
+  - `source_table` (VARCHAR(100), Not Null)
+  - `source_record_id` (VARCHAR(255), Not Null)
+  - `pii_detected` (JSONB, Not Null) - Array of detected PII types with confidence scores
+  - `rule_version` (VARCHAR(20), Not Null)
+  - `scrubber_version` (VARCHAR(20), Not Null)
+  - `triggered_by` (VARCHAR(100), Nullable)
+  - `processing_time_ms` (INT, Nullable)
+- **Constraints**: Immutable (no UPDATE/DELETE allowed)
+- **Indexes**: 
+  - `idx_audit_timestamp` on `timestamp DESC`
+  - `idx_audit_source` on `(source_table, source_record_id)`
+
+### `team_member_embeddings` (MODIFIED: CR-PII-001)
+- **Purpose**: Stores vector embeddings for RAG retrieval (PII-scrubbed only).
+- **New Columns** (CR-PII-001):
+  - `pii_scrubbed` (BOOLEAN, Not Null, Default: FALSE)
+  - `profile_text_scrubbed` (TEXT, Not Null) - Replaces profile_text with scrubbed version
+  - `scrub_metadata` (JSONB, Nullable) - Scrubbing details (actions, confidence, timestamp)
+- **Constraints**: 
+  - `CHECK (pii_scrubbed = TRUE)` - Enforces no unscrubbed data storage
+- **Migration Note**: Existing embeddings require backfill (see CR-PII-001 Section 8.1)
