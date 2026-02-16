@@ -48,7 +48,7 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         }
         
         # Run graph with audit trail
-        with tracing_v2_enabled(project_name="ib-job-skill-mapping-system"):
+        with tracing_v2_enabled():
             final_state = execute_graph_with_audit(
                 initial_state=initial_state,
                 request_id=request_id,

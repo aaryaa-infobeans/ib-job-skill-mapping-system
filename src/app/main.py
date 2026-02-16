@@ -38,7 +38,8 @@ app.add_middleware(CorrelationIdMiddleware)
 logger.info("Application starting", extra={
     "project": settings.project_name,
     "jwt_validation": "enabled" if settings.get_jwt_secret_key() else "dev mode (no signature validation)",
-    "langsmith_tracing": "enabled" if os.getenv("LANGCHAIN_TRACING_V2") == "true" else "disabled"
+    "langsmith_tracing": "enabled" if os.getenv("LANGCHAIN_TRACING_V2") == "true" else "disabled",
+    "langsmith_project": os.getenv("LANGCHAIN_PROJECT", "default")
 })
 
 # Include routers
