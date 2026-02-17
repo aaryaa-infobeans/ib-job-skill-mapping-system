@@ -107,7 +107,10 @@ def pii_scrubber_node(state: GraphState) -> GraphState:
                 
                 if result.detections:
                     pii_metadata["fields_scrubbed"].append(field)
-                    pii_metadata["detections"].extend(result.detections)
+                    # Add field_name to each detection for audit logging
+                    for detection in result.detections:
+                        detection["field_name"] = field
+                        pii_metadata["detections"].append(detection)
                     pii_metadata["total_pii_found"] += len(result.detections)
             else:
                 # Non-string fields pass through unchanged
