@@ -442,7 +442,32 @@
   - After a successful run, the `langgraph_checkpoints` table contains a complete, auditable record of the AI execution, including token counts.
 - **Dependencies**: Phase 4
 - **Owner Role**: AI / ML Engineering
-- **Task Type**: Validate
+- **Task Type**: Validate (Completed)
+
+#### Task 5.7: Integrate LangSmith for LLM Tracing
+- **Description**: Configure LangSmith to capture full traces of AI pipeline execution, including prompts, outputs, and token usage.
+- **Inputs**: `langsmith-tracing.md` spec.
+- **Outputs**: Active LangSmith tracing for all AI agents.
+- **Spec References**:
+  - `specs/ai/langsmith-tracing.md`
+- **Acceptance Criteria**:
+  - LLM prompts and outputs are visible in the LangSmith dashboard.
+  - Contextual metadata (correlation_id) is included in traces.
+- **Dependencies**: Phase 4
+- **Owner Role**: AI / ML Engineering
+- **Task Type**: Build (Completed)
+
+#### Task 5.8: Refactor AI Agents for Observability
+- **Description**: Migrate agent LLM calls from raw OpenAI client to LangChain ChatOpenAI to enable automatic tracing.
+- **Inputs**: Implemented AI agents.
+- **Outputs**: Refactored agent code.
+- **Spec References**:
+  - `specs/ai/langsmith-tracing.md`
+- **Acceptance Criteria**:
+  - All LLM interactions are correctly captured by the LangChain tracer.
+- **Dependencies**: Task 5.7
+- **Owner Role**: AI / ML Engineering
+- **Task Type**: Build (Completed)
 
 ---
 
