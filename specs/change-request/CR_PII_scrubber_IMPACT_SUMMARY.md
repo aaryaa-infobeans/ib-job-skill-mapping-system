@@ -186,7 +186,7 @@ kubectl logs -f deployment/rag-pipeline | grep "PII_SCRUB"
 |-----------|---------|-----------|-------------------|
 | **NER False Positives** | Skill names (Python, Java) flagged as names | Whitelist of 500+ tech terms | Train custom NER model on tech vocabulary |
 | **Multi-Language Support** | Only English NER model available | Regex-only for non-English text | Add SpaCy models: es_core, fr_core, de_core |
-| **Real-Time Detokenization** | Tokenization vault adds 10ms latency | Cache tokens in Redis (60% hit rate) | Optimize vault queries, add read replicas |
+| **Token Irreversibility** | Hash-based tokens cannot be detokenized | Accept one-way tokens for compliance | N/A (irreversibility is intentional for security) |
 | **Historical Data Gap** | Legacy embeddings without audit trail | Backfill creates audit records retroactively | Accept 90-day audit gap as documented |
 | **Regex Pattern Drift** | Phone/postal code patterns vary globally | Quarterly pattern review & updates | Automated pattern learning from false negatives |
 

@@ -215,24 +215,23 @@ Masked: "+*-***-0123"
 
 ### 3.5 Tokenization
 
-**Definition:** Replacement of PII with a unique, reversible token stored in a secure vault.
+**Definition:** Replacement of PII with a unique, deterministic hash-based token.
 
-**Use Case:** When authorized users need to reverse PII for specific workflows (e.g., hiring managers viewing candidate details).
+**Use Case:** When semantic meaning must be preserved for matching while protecting confidentiality (e.g., client names, project names).
 
 **Implementation:**
 ```
 Original: "Acme Corporation"
-Tokenized: "CLIENT_TOKEN_A7B9C2"
+Tokenized: "CLIENT_TOKEN_a7b9c2d1"
 
-Vault Mapping (Encrypted):
-  CLIENT_TOKEN_A7B9C2 → "Acme Corporation"
+Token Generation: SHA256(value + salt)[0:8]
 ```
 
 **Properties:**
-- **Reversible:** Authorized users with vault access can detokenize
-- **Unique:** Each value maps to a unique token
+- **Irreversible:** Original data cannot be recovered (one-way hash)
+- **Unique:** Each unique value maps to a unique token
 - **Deterministic:** Same input produces same token
-- **Auditable:** All detokenization events logged
+- **Collision-Resistant:** Different inputs produce different tokens
 
 ### 3.6 Hashing (Cryptographic One-Way)
 
@@ -361,9 +360,9 @@ business_sensitive:
 ```
 
 **Tokenization Policy:**
-- Client names → `CLIENT_TOKEN_{SHA256(name)[0:8]}`
-- Project names → `PROJECT_TOKEN_{SHA256(name)[0:8]}`
-- Tokens stored in secure vault with encryption-at-rest
+- Client names → `CLIENT_TOKEN_{SHA256(name+salt)[0:8]}`
+- Project names → `PROJECT_TOKEN_{SHA256(name+salt)[0:8]}`
+- Tokens generated deterministically using HMAC-SHA256
 
 **Rule Engine Requirements:**
 - Rules MUST be validated against JSON schema before application
@@ -596,7 +595,7 @@ def test_scrubber_idempotency():
 
 **Performance Optimization Strategies:**
 - Batch processing: Scrub 50 profiles in single NER pass
-- Caching: Cache scrubbed versions for 1 hour (Redis)
+- GPU acceleration: Use CUDA for NER inference (5x faster than CPU)
 - Async processing: Run scrubber asynchronously for non-real-time ingestion
 
 **Acceptance Criteria:**
@@ -775,7 +774,6 @@ false_positive_whitelist:
 | **Scrubbing rules file corrupt** | REJECT | 503 Service Unavailable | Fix rules, retry after 5 min |
 | **NER model unavailable** | DEGRADE* | 202 Accepted (degraded) | Regex-only scrubbing, manual review queued |
 | **Database unreachable (audit table)** | REJECT | 503 Service Unavailable | Exponential backoff (1s, 2s, 4s) |
-| **Tokenization service unavailable** | REJECT | 503 Service Unavailable | Circuit breaker, retry after 60s |
 | **Confidence below threshold** | LOG + QUEUE | 202 Accepted | Manual review within 24h |
 
 *Degraded mode: Regex patterns only (no NER), flag for manual review.
@@ -1079,9 +1077,7 @@ AND pii_scrubbed = TRUE;
 
 **Dependencies:**
 - SpaCy `en_core_web_trf` NER model (560MB)
-- AWS KMS or Azure Key Vault (for tokenization)
 - PostgreSQL ≥ 13 (for improved JSONB performance)
-- Redis ≥ 6.0 (for caching)
 
 **Backward Compatibility:**
 - **Breaking Change:** Existing unscrubbed embeddings incompatible with new queries
@@ -1284,10 +1280,10 @@ business_sensitive:
 | **NER-based scrubbing (GPU)** | 500 profiles/sec | 2ms | 5ms |
 | **Combined scrubbing** | 80 profiles/sec | 12ms | 50ms |
 
-**Caching Impact:**
-- Cache hit rate: 60% (for frequent queries)
-- Cache hit latency: < 1ms
-- Effective throughput with cache: 200 profiles/sec
+**GPU Acceleration Impact:**
+- GPU vs CPU speedup: 5x
+- GPU memory usage: 4GB VRAM
+- Effective throughput with GPU: 500 profiles/sec
 
 ---
 

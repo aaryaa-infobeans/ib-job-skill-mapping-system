@@ -48,7 +48,6 @@ This implementation plan translates the approved CR-PII-001 specification into a
 - [x] Stakeholder approval obtained (CISO, DPO, Legal, Engineering)
 - [ ] Provision GPU instance (NVIDIA T4) for NER model hosting
 - [ ] Install SpaCy `en_core_web_trf` model (560MB) + validation
-- [ ] Deploy Redis cluster (3 nodes) for caching layer
 - [ ] Create `pii_scrub_audit` table + rollback scripts
 - [ ] Configure Prometheus metrics + Grafana dashboards
 - [ ] Set up PagerDuty integration for critical alerts
@@ -64,7 +63,7 @@ This implementation plan translates the approved CR-PII-001 specification into a
 - [ ] Configure confidence thresholds: STRICT (≥0.50), BALANCED (≥0.85)
 - [ ] Build entity detection for: PERSON, GPE, ORG, DATE, CARDINAL
 - [ ] Whitelist integration for skill names (Python, Java, Ruby, etc.)
-- [ ] Implement tokenization vault (database-backed)
+- [ ] Implement hash-based tokenization (deterministic SHA-256 tokens)
 - [ ] Build fuzzy matching engine (Levenshtein, threshold=0.85)
 - [ ] Client/project name detection from database sources (refresh every 1h)
 - [ ] Implement deterministic replacement engine (salt-based hashing, masking)
@@ -202,7 +201,7 @@ This implementation plan translates the approved CR-PII-001 specification into a
   - Blue: Current production (no scrubber)
   - Green: New production (with scrubber)
 - [ ] Run smoke tests in green (100 test requisitions)
-- [ ] Validate green environment health (infrastructure, NER model, Redis, audit logging, metrics)
+- [ ] Validate green environment health (infrastructure, NER model, audit logging, metrics)
 - [ ] Switch 100% traffic to green (atomic cutover)
 - [ ] Monitor 4-hour critical observation period:
   - Scrubber error rate < 1%
@@ -265,7 +264,7 @@ This implementation plan translates the approved CR-PII-001 specification into a
 **Tasks:**
 - [ ] Re-index vector embeddings on scrubbed data only
 - [ ] Optimize NER batch size based on production metrics
-- [ ] Tune Redis cache TTL for optimal hit rate
+- [ ] Tune GPU memory allocation for optimal throughput
 - [ ] Complete all 5 runbooks
 - [ ] Complete all 4 ADRs
 - [ ] Update API documentation
@@ -368,7 +367,7 @@ feature/pii-scrubber-<component>-<spec-section>
 
 | Branch Name | Spec Section Reference | Scope | PR Reviewers Required |
 |-------------|----------------------|-------|-----------------------|
-| **feature/pii-phase1-infrastructure** | FR-PII-001 to FR-PII-004, NFR-PII-002 | Pattern engine, NER integration, Redis, observability, audit table | Security + 2 Backend Engineers |
+| **feature/pii-phase1-infrastructure** | FR-PII-001 to FR-PII-004, NFR-PII-002 | Pattern engine, NER integration, observability, audit table | Security + 2 Backend Engineers |
 | **feature/pii-phase2-integration** | Section 5.1, Section 11.1 | Graph topology (Node 0), state schema, database migrations, testing suite | AI Engineer + Backend Engineer + DBA |
 | **feature/pii-phase3-validation** | Section 8.1, NFR-PII-001 | Staging backfill (250k records), A/B testing, regression testing | Backend + Data Engineer |
 | **feature/pii-phase4-deployment** | Section 13.3 | Production backfill completion, blue-green deployment, constraint enforcement | SRE + Engineering Director |
@@ -2184,7 +2183,6 @@ AND scrub_metadata->>'original_checksum' !=
 
 - [x] All stakeholders approved (CISO, DPO, Legal, Engineering)
 - [ ] GPU instance provisioned and NER model loaded
-- [ ] Redis cluster deployed (3 nodes, 60% cache hit rate validated)
 - [ ] `pii_scrub_audit` table created + permissions configured
 - [ ] Prometheus metrics configured, Grafana dashboards deployed
 - [ ] PagerDuty integration tested (alert drill conducted)
@@ -2241,7 +2239,7 @@ AND scrub_metadata->>'original_checksum' !=
 - [ ] Scrubber error rate < 1% (better than 5% threshold)
 - [ ] False positive rate ≤ 3% validated on random sample (AC-F-004)
 - [ ] Scrubbing latency ≤ 50ms p95 (AC-NF-001)
-- [ ] Redis cache hit rate ≥ 60% (optimization successful)
+- [ ] GPU utilization optimized (≥70% during peak load)
 - [ ] Manual review queue processed: 100% of 0.70-0.84 confidence detections reviewed
 - [ ] Whitelist updated: New skill terms added based on false positives
 - [ ] Rollback procedure tested successfully in staging
@@ -2283,7 +2281,7 @@ AND scrub_metadata->>'original_checksum' !=
 ### Phase 5: Post-Deployment Optimization (Week 6, Optional) (DoD)
 
 - [ ] Vector embeddings re-indexed (optimized for scrubbed data only)
-- [ ] Performance tuning completed: NER batch size optimized, Redis TTL tuned
+- [ ] Performance tuning completed: NER batch size optimized, GPU memory tuned
 - [ ] Legacy code removed: Feature flag logic deleted from codebase
 - [ ] All 5 runbooks published:
   - [ ] PII Scrubber Deployment
@@ -2320,7 +2318,7 @@ AND scrub_metadata->>'original_checksum' !=
 |---------|-------------|------------|--------|----------|---------------------|-------|--------|
 | **R-001** | NER model F1-score < 0.90 | Low | High | MEDIUM | Pre-validate on 10,000-sample corpus before deployment | ML Engineer | OPEN |
 | **R-002** | False positive rate > 5% (skill terms flagged) | Medium | High | HIGH | Whitelist 500+ tech terms, manual review queue | ML Engineer | OPEN |
-| **R-003** | Scrubbing latency > 100ms p95 | Medium | Medium | MEDIUM | GPU acceleration, batch processing, Redis caching | Backend Eng | OPEN |
+| **R-003** | Scrubbing latency > 100ms p95 | Medium | Medium | MEDIUM | GPU acceleration, batch processing, async queueing | Backend Eng | OPEN |
 | **R-004** | Data loss during backfill | Low | Critical | HIGH | Checksums, dry-run validation, 90-day rollback window | Data Engineer | OPEN |
 | **R-005** | Match quality degradation > 10% | Medium | High | HIGH | A/B testing, baseline validation, rollback plan | Product + SRE | OPEN |
 | **R-006** | PII leak in logs | Medium | Critical | CRITICAL | Structured logging, daily automated scans, alerts | Security Eng | OPEN |
@@ -2356,9 +2354,7 @@ risk_mitigation_status:
 | Component | Depends On | Version/Spec | Critical Path? | Mitigation if Unavailable |
 |-----------|-----------|--------------|----------------|---------------------------|
 | **PII Scrubber** | SpaCy `en_core_web_trf` | 3.5+ | YES | Degrade to regex-only mode |
-| **PII Scrubber** | Redis (caching) | 6.0+ | NO | Direct scrubbing (higher latency) |
 | **PII Scrubber** | PostgreSQL (audit table) | 13+ | YES | Fail-closed (reject requests) |
-| **PII Scrubber** | Tokenization Vault | Custom | NO | Use redaction instead of tokenization |
 | **Graph Topology** | LangGraph | 0.2+ | YES | No workaround (blocking) |
 | **Backfill** | Raw profile text (source system) | N/A | YES | Mark records for manual review |
 | **NER Engine** | GPU (NVIDIA T4) | CUDA 11+ | NO | CPU fallback (slower) |
@@ -2374,7 +2370,6 @@ SpaCy NER Model → PII Scrubber → Node 0 → Graph Execution → Embedding St
 **Dependency Readiness Checklist:**
 
 - [ ] SpaCy model downloaded and validated (F1 ≥ 0.90)
-- [ ] Redis cluster deployed and tested (cache hit rate ≥ 60%)
 - [ ] PostgreSQL audit table created and permissions set
 - [ ] LangGraph library updated to 0.2+
 - [ ] GPU instance provisioned (or CPU fallback tested)
@@ -2632,7 +2627,7 @@ jobs:
 - [ ] **Stakeholder Review:** Circulate this plan to CISO, DPO, Legal, Engineering Director
 - [ ] **Resource Allocation:** Assign team (2 backend engineers, 1 ML engineer, 1 QA engineer, 1 SRE)
 - [ ] **Kickoff Meeting:** Schedule implementation kickoff (all stakeholders)
-- [ ] **Infrastructure Provisioning:** GPU instance, Redis cluster, audit table
+- [ ] **Infrastructure Provisioning:** GPU instance, audit table
 - [ ] **Dependencies Installation:** SpaCy model download and validation
 
 ### 15.2 Approval Checklist

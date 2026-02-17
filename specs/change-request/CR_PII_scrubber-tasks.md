@@ -68,13 +68,6 @@ Mandatory review gates:
   - **Owner:** ML Engineering
   - **Effort:** 2 points
 
-- [ ] **TASK-PII-003:** Deploy Redis cluster (3 nodes) with replication
-  - **Linked Spec:** NFR-PII-001 (Caching for performance)
-  - **Validation:** Cache hit rate ≥ 60% in load test
-  - **DoD:** Cluster health check passes, persistence enabled, monitoring configured
-  - **Owner:** Platform Engineering
-  - **Effort:** 5 points
-
 - [ ] **TASK-PII-004:** Create `pii_scrub_audit` table (immutable audit log)
   - **Linked Spec:** NFR-PII-003 (Audit logging), AC-NF-004
   - **Validation:** INSERT succeeds, UPDATE/DELETE rejected (constraint enforced)
@@ -186,12 +179,12 @@ Mandatory review gates:
 
 ### 1.4 Core Scrubber Development - Business-Sensitive Detection (Days 3-5)
 
-- [ ] **TASK-PII-030:** Implement tokenization vault (database-backed storage)
-  - **Linked Spec:** FR-PII-003
-  - **Validation:** Token → original mapping persists, retrieval < 10ms
-  - **DoD:** Encrypted storage (AES-256), 7-year retention policy
+- [ ] **TASK-PII-030:** Implement hash-based tokenization (deterministic)
+  - **Linked Spec:** FR-PII-003, Section 3.5
+  - **Validation:** Same input produces same token, HMAC-SHA256 verified
+  - **DoD:** Tokens irreversible, deterministic, 8-char hex format
   - **Owner:** Backend Engineering + Security
-  - **Effort:** 5 points
+  - **Effort:** 3 points
 
 - [ ] **TASK-PII-031:** Build fuzzy matching engine (Levenshtein distance ≥ 0.85)
   - **Linked Spec:** FR-PII-003
@@ -505,13 +498,6 @@ Mandatory review gates:
   - **Owner:** QA + SRE
   - **Effort:** 5 points
 
-- [ ] **TASK-PII-142:** Chaos test: Redis cache failure → Degraded mode (no cache)
-  - **Linked Spec:** NFR-PII-001
-  - **Validation:** Scrubbing continues without cache, latency < 200ms
-  - **DoD:** Cache miss rate = 100%, no errors
-  - **Owner:** QA + SRE
-  - **Effort:** 3 points
-
 - [ ] **TASK-PII-143:** Chaos test: Database failure → Audit logging queued
   - **Linked Spec:** NFR-PII-003
   - **Validation:** Audit logs buffered in memory, flushed when DB recovers
@@ -554,14 +540,14 @@ Mandatory review gates:
 
 - [ ] **TASK-PII-200:** Deploy scrubber to staging environment (blue-green)
   - **Linked Spec:** Section 13.3 (Deployment plan)
-  - **Validation:** Staging environment mirrors production (GPU, Redis, DB)
+  - **Validation:** Staging environment mirrors production (GPU, DB)
   - **DoD:** Health checks pass, smoke tests pass (100 test requisitions)
   - **Owner:** SRE + Backend Engineering
   - **Effort:** 5 points
 
 - [ ] **TASK-PII-201:** Validate staging infrastructure readiness
   - **Linked Spec:** NFR-PII-001, NFR-PII-002
-  - **Validation:** GPU detected, Redis cluster healthy, Prometheus/Grafana configured
+  - **Validation:** GPU detected, Prometheus/Grafana configured
   - **DoD:** Infrastructure checklist 100% complete
   - **Owner:** SRE
   - **Effort:** 3 points
@@ -776,7 +762,7 @@ Mandatory review gates:
 - [ ] **TASK-PII-310:** Deploy scrubber to production green environment
   - **Linked Spec:** Section 13.3 (Blue-green deployment)
   - **Validation:** Green environment health checks pass
-  - **DoD:** All services running, GPU available, Redis connected, DB migrations applied
+  - **DoD:** All services running, GPU available, DB migrations applied
   - **Owner:** SRE + Backend Engineering
   - **Effort:** 5 points
 
@@ -789,7 +775,7 @@ Mandatory review gates:
 
 - [ ] **TASK-PII-312:** Validate green environment infrastructure
   - **Linked Spec:** NFR-PII-001, NFR-PII-002
-  - **Validation:** GPU utilization > 70%, Redis cache hit rate ≥ 60%, Prometheus/Grafana operational
+  - **Validation:** GPU utilization > 70%, Prometheus/Grafana operational
   - **DoD:** Infrastructure checklist 100% complete
   - **Owner:** SRE
   - **Effort:** 2 points
@@ -986,11 +972,11 @@ Mandatory review gates:
   - **Owner:** Backend Engineering
   - **Effort:** 5 points
 
-- [ ] **TASK-PII-402:** Tune Redis cache TTL for optimal hit rate
+- [ ] **TASK-PII-402:** Tune GPU memory allocation for optimal throughput
   - **Linked Spec:** NFR-PII-001
-  - **Validation:** Cache hit rate ≥ 70% (improved from 60%)
-  - **DoD:** TTL configured based on access patterns
-  - **Owner:** SRE + Backend Engineering
+  - **Validation:** Throughput increased by ≥10% vs Week 5 baseline
+  - **DoD:** GPU memory optimized, batch size tuned
+  - **Owner:** Backend Engineering + ML Engineering
   - **Effort:** 3 points
 
 - [ ] **TASK-PII-403:** Remove unused code paths and feature flags
@@ -1339,7 +1325,7 @@ Mandatory review gates:
 ## Execution Workflow
 
 ### Week 1: Phase 1
-1. Provision infrastructure (GPU, Redis, DB)
+1. Provision infrastructure (GPU, DB)
 2. Develop core scrubber engine (parallel track)
 3. Write 100 unit tests
 4. Phase 1 Reflection Checkpoint
