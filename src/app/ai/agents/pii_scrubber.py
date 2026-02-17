@@ -159,10 +159,20 @@ def should_continue_after_pii_scrubbing(state: GraphState) -> str:
         return "END"
     
     # Check pii_scrubbed flag (FR-PII-005)
-    if not state.get("pii_scrubbed", False):
+    # BACKWARD COMPATIBILITY: None or missing field (legacy checkpoints) should allow passage
+    # Only explicitly False should block
+    pii_scrubbed = state.get("pii_scrubbed")
+    
+    if pii_scrubbed is False:
+        # Explicitly False - block unscrubbed data
         logger.error("VALIDATION GATE BLOCKED: pii_scrubbed = False")
         state["error_message"] = "Validation failed: Data must be PII-scrubbed before processing"
         return "END"
     
-    logger.info("Validation gate passed: pii_scrubbed = True")
+    # pii_scrubbed is True or None (legacy checkpoint) - allow passage
+    if pii_scrubbed is None:
+        logger.info("Validation gate passed: pii_scrubbed = None (legacy checkpoint)")
+    else:
+        logger.info("Validation gate passed: pii_scrubbed = True")
+    
     return "requisition_parsing"
