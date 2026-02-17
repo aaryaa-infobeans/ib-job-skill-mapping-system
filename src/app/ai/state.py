@@ -88,11 +88,28 @@ class LLMCallLog(TypedDict):
     cost_usd: float
 
 
+class PIIScrubMetadata(TypedDict):
+    """PII scrubbing metadata (TASK-PII-102)."""
+    
+    detections: List[Dict]  # List of PII entities detected
+    fields_scrubbed: List[str]  # Field names that were scrubbed
+    total_pii_found: int  # Total count of PII instances
+
+
 class GraphState(TypedDict):
-    """Complete state object passed through the LangGraph execution."""
+    """Complete state object passed through the LangGraph execution.
+    
+    Version 1.1 (CR-PII-001):
+    - Added pii_scrubbed flag (TASK-PII-103)
+    - Added pii_scrub_metadata (TASK-PII-102)
+    """
 
     # Initial input
     requisition_input: RequisitionInput
+
+    # Populated by PII_Scrubber_Agent (NEW - TASK-PII-100)
+    pii_scrubbed: Optional[bool]  # Flag indicating if PII scrubbing completed (TASK-PII-103)
+    pii_scrub_metadata: Optional[PIIScrubMetadata]  # Scrubbing operation metadata (TASK-PII-102)
 
     # Populated by JD_Parsing_Agent
     parsed_jd: Optional[ParsedJD]

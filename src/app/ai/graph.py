@@ -1,10 +1,11 @@
-"""LangGraph definition."""
+"""LangGraph definition with PII Scrubber (Node 0)."""
 
 import logging
 
 from langgraph.graph import StateGraph, END
 
 from app.ai.state import GraphState
+from app.ai.agents.pii_scrubber import pii_scrubber_node, should_continue_after_pii_scrubbing
 from app.ai.agents.requisition_parsing import requisition_parsing_node
 from app.ai.agents.skill_normalization import skill_normalization_node
 from app.ai.agents.embedding import embedding_node
@@ -39,18 +40,27 @@ def should_continue_after_parsing(state: GraphState) -> str:
 
 
 def create_graph():
-    """Create the LangGraph for JD-Skill matching.
+    """Create the LangGraph for JD-Skill matching with PII Scrubber.
     
-    Topology with error handling:
-    START → JD_Parsing → [Check for errors]
-                         ↓ (if error) → END
-                         ↓ (if success) → Skill_Normalization → Embedding → 
-                         RAG_Retrieval → Matching_Scoring → Explanation_Generation → 
-                         Result_Aggregation → END
+    Topology v1.1 (CR-PII-001):
+    START → PII_Scrubber (Node 0) → [Validation Gate]
+                                    ↓ (if pii_scrubbed=False) → END (HTTP 422)
+                                    ↓ (if pii_scrubbed=True) → JD_Parsing → 
+                                    [Check for errors]
+                                    ↓ (if error) → END
+                                    ↓ (if success) → Skill_Normalization → Embedding → 
+                                    RAG_Retrieval → Matching_Scoring → Explanation_Generation → 
+                                    Result_Aggregation → END
+    
+    Changes from v1.0:
+    - Added Node 0: PII_Scrubber_Agent (TASK-PII-101)
+    - Added validation gate after scrubbing (FR-PII-005)
+    - Updated state schema with pii_scrubbed flag (TASK-PII-103)
     """
     workflow = StateGraph(GraphState)
     
-    # Add nodes
+    # Add nodes (Node 0: PII Scrubber is now first)
+    workflow.add_node("pii_scrubber", pii_scrubber_node)  # NEW: Node 0
     workflow.add_node("requisition_parsing", requisition_parsing_node)
     workflow.add_node("skill_normalization", skill_normalization_node)
     workflow.add_node("embedding", embedding_node)
@@ -59,10 +69,20 @@ def create_graph():
     workflow.add_node("explanation_generation", explanation_generation_node)
     workflow.add_node("result_aggregation", result_aggregation_node)
     
-    # Define edges with conditional routing after parsing
-    workflow.set_entry_point("requisition_parsing")
+    # Define edges with Node 0 as entry point
+    workflow.set_entry_point("pii_scrubber")  # CHANGED: Was "requisition_parsing"
     
-    # Add conditional edge after parsing to check for errors
+    # Add validation gate after PII scrubbing (FR-PII-005)
+    workflow.add_conditional_edges(
+        "pii_scrubber",
+        should_continue_after_pii_scrubbing,
+        {
+            "END": END,
+            "requisition_parsing": "requisition_parsing"
+        }
+    )
+    
+    # Add conditional edge after parsing to check for errors (existing logic)
     workflow.add_conditional_edges(
         "requisition_parsing",
         should_continue_after_parsing,
@@ -82,5 +102,5 @@ def create_graph():
     
     # Compile and return
     graph = workflow.compile()
-    logger.info("LangGraph compiled successfully with error handling")
+    logger.info("LangGraph v1.1 compiled successfully with PII Scrubber (Node 0)")
     return graph
