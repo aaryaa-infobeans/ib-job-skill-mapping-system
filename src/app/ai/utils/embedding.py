@@ -15,7 +15,7 @@ class EmbeddingAgent(BaseAgent):
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__("embedding", logger)
-        self.provider = settings.llm_provider.lower()
+        self.provider = settings.embedding_provider.lower()
         self.target_dim = getattr(settings, "pgvector_dimension", 3072)
         
         self.openai_client = None

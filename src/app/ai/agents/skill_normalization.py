@@ -218,7 +218,14 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         
         # Safe cost estimate based on provider
         model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
-        cost = (prompt_tokens / 1_000_000 * 0.15) + (completion_tokens / 1_000_000 * 0.60)
+        
+        # Cost calculation based on provider
+        if settings.llm_provider == "google":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_google) + (completion_tokens / 1_000_000 * settings.output_cost_google)
+        elif settings.llm_provider == "groq":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_groq) + (completion_tokens / 1_000_000 * settings.output_cost_groq)
+        else:
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_openai) + (completion_tokens / 1_000_000 * settings.output_cost_openai)
         
         # Add to LLM logs for observability
         state["llm_call_logs"].append({

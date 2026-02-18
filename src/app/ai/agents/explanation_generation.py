@@ -99,6 +99,12 @@ def _generate_llm_explanation(
         
         response = llm.invoke(messages)
         
+        # Track tokens (Modern LangChain uses usage_metadata on the response object)
+        usage = getattr(response, "usage_metadata", None) or response.response_metadata.get("usage_metadata") or response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_token_count") or usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("output_tokens") or usage.get("candidates_token_count") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
+
         # Parse response
         explanation_text = response.content
         if not explanation_text or not explanation_text.strip():
@@ -108,24 +114,16 @@ def _generate_llm_explanation(
                 f"Finish reason: {finish_reason}, "
                 f"Usage: {usage}"
             )
-
-        # Track tokens (Modern LangChain uses usage_metadata on the response object)
-        usage = getattr(response, "usage_metadata", None) or response.response_metadata.get("usage_metadata") or response.response_metadata.get("token_usage", {})
-        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_token_count") or usage.get("prompt_tokens") or 0
-        completion_tokens = usage.get("output_tokens") or usage.get("candidates_token_count") or usage.get("completion_tokens") or 0
-        total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
         
-        # Safe cost estimate based on model
+        # Cost calculation based on provider
+        if settings.llm_provider == "google":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_google) + (completion_tokens / 1_000_000 * settings.output_cost_google)
+        elif settings.llm_provider == "groq":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_groq) + (completion_tokens / 1_000_000 * settings.output_cost_groq)
+        else:
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_openai) + (completion_tokens / 1_000_000 * settings.output_cost_openai)
+        
         model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
-        cost = (prompt_tokens / 1_000_000 * 0.15) + (completion_tokens / 1_000_000 * 0.60)
-        
-        if not explanation_text or not explanation_text.strip():
-            finish_reason = response.response_metadata.get("finish_reason")
-            logger.error(
-                f"LLM returned an empty response for {team_member_id}. "
-                f"Finish reason: {finish_reason}, "
-                f"Usage: {usage}"
-            )
 
         # Try to parse as JSON using robust utility
         explanation_data = extract_json_from_response(explanation_text)

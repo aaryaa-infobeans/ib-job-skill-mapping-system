@@ -17,7 +17,7 @@ sys.path.insert(0, "src")
 
 from app.main import app
 # API Authentication Token
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiZXhwIjoxODAyNTk0MTE3fQ.AbwiHnkMJfs7YB7nf1zoQfx7CVzQiYCB_I02AVV-R8M"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiZXhwIjoxODAyOTY3NTA5fQ.8PFFHEhz8Ywg51nQ68llGUVi_RXGTHam7D6LvITLT18"
 headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 # Create test client

@@ -136,7 +136,14 @@ def parse_requisition_with_llm(
         total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
         
         model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
-        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
+        
+        # Cost calculation based on provider
+        if settings.llm_provider == "google":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_google) + (completion_tokens / 1_000_000 * settings.output_cost_google)
+        elif settings.llm_provider == "groq":
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_groq) + (completion_tokens / 1_000_000 * settings.output_cost_groq)
+        else:
+            cost = (prompt_tokens / 1_000_000 * settings.input_cost_openai) + (completion_tokens / 1_000_000 * settings.output_cost_openai)
         
         # Add to LLM logs if request_id is available in a global way or passed
         # For now, we will return the metrics along with enriched_jd

@@ -56,8 +56,28 @@ def get_llm(temperature: float = 0.0, max_tokens: Optional[int] = None) -> Any:
             return llm
         except Exception as e:
             logger.error(f"❌ Failed to initialize Google Gemini: {str(e)}")
-            # Fallback to OpenAI if Gemini fails? Or just raise? 
-            # Given the context, we'll raise to avoid silent failures with exhausted credits.
+            raise
+
+    if provider == "groq":
+        try:
+            from langchain_groq import ChatGroq
+            
+            api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY")
+            if not api_key:
+                logger.error("❌ GROQ_API_KEY not found in settings or environment")
+                raise ValueError("Groq API Key missing")
+
+            llm = ChatGroq(
+                model_name=settings.groq_model,
+                groq_api_key=api_key,
+                temperature=temperature,
+                max_tokens=actual_max_tokens,
+            )
+            logger.info(f"✅ Initialized Groq LLM: {settings.groq_model}")
+            _llm_cache[cache_key] = llm
+            return llm
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Groq: {str(e)}")
             raise
 
     # Default to OpenAI

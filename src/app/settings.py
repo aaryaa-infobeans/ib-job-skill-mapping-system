@@ -30,17 +30,26 @@ class Settings(BaseSettings):
     secrets_backend: str = "env"  # Options: env, aws, vault
     
     # LLM Configuration
-    llm_provider: str = "openai"  # Options: openai, google
+    llm_provider: str
+    embedding_provider: str
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4"
+    openai_model: str
     google_api_key: Optional[str] = None
-    google_model: str = "gemini-flash-latest"
-    google_embedding_model: str = "models/gemini-embedding-001"
-    openai_embedding_model: str = "text-embedding-3-large"
-    max_tokens: int = 2000
-    openai_input_rate: Optional[float] = None
-    openai_output_rate: Optional[float] = None
+    google_model: str
+    groq_api_key: Optional[str] = None
+    groq_model: str
+    google_embedding_model: str
+    openai_embedding_model: str
+    max_tokens: int
     
+    # Cost Rates (USD per 1M tokens)
+    input_cost_openai: float
+    output_cost_openai: float
+    input_cost_google: float
+    output_cost_google: float
+    input_cost_groq: float
+    output_cost_groq: float
+
     # Agent Weights
     weight_mandatory_skills: float
     weight_preferred_skills: float
@@ -54,7 +63,7 @@ class Settings(BaseSettings):
     # Thresholds
     fit_score_threshold: float
     rag_similarity_threshold: float
-    max_llm_explanations: int = 3
+    max_llm_explanations: int
     
     # Retry Configuration
     max_retry_attempts: int
@@ -96,10 +105,13 @@ class Settings(BaseSettings):
         
         # Fall back to config
         if not db_url:
-            db_url = self.database_url or os.getenv(
-                "DATABASE_URL",
-                "postgresql+psycopg2://user:password@localhost:5433/ib_job_skill_mapping"
-            )
+            db_url = self.database_url or os.getenv("DATABASE_URL")
+
+        if not db_url:
+            logger.error("❌ DATABASE_URL not found in settings, secrets, or environment")
+            # In production, we should probably raise here, but for now we'll return None 
+            # and let the connection fail downstream with a clear error.
+            return None
         
         return db_url
     
