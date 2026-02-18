@@ -14,29 +14,11 @@ from app.settings import settings
 # Global client cache
 _client_cache = {}
 
-from langchain_openai import ChatOpenAI
+from app.ai.llm_factory import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
+from app.ai.utils.json_utils import extract_json_from_response
 
-def _get_llm():
-    if "llm" in _client_cache:
-        return _client_cache["llm"], True
-        
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
-        logger.warning("⚠️  OPENAI_API_KEY not configured for parsing")
-        return None, False
-        
-    try:
-        llm = ChatOpenAI(
-            api_key=api_key,
-            model=settings.openai_model or "gpt-4",
-            temperature=0.0
-        )
-        _client_cache["llm"] = llm
-        return llm, True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
-        return None, False
+# Removed local _get_llm as it is now handled by app.ai.llm_factory.get_llm
 
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
@@ -92,8 +74,8 @@ def parse_requisition_with_llm(
     Returns:
         Enriched requisition dict (ParsedJD) or None on failure
     """
-    llm, llm_enabled = _get_llm()
-    if not llm_enabled:
+    llm = get_llm(temperature=0.0)
+    if not llm:
         logger.info("LLM not enabled, using fallback parsing logic")
         return _fallback_parse(job_description), None
     
@@ -122,7 +104,10 @@ def parse_requisition_with_llm(
         ]
         
         response = llm.invoke(messages)
-        llm_output = json.loads(response.content)
+        llm_output = extract_json_from_response(response.content)
+        
+        if not llm_output:
+            raise ValueError("Failed to extract valid JSON from LLM response")
         
         # Merge LLM enrichment back into the full context
         enriched_jd = {
@@ -144,11 +129,13 @@ def parse_requisition_with_llm(
             "metadata": job_description.get("metadata", {}),
         }
         
-        # Track tokens and cost
-        usage = response.response_metadata.get("token_usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0)
+        # Track tokens (Modern LangChain uses usage_metadata on the response object)
+        usage = getattr(response, "usage_metadata", None) or response.response_metadata.get("usage_metadata") or response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_token_count") or usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("output_tokens") or usage.get("candidates_token_count") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
+        
+        model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
         cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
         
         # Add to LLM logs if request_id is available in a global way or passed
@@ -156,7 +143,7 @@ def parse_requisition_with_llm(
         metrics = {
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
-            "model": settings.openai_model or "gpt-4",
+            "model": model_name,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
@@ -173,7 +160,7 @@ def parse_requisition_with_llm(
         metrics = {
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
-            "model": settings.openai_model or "gpt-4",
+            "model": settings.google_model if settings.llm_provider == "google" else settings.openai_model,
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "total_tokens": 0,

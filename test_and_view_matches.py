@@ -16,13 +16,12 @@ load_dotenv()
 sys.path.insert(0, "src")
 
 from app.main import app
-from fastapi.testclient import TestClient
-
 # API Authentication Token
 AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiZXhwIjoxODAyNTk0MTE3fQ.AbwiHnkMJfs7YB7nf1zoQfx7CVzQiYCB_I02AVV-R8M"
 headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 # Create test client
+from fastapi.testclient import TestClient
 client = TestClient(app)
 
 # Generate unique request ID
@@ -132,9 +131,11 @@ if response.status_code == 202:
                 print(f"      - Semantic Match:   {format_score(mr.get('semantic_similarity'))}")
             
             # Show Explanation Summary
-            exp = match.get("explanation", [])
-            if exp:
-                print(f"    Reasoning: {exp[0] if isinstance(exp, list) else exp}")
+            explanations = match.get("explanation", [])
+            if explanations:
+                print("    Reasoning:")
+                for line in explanations:
+                    print(f"      {line}")
 
     # Step 3: Database Analysis
     print("\n" + "="*60)

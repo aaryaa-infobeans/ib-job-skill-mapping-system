@@ -30,11 +30,16 @@ class Settings(BaseSettings):
     secrets_backend: str = "env"  # Options: env, aws, vault
     
     # LLM Configuration
+    llm_provider: str = "openai"  # Options: openai, google
     openai_api_key: Optional[str] = None
-    openai_model: str
-    openai_embedding_model: str
-    openai_input_rate: Optional[float]
-    openai_output_rate: Optional[float]
+    openai_model: str = "gpt-4"
+    google_api_key: Optional[str] = None
+    google_model: str = "gemini-flash-latest"
+    google_embedding_model: str = "models/gemini-embedding-001"
+    openai_embedding_model: str = "text-embedding-3-large"
+    max_tokens: int = 2000
+    openai_input_rate: Optional[float] = None
+    openai_output_rate: Optional[float] = None
     
     # Agent Weights
     weight_mandatory_skills: float
@@ -49,6 +54,7 @@ class Settings(BaseSettings):
     # Thresholds
     fit_score_threshold: float
     rag_similarity_threshold: float
+    max_llm_explanations: int = 3
     
     # Retry Configuration
     max_retry_attempts: int

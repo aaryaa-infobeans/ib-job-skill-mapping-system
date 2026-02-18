@@ -5,39 +5,19 @@ import logging
 import os
 from typing import Optional, Dict, Any, List
 
-from langchain_openai import ChatOpenAI
+from app.ai.llm_factory import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.settings import settings
 from app.ai.state import GraphState
 from app.ai.utils.explanation_prompt import format_explanation_prompt
+from app.ai.utils.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
 # Global client cache
 _client_cache = {}
 
-def _get_llm():
-    if "llm" in _client_cache:
-        return _client_cache["llm"], True
-        
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
-        logger.warning("⚠️  OPENAI_API_KEY not configured or invalid - using template-based explanations")
-        return None, False
-        
-    try:
-        llm = ChatOpenAI(
-            api_key=api_key,
-            model=settings.openai_model or "gpt-4",
-            temperature=0.7,
-            max_tokens=1000
-        )
-        _client_cache["llm"] = llm
-        logger.info(f"✅ ChatOpenAI initialized for explanation generation")
-        return llm, True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
-        return None, False
+# Removed local _get_llm as it is now handled by app.ai.llm_factory.get_llm
 
 
 def _generate_llm_explanation(
@@ -61,8 +41,8 @@ def _generate_llm_explanation(
     Returns:
         Dictionary with detailed explanation or None if LLM call fails or not enabled
     """
-    llm, llm_enabled = _get_llm()
-    if not llm_enabled:
+    llm = get_llm(temperature=0.0, max_tokens=settings.max_tokens)
+    if not llm:
         logger.debug(f"LLM not enabled, skipping LLM explanation for {team_member_id}")
         return None
     
@@ -121,32 +101,50 @@ def _generate_llm_explanation(
         
         # Parse response
         explanation_text = response.content
-        logger.debug(f"Raw LLM response for {team_member_id}: {explanation_text}")
+        if not explanation_text or not explanation_text.strip():
+            finish_reason = response.response_metadata.get("finish_reason")
+            logger.error(
+                f"LLM returned an empty response for {team_member_id}. "
+                f"Finish reason: {finish_reason}, "
+                f"Usage: {usage}"
+            )
+
+        # Track tokens (Modern LangChain uses usage_metadata on the response object)
+        usage = getattr(response, "usage_metadata", None) or response.response_metadata.get("usage_metadata") or response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_token_count") or usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("output_tokens") or usage.get("candidates_token_count") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
         
-        # Try to parse as JSON
-        try:
-            explanation_data = json.loads(explanation_text)
-        except json.JSONDecodeError:
-            # If not valid JSON, create structured response from text
-            logger.warning(f"LLM response not valid JSON for {team_member_id}, wrapping as text")
+        # Safe cost estimate based on model
+        model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
+        cost = (prompt_tokens / 1_000_000 * 0.15) + (completion_tokens / 1_000_000 * 0.60)
+        
+        if not explanation_text or not explanation_text.strip():
+            finish_reason = response.response_metadata.get("finish_reason")
+            logger.error(
+                f"LLM returned an empty response for {team_member_id}. "
+                f"Finish reason: {finish_reason}, "
+                f"Usage: {usage}"
+            )
+
+        # Try to parse as JSON using robust utility
+        explanation_data = extract_json_from_response(explanation_text)
+        
+        if not explanation_data:
+            # If not valid JSON, use the raw text as the summary if it exists
+            logger.warning(f"LLM response not valid JSON for {team_member_id}, length={len(explanation_text) if explanation_text else 0}")
+            explanation_text = explanation_text.strip()
             explanation_data = {
-                "summary": explanation_text[:200],
-                "detailed_explanation": explanation_text,
+                "summary": explanation_text[:500] if explanation_text else "Candidate profile evaluation completed.",
+                "detailed_explanation": explanation_text if explanation_text else "No detailed reasoning provided by LLM.",
                 "strengths": [],
                 "gaps": [],
-                "fit_analysis": explanation_text,
-                "recommendation": "Review candidate profile for more details"
+                "fit_analysis": explanation_text if explanation_text else "Fit analysis based on matching scores.",
+                "recommendation": "Review candidate profile for detailed evaluation."
             }
         
-        # Track tokens
-        usage = response.response_metadata.get("token_usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0)
-        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
-        
         logger.info(
-            f"LLM explanation generated for {team_member_id}: "
+            f"LLM explanation generated for {team_member_id} using {model_name}: "
             f"tokens={total_tokens}, cost=${cost:.6f}"
         )
         
@@ -155,7 +153,7 @@ def _generate_llm_explanation(
             "token_count": total_tokens,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
-            "model": "gpt-4",
+            "model": model_name,
             "cost_usd": cost,
         }
         
@@ -197,8 +195,8 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         return state
     
     # Load thresholds and limits
-    fit_score_threshold = float(os.getenv("FIT_SCORE_THRESHOLD", "0.5"))
-    max_llm_explanations = int(os.getenv("MAX_LLM_EXPLANATIONS", "5"))
+    fit_score_threshold = settings.fit_score_threshold
+    max_llm_explanations = settings.max_llm_explanations
     
     # Count totals for logging
     total_candidates = len(candidate_scores)
@@ -319,9 +317,9 @@ def explanation_generation_node(state: GraphState) -> GraphState:
                 candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
                 explanations_failed += 1
         else:
-            # 3. Use template-based explanation for qualified but non-top candidates
-            logger.debug(f"Using template explanation for {team_member_id} (outside top {max_llm_explanations})")
-            candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
+            # 3. Skip detailed explanation for qualified but non-top candidates
+            # This allows result_aggregation_node to use its default score-based summary
+            logger.debug(f"Skipping detailed explanation for {team_member_id} (outside top {max_llm_explanations})")
             templates_used += 1
     
     # Store node metrics in state for tracking

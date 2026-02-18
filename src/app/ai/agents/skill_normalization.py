@@ -6,13 +6,14 @@ import os
 from typing import Dict, List, Any, Optional
 
 from sqlalchemy.orm import Session
-from langchain_openai import ChatOpenAI
+from app.ai.llm_factory import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.ai.state import GraphState
 from app.db.models import SkillMaster, SkillOntology
 from app.db.session import SessionLocal
 from app.settings import settings
+from app.ai.utils.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -190,16 +191,8 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "ontology": ontology_data
         }
         
-        # Initialize ChatOpenAI
-        api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment or settings")
-            
-        llm = ChatOpenAI(
-            api_key=api_key,
-            model=settings.openai_model or "gpt-4",
-            temperature=0.0
-        )
+        # Initialize LLM via Factory
+        llm = get_llm(temperature=0.0)
         
         # Call LLM for fuzzy-logic normalization and enrichment
         logger.info("Calling LLM for skill normalization")
@@ -212,20 +205,26 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         
         # Parse result
         result_text = response.content
-        result = json.loads(result_text)
+        result = extract_json_from_response(result_text)
         
-        # Extract metadata for logging
-        usage = response.response_metadata.get("token_usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0)
-        cost = (prompt_tokens / 1_000_000 * 0.03) + (completion_tokens / 1_000_000 * 0.06)
+        if result is None:
+            raise ValueError("Failed to extract JSON from LLM response")
+        
+        # Extract metadata for logging (Modern LangChain uses usage_metadata on the response object)
+        usage = getattr(response, "usage_metadata", None) or response.response_metadata.get("usage_metadata") or response.response_metadata.get("token_usage", {})
+        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_token_count") or usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("output_tokens") or usage.get("candidates_token_count") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or usage.get("total_token_count") or (prompt_tokens + completion_tokens)
+        
+        # Safe cost estimate based on provider
+        model_name = settings.google_model if settings.llm_provider == "google" else settings.openai_model
+        cost = (prompt_tokens / 1_000_000 * 0.15) + (completion_tokens / 1_000_000 * 0.60)
         
         # Add to LLM logs for observability
         state["llm_call_logs"].append({
             "agent_name": "skill_normalization",
             "prompt_name": "skill_ontology_normalization",
-            "model": "gpt-4",
+            "model": model_name,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,

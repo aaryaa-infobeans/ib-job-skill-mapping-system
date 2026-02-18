@@ -79,8 +79,11 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         detailed_explanation = candidate.get("detailed_explanation", {})
         if detailed_explanation:
             # Include LLM-generated summary and analysis
-            if "summary" in detailed_explanation:
-                explanation.append(f"📌 {detailed_explanation['summary']}")
+            summary = detailed_explanation.get("summary")
+            if summary and summary.strip():
+                explanation.append(f"📌 {summary}")
+            else:
+                explanation.append(f"📌 Candidate profile evaluation for {candidate['team_member_id']}")
             
             if detailed_explanation.get("strengths"):
                 strengths_str = ", ".join(detailed_explanation["strengths"])

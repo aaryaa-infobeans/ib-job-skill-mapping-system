@@ -4,8 +4,9 @@ import json
 import logging
 import os
 from typing import Dict, List, Tuple
-from langchain_openai import ChatOpenAI
+from app.ai.llm_factory import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
+from app.ai.utils.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -13,30 +14,7 @@ logger = logging.getLogger(__name__)
 _client_cache = {}
 
 
-def _get_llm():
-    """Get or create ChatOpenAI."""
-    if "llm" in _client_cache:
-        return _client_cache["llm"], True
-        
-    from app.settings import settings
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    
-    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
-        logger.warning("⚠️  OPENAI_API_KEY not configured for semantic validation")
-        return None, False
-        
-    try:
-        llm = ChatOpenAI(
-            api_key=api_key,
-            model=settings.openai_model or "gpt-4o-mini",
-            temperature=0.0,
-            max_tokens=500
-        )
-        _client_cache["llm"] = llm
-        return llm, True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize ChatOpenAI: {str(e)}")
-        return None, False
+# Removed local _get_llm as it is now handled by app.ai.llm_factory.get_llm
 
 
 SEMANTIC_VALIDATION_PROMPT = """You are a data quality validator for job requisitions. Your task is to identify nonsensical, garbage, or invalid values in the requisition data.
@@ -82,9 +60,9 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         - is_valid: True if data appears valid, False if garbage detected
         - validation_errors: List of semantic validation error messages
     """
-    llm, llm_enabled = _get_llm()
+    llm = get_llm(temperature=0.0, max_tokens=500)
     
-    if not llm_enabled:
+    if not llm:
         logger.warning("⚠️  LLM not available for semantic validation - skipping quality check")
         # If LLM is not available, we can't do semantic validation
         # Return True to allow processing (basic validation already passed)
@@ -113,7 +91,12 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         response = llm.invoke(messages)
         
         # Parse LLM response
-        llm_output = json.loads(response.content)
+        llm_output = extract_json_from_response(response.content)
+        
+        if not llm_output:
+            # If we can't parse the response, assume valid to avoid blocking legitimate requests
+            logger.warning("Failed to extract JSON from semantic validation response, assuming valid")
+            return True, []
         
         is_valid = llm_output.get("is_valid", True)
         validation_errors = llm_output.get("validation_errors", [])
@@ -126,11 +109,6 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
                 logger.warning(f"  - {error}")
         
         return is_valid, validation_errors
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM validation response: {str(e)}")
-        # If we can't parse the response, assume valid to avoid blocking legitimate requests
-        return True, []
         
     except Exception as e:
         logger.error(f"Error in semantic validation: {str(e)}", exc_info=True)

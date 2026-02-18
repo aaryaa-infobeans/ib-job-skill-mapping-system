@@ -8,24 +8,53 @@ from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import NormalizedRequisition, EmbeddingResult
 
 
+from app.settings import settings
+
 class EmbeddingAgent(BaseAgent):
-    """Generate embeddings for JD components using OpenAI API."""
+    """Generate embeddings for JD components using configured Provider (OpenAI or Google)."""
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__("embedding", logger)
-        self.model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
+        self.provider = settings.llm_provider.lower()
+        self.target_dim = getattr(settings, "pgvector_dimension", 3072)
+        
         self.openai_client = None
-        self._init_openai()
+        self.google_embeddings = None
+        
+        if self.provider == "google":
+            self._init_google()
+        else:
+            self._init_openai()
+    
+    def _init_google(self):
+        """Initialize Google Generative AI embeddings."""
+        try:
+            from langchain_google_genai import GoogleGenerativeAIEmbeddings
+            api_key = settings.google_api_key or os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                self.logger.warning("GOOGLE_API_KEY not set, using mock embeddings")
+                return
+            
+            self.google_embeddings = GoogleGenerativeAIEmbeddings(
+                model=settings.google_embedding_model,
+                google_api_key=api_key
+            )
+            self.model = settings.google_embedding_model
+            self.logger.info(f"✅ Initialized Google Embeddings: {self.model}")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize Google embeddings: {str(e)}")
     
     def _init_openai(self):
         """Initialize OpenAI client."""
         try:
             from openai import OpenAI
-            api_key = os.getenv("OPENAI_API_KEY")
+            api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
             if not api_key:
                 self.logger.warning("OPENAI_API_KEY not set, using mock embeddings")
                 return
             self.openai_client = OpenAI(api_key=api_key)
+            self.model = settings.openai_embedding_model
+            self.logger.info(f"✅ Initialized OpenAI Embeddings: {self.model}")
         except ImportError:
             self.logger.warning("OpenAI library not installed, using mock embeddings")
     
@@ -69,29 +98,48 @@ class EmbeddingAgent(BaseAgent):
     
     def _embed_text(self, text: str) -> np.ndarray:
         """
-        Generate embedding for a text string.
+        Generate embedding for a text string using configured provider.
         
         Args:
             text: Text to embed
             
         Returns:
-            3072-dimensional embedding vector
+            Embedding vector (padded to target_dim if necessary)
         """
-        if not self.openai_client:
-            # Return mock embedding for testing
-            return np.random.randn(3072).astype(np.float32)
+        # Try Google first if configured
+        if self.provider == "google" and self.google_embeddings:
+            try:
+                embedding = self.google_embeddings.embed_query(text)
+                vector = np.array(embedding, dtype=np.float32)
+                
+                # Zero-padding for dimension mismatch (e.g., 768 -> 3072)
+                if len(vector) < self.target_dim:
+                    vector = np.pad(vector, (0, self.target_dim - len(vector)), mode='constant')
+                
+                return vector[:self.target_dim]
+            except Exception as e:
+                self.logger.error(f"Failed to embed text with Google: {str(e)}")
+                # Continue to fallback or mock
         
-        try:
-            response = self.openai_client.embeddings.create(
-                model=self.model,
-                input=text
-            )
-            embedding = response.data[0].embedding
-            return np.array(embedding, dtype=np.float32)
-        except Exception as e:
-            self.logger.error(f"Failed to embed text: {str(e)}", exc_info=True)
-            # Return mock embedding on error
-            return np.random.randn(3072).astype(np.float32)
+        # Try OpenAI
+        if self.openai_client:
+            try:
+                response = self.openai_client.embeddings.create(
+                    model=self.model,
+                    input=text
+                )
+                embedding = response.data[0].embedding
+                vector = np.array(embedding, dtype=np.float32)
+
+                if len(vector) < self.target_dim:
+                    vector = np.pad(vector, (0, self.target_dim - len(vector)), mode='constant')
+                
+                return vector[:self.target_dim]
+            except Exception as e:
+                self.logger.error(f"Failed to embed text with OpenAI: {str(e)}", exc_info=True)
+        
+        # Fallback to mock embedding
+        return np.random.randn(self.target_dim).astype(np.float32)
     
     def validate_input(self, input_data: Any) -> bool:
         """Validate that input is NormalizedRequisition."""
