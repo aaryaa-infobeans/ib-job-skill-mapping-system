@@ -48,11 +48,11 @@ def verify_scoring():
     scores = state.get("candidate_scores", [])
     print(f"Scored {len(scores)} candidates.")
     
-    # Find a candidate with the certification (EMP_3425 was seeded with AWS ML)
-    test_candidate = next((c for c in scores if c["team_member_id"] == "EMP_3425"), None)
+    # Find a candidate with the certification (3425 was seeded with AWS ML)
+    test_candidate = next((c for c in scores if c["team_member_id"] == "3425"), None)
     
     if test_candidate:
-        print("\nVerification for EMP_3425 (should have AWS ML):")
+        print("\nVerification for 3425 (should have AWS ML):")
         print(f"Final Score: {test_candidate['final_score']}")
         print(f"Certification Score: {test_candidate['certification_score']}")
         print(f"Certifications Found: {test_candidate['certifications']}")
@@ -64,12 +64,12 @@ def verify_scoring():
         os.environ["OPENAI_API_KEY"] = "" 
         state = explanation_generation_node(state)
         
-        final_candidate = next((c for c in state["candidate_scores"] if c["team_member_id"] == "EMP_3425"), None)
+        final_candidate = next((c for c in state["candidate_scores"] if c["team_member_id"] == "3425"), None)
         if final_candidate and "detailed_explanation" in final_candidate:
             print("\nTemplate Explanation Fit Analysis:")
             print(final_candidate["detailed_explanation"].get("fit_analysis"))
     else:
-        print("\nEMP_3425 not found in scores.")
+        print("\n3425 not found in scores.")
 
 if __name__ == "__main__":
     verify_scoring()

@@ -524,7 +524,7 @@ Checks the availability of one or more team members for a requisition window, ap
 {
   "requisition_duration_month": 3,
   "expected_start_date": "2026-02-15",
-  "team_member_id": "EMP_8842"
+  "team_member_id": "8842"
 }
 ```
 
@@ -533,7 +533,7 @@ Checks the availability of one or more team members for a requisition window, ap
 {
   "requisition_duration_month": 3,
   "expected_start_date": "2026-02-15",
-  "team_member_ids": ["EMP_8842", "EMP_1201", "EMP_7788"]
+  "team_member_ids": ["8842", "1201", "7788"]
 }
 ```
 
@@ -546,7 +546,7 @@ Checks the availability of one or more team members for a requisition window, ap
   "requisition_duration_month": 3,
   "results": [
     {
-      "team_member_id": "EMP_8842",
+      "team_member_id": "8842",
       "available": true,
       "reason_code": "AVAILABLE",
       "reason": "No conflicting billable allocations found in requested window.",

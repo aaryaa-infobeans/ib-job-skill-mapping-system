@@ -31,11 +31,11 @@ def test_rag_first_scoring_flow():
         # PREPARATION: Mock Requisition vectors
         # ---------------------------------------------------------
         # In practice, these vectors come from your EmbeddingAgent (OpenAI API)
-        # For this test, we fetch EMP_3444's embedding to use as our 'Target' requirement.
+        # For this test, we fetch 3444's embedding to use as our 'Target' requirement.
         print("\n[PREP] Fetching target vector for query...")
-        target_member = db.query(TeamMemberEmbedding).filter_by(team_member_id="EMP_3444").first()
+        target_member = db.query(TeamMemberEmbedding).filter_by(team_member_id="3444").first()
         if not target_member:
-            pytest.skip("EMP_3444 not found in database, cannot run demonstration.")
+            pytest.skip("3444 not found in database, cannot run demonstration.")
             
         target_vector = np.array(target_member.embedding)
         
