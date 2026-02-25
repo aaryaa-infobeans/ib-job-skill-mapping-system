@@ -1,18 +1,26 @@
 """Matches router."""
 
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import verify_token
 from app.ai.results_cache import get_results
 from app.db.repositories.requisition_repository import RequisitionRepository
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 
 router = APIRouter(prefix="/jd-skill-mapping", tags=["matches"])
 
+async def background_resumption(request_id: str):
+    """Background task to resume processing."""
+    db = SessionLocal()
+    try:
+        from app.ai.resumption import resume_requisition
+        resume_requisition(request_id, db)
+    finally:
+        db.close()
 
 class MatchResult(BaseModel):
     """Individual match result with detailed explanation."""
@@ -50,6 +58,7 @@ class MatchesResponse(BaseModel):
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
 async def get_matches(
     correlation_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     token: dict = Depends(verify_token),
 ):
@@ -101,9 +110,8 @@ async def get_matches(
             
             # Retrieve error message from checkpoint
             error_checkpoint = db.query(LangGraphCheckpoint).filter(
-                LangGraphCheckpoint.request_id == requisition.request_id,
-                LangGraphCheckpoint.node_name == "error"
-            ).first()
+                LangGraphCheckpoint.request_id == requisition.request_id
+            ).order_by(LangGraphCheckpoint.created_at.desc()).first()
             
             error_message = None
             validation_errors = None
@@ -129,6 +137,22 @@ async def get_matches(
             )
         else:
             # Requisition is still being processed
+            # CHECK FOR STUCK REQUISITION
+            # If processing for more than 5 minutes and no results in cache, trigger resumption
+            if requisition.received_at:
+                processing_time = datetime.utcnow() - requisition.received_at
+                if processing_time > timedelta(minutes=5):
+                    from app.ai.audit import get_checkpoints_for_request
+                    checkpoints = get_checkpoints_for_request(db, requisition.request_id)
+                    
+                    # Only resume if we have some checkpoints but not COMPLETED
+                    if checkpoints:
+                        # Check if we already tried to resume recently (e.g. within last 2 minutes)
+                        # We can use the last checkpoint's creation time to avoid spamming resumption
+                        last_cp_time = checkpoints[-1].created_at if checkpoints else requisition.received_at
+                        if datetime.utcnow() - last_cp_time > timedelta(minutes=2):
+                            background_tasks.add_task(background_resumption, requisition.request_id)
+            
             return MatchesResponse(
                 correlation_id=correlation_id,
                 status="PROCESSING",

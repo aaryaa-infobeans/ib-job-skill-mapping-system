@@ -12,279 +12,237 @@ class ScoringAgent(BaseAgent):
     """Score candidates based on weighted components defined in settings."""
     
     def __init__(self, logger: Optional[logging.Logger] = None):
-        super().__init__("scoring", logger)
+        super().__init__(agent_name="ScoringAgent", logger=logger)
     
-    def _calculate_skill_score(
-        self,
-        team_member_skill_ids: List[str],
-        mandatory_skill_ids: List[str],
-        preferred_skill_ids: List[str],
-        mandatory_alternatives: Optional[Dict[str, List[str]]] = None,
-        preferred_alternatives: Optional[Dict[str, List[str]]] = None,
-    ) -> Dict[str, Any]:
-        """Calculate skill matching score with support for skill groups (alternatives)."""
-        member_skills = set(team_member_skill_ids)
+    def validate_input(self, input_data: Any) -> bool:
+        return True
         
-        # 1. Mandatory Skills Calculation
-        matched_mandatory = []
-        if mandatory_alternatives:
-            # Group-based scoring
-            total_mandatory = len(mandatory_alternatives)
-            for canonical, alt_ids in mandatory_alternatives.items():
-                # Check if ANY of the alternative IDs are in member skills
-                if any(sid in member_skills for sid in alt_ids):
-                    matched_mandatory.append(canonical)
-            mandatory_score = len(matched_mandatory) / total_mandatory if total_mandatory > 0 else 1.0
-        else:
-            # Fallback to direct ID matching
-            mandatory_skills = set(mandatory_skill_ids)
-            matched_mandatory = list(member_skills & mandatory_skills)
-            mandatory_score = len(matched_mandatory) / len(mandatory_skills) if mandatory_skills else 1.0
+    def format_output(self, result: Any) -> Any:
+        return result
+    
+    ROLE_WEIGHTS = {
+        "SENIOR": {"M": 0.50, "P": 0.20, "S": 0.25, "C": 0.05, "GATE": 0.60},
+        "MID":    {"M": 0.40, "P": 0.20, "S": 0.25, "C": 0.15, "GATE": 0.50},
+        "JUNIOR": {"M": 0.30, "P": 0.30, "S": 0.25, "C": 0.15, "GATE": 0.50}
+    }
 
-        # 2. Preferred Skills Calculation
+    def _get_role_category(self, experience_months: int, jd_level: str = "") -> str:
+        """Determine role category based on experience or JD level."""
+        level = (jd_level or "").upper()
+        if "SENIOR" in level or "SR" in level or experience_months >= 96: # 8 years
+            return "SENIOR"
+        if "JUNIOR" in level or "JR" in level or experience_months < 24: # 2 years
+            return "JUNIOR"
+        return "MID"
+
+    def _calculate_mandatory_group_score(
+        self,
+        member_skill_ids: List[str],
+        mandatory_alternatives: Dict[str, List[str]]
+    ) -> float:
+        """TASK-04: Mandatory Skill Grouping Logic."""
+        if not mandatory_alternatives:
+            return 1.0
+            
+        member_skills = set(member_skill_ids)
+        satisfied_groups = 0
+        total_groups = len(mandatory_alternatives)
+        
+        for canonical, alt_ids in mandatory_alternatives.items():
+            if any(sid in member_skills for sid in alt_ids):
+                satisfied_groups += 1
+                
+        return satisfied_groups / total_groups if total_groups > 0 else 1.0
+
+    def _calculate_context_boost(self, profile_data: Dict[str, Any]) -> float:
+        """TASK-06: Context Support Boost (Hard Cap 0.08)."""
+        # Components: Experience (5/15), Certifications (5/15), Location (3/15), Work Mode (2/15)
+        
+        # 1. Experience
+        exp_score = self._calculate_experience_score(
+            profile_data.get("experience_months", 0),
+            profile_data.get("min_experience_months"),
+            profile_data.get("max_experience_months")
+        )
+        # 2. Certifications
+        cert_res = self._calculate_certification_score(
+            profile_data.get("certifications", []),
+            profile_data.get("required_certifications", [])
+        )
+        # 3. Location
+        loc_score = self._calculate_location_score(
+            profile_data.get("location"),
+            profile_data.get("required_locations", [])
+        )
+        # 4. Work Mode
+        mode_score = self._calculate_work_mode_score(
+            profile_data.get("work_mode"),
+            profile_data.get("required_work_modes", [])
+        )
+        
+        raw_context = (
+            (exp_score * 5/15) + 
+            (cert_res["score"] * 5/15) + 
+            (loc_score * 3/15) + 
+            (mode_score * 2/15)
+        )
+        
+        return raw_context # Return raw [0,1], clamping happens in execute
+
+    def _calculate_skill_score(self, member_skill_ids, mandatory_ids, preferred_ids, alternatives=None, preferred_alternatives=None):
+        """Simplified skill score for preferred skills (mandatory handled by grouping)."""
+        member_skills = set(member_skill_ids)
         matched_preferred = []
-        if preferred_alternatives:
-            # Group-based scoring
-            total_preferred = len(preferred_alternatives)
-            for canonical, alt_ids in preferred_alternatives.items():
-                if any(sid in member_skills for sid in alt_ids):
-                    matched_preferred.append(canonical)
-            preferred_score = len(matched_preferred) / total_preferred if total_preferred > 0 else 1.0
-        else:
-            # Fallback to direct ID matching
-            preferred_skills = set(preferred_skill_ids)
-            matched_preferred = list(member_skills & preferred_skills)
-            preferred_score = len(matched_preferred) / len(preferred_skills) if preferred_skills else 1.0
+        if not preferred_ids:
+            return {"preferred_score": 1.0, "matched_preferred": []}
+            
+        for pid in preferred_ids:
+            alts = (preferred_alternatives or {}).get(pid, [pid])
+            if any(aid in member_skills for aid in alts):
+                matched_preferred.append(pid)
         
-        return {
-            "mandatory_score": mandatory_score,
-            "preferred_score": preferred_score,
-            "matched_mandatory": matched_mandatory,
-            "matched_preferred": matched_preferred,
-        }
+        score = len(matched_preferred) / len(preferred_ids) if preferred_ids else 1.0
+        return {"preferred_score": score, "matched_preferred": matched_preferred}
 
-    def _calculate_experience_score(
-        self,
-        team_member_months: int,
-        min_months: Optional[int],
-        max_months: Optional[int],
-    ) -> float:
-        """Calculate experience matching score."""
-        if min_months is None and max_months is None:
-            return 1.0
-        
-        if min_months is not None and max_months is None:
-            return 1.0 if team_member_months >= min_months else 0.0
-        
-        if min_months is None and max_months is not None:
-            return 0.0
-        
-        if min_months is not None and max_months is not None:
-            if team_member_months < min_months:
-                return 0.0
-            return 1.0 # Within range or above max
-            
-        return 0.0
+    def _calculate_experience_score(self, member_exp, min_exp, max_exp):
+        if not min_exp: return 1.0
+        if member_exp >= min_exp: return 1.0
+        return member_exp / min_exp if min_exp > 0 else 1.0
 
-    def _calculate_location_score(
-        self,
-        candidate_location: Optional[str],
-        required_locations: List[str],
-    ) -> float:
-        """Calculate location matching score."""
-        if not required_locations:
-            return 1.0
-            
-        if not candidate_location:
-            return 0.0
-            
-        required_lower = [loc.lower().strip() for loc in required_locations]
-        candidate_lower = candidate_location.lower().strip()
-        
-        if "remote" in required_lower or "any" in required_lower:
-            return 1.0
-            
-        if candidate_lower in required_lower:
-            return 1.0
-            
-        for loc in required_lower:
-            if loc in candidate_lower or candidate_lower in loc:
-                return 1.0
-                
-        return 0.0
-
-    def _calculate_certification_score(
-        self,
-        candidate_certs: List[str],
-        required_certs: List[str],
-    ) -> Dict[str, Any]:
-        """Calculate certification matching score."""
-        if not required_certs:
-            return {"score": 1.0, "matched": [], "missing": []}
-            
-        if not candidate_certs:
-            return {"score": 0.0, "matched": [], "missing": required_certs}
-            
-        matched = []
-        missing = []
-        candidate_certs_lower = [c.lower().strip() for c in candidate_certs]
-        
-        for req in required_certs:
-            req_lower = req.lower().strip()
-            is_matched = False
-            for cand in candidate_certs_lower:
-                if req_lower in cand or cand in req_lower:
-                    matched.append(req)
-                    is_matched = True
-                    break
-            if not is_matched:
-                missing.append(req)
-                
+    def _calculate_certification_score(self, member_certs, required_certs):
+        if not required_certs: return {"score": 1.0, "matched": [], "missing": []}
+        matched = [c for c in required_certs if c in member_certs]
+        missing = [c for c in required_certs if c not in member_certs]
         score = len(matched) / len(required_certs)
         return {"score": score, "matched": matched, "missing": missing}
 
-    def _calculate_work_mode_score(
-        self,
-        candidate_mode: Optional[str],
-        required_modes: List[str],
-    ) -> float:
-        """Calculate work mode matching score."""
-        if not required_modes:
-            return 1.0
-            
-        if not candidate_mode:
-            return 0.0
-            
-        mode_map = {
-            "wfo": ["wfo", "office", "on-site", "onsite"],
-            "wfh": ["wfh", "remote", "work from home"],
-            "hybrid": ["hybrid", "flexible"]
-        }
-        
-        required_lower = [m.lower().strip() for m in required_modes]
-        candidate_val = candidate_mode.lower().strip()
-        
-        for req in required_lower:
-            if candidate_val == req:
-                return 1.0
-            for canonical, aliases in mode_map.items():
-                if (candidate_val == canonical or candidate_val in aliases) and \
-                   (req == canonical or req in aliases):
-                    return 1.0
-        return 0.0
+    def _calculate_location_score(self, member_loc, required_locs):
+        if not required_locs: return 1.0
+        if not member_loc: return 0.0
+        member_loc_lower = member_loc.lower()
+        required_locs_lower = [l.lower() for l in required_locs]
+        return 1.0 if member_loc_lower in required_locs_lower else 0.0
+
+    def _calculate_work_mode_score(self, member_mode, required_modes):
+        if not required_modes: return 1.0
+        if not member_mode: return 0.5
+        member_mode_lower = member_mode.lower()
+        required_modes_lower = [m.lower() for m in required_modes]
+        return 1.0 if member_mode_lower in required_modes_lower else 0.5 # Partial credit for mismatch
 
     def execute(self, rag_candidate: RAGCandidate, profile_data: Optional[Dict] = None) -> ScoringResult:
         """
-        Score a candidate based on RAG similarities and profile data.
+        Phase 1: Agentic Scoring with Role-Aware weights.
         """
         profile_data = profile_data or {}
+        experience_months = profile_data.get("experience_months", 0)
+        jd_level = profile_data.get("jd_level", "MID")
         
-        # 1. Skill Matching
-        # 1. Skill Matching
-        skill_res = self._calculate_skill_score(
+        role_type = self._get_role_category(experience_months, jd_level)
+        weights = self.ROLE_WEIGHTS[role_type]
+        
+        # 1. Mandatory Skill Grouping (M)
+        m_score = self._calculate_mandatory_group_score(
             profile_data.get("skill_ids", []),
-            profile_data.get("mandatory_skill_ids", []),
+            profile_data.get("mandatory_alternatives") or {}
+        )
+        
+        # 2. Preferred Skills (P) - Using group-based if alternatives available
+        p_res = self._calculate_skill_score(
+            profile_data.get("skill_ids", []),
+            [], # mandatory_skill_ids (already handled by grouping)
             profile_data.get("preferred_skill_ids", []),
-            mandatory_alternatives=profile_data.get("mandatory_alternatives"),
-            preferred_alternatives=profile_data.get("preferred_alternatives"),
+            None,
+            profile_data.get("preferred_alternatives")
         )
+        p_score = p_res["preferred_score"]
         
-        # 2. Experience Matching
-        experience_score = self._calculate_experience_score(
-            profile_data.get("experience_months", 0),
+        # 3. Semantic Similarity (S)
+        s_score = rag_candidate.jd_level_similarity
+        
+        # 4. Context Boost (C) helper calls for breakdown
+        exp_score = self._calculate_experience_score(
+            experience_months,
             profile_data.get("min_experience_months"),
-            profile_data.get("max_experience_months"),
+            profile_data.get("max_experience_months")
         )
-        
-        # 3. Certification Matching
         cert_res = self._calculate_certification_score(
             profile_data.get("certifications", []),
-            profile_data.get("required_certifications", []),
+            profile_data.get("required_certifications", [])
         )
-        
-        # 4. Location and Work Mode Matching
-        location_score = self._calculate_location_score(
+        loc_score = self._calculate_location_score(
             profile_data.get("location"),
-            profile_data.get("required_locations", []),
+            profile_data.get("required_locations", [])
         )
-        work_mode_score = self._calculate_work_mode_score(
+        mode_score = self._calculate_work_mode_score(
             profile_data.get("work_mode"),
-            profile_data.get("required_work_modes", []),
+            profile_data.get("required_work_modes", [])
         )
         
-        # 5. Semantic similarities (from RAG)
-        semantic_score = rag_candidate.final_similarity
-        jd_level_score = rag_candidate.jd_level_similarity
+        c_raw = (
+            (exp_score * 5/15) + 
+            (cert_res["score"] * 5/15) + 
+            (loc_score * 3/15) + 
+            (mode_score * 2/15)
+        )
+        c_contribution = min(c_raw * weights["C"], 0.08)
         
-        # Calculate final weighted score
+        # 5. Penalties (TASK-07)
+        penalties = 0.0
+        if m_score < 1.0:
+            penalties += 0.10
+            
+        # Final Score calculation
         match_score = (
-            (settings.weight_mandatory_skills * skill_res["mandatory_score"]) +
-            (settings.weight_preferred_skills * skill_res["preferred_score"]) +
-            (settings.weight_experience * experience_score) +
-            (settings.weight_certification * cert_res["score"]) +
-            (settings.weight_location * location_score) +
-            (settings.weight_work_mode * work_mode_score) +
-            (settings.weight_semantic_similarity * semantic_score) +
-            (settings.weight_jd_text * jd_level_score)
+            (m_score * weights["M"]) +
+            (p_score * weights["P"]) +
+            (s_score * weights["S"]) +
+            c_contribution -
+            penalties
         )
-        
         match_score = max(0.0, min(1.0, match_score))
         
-        # Breakdown of components
+        # Prepare breakdown
         score_breakdown = {
-            "mandatory_skills": skill_res["mandatory_score"],
-            "preferred_skills": skill_res["preferred_score"],
-            "experience": experience_score,
-            "certification": cert_res["score"],
-            "location": location_score,
-            "work_mode": work_mode_score,
-            "semantic_similarity": semantic_score,
-            "jd_level": jd_level_score,
+            "mandatory_skills_group": m_score,
+            "preferred_skills": p_score,
+            "semantic_similarity": s_score,
+            "context_boost": c_contribution,
+            "penalties": penalties,
+            "role_type": role_type
         }
         
-        weighted_components = {
-            k: v * getattr(settings, f"weight_{k if k != 'jd_level' else 'jd_text'}")
-            for k, v in score_breakdown.items()
-        }
-        
-        # Detailed Breakdown as requested
         detailed = ScoringBreakdown(
-            skills_matched=skill_res["matched_mandatory"] + skill_res["matched_preferred"],
-            mandatory_matched=skill_res["matched_mandatory"],
-            preferred_matched=skill_res["matched_preferred"],
-            mandatory_score=round(skill_res["mandatory_score"], 2),
-            preferred_score=round(skill_res["preferred_score"], 2),
+            skills_matched=p_res["matched_preferred"],
+            mandatory_matched=[], 
+            preferred_matched=p_res["matched_preferred"],
+            mandatory_score=round(m_score, 2),
+            preferred_score=round(p_score, 2),
+            certification_score=round(cert_res["score"], 2),
             certification_matched=cert_res["matched"],
             certification_missing=cert_res["missing"],
-            certification_score=round(cert_res["score"], 2),
-            location_matched=location_score > 0,
-            location_score=round(location_score, 2),
-            work_mode_matched=work_mode_score > 0,
-            work_mode_score=round(work_mode_score, 2),
-            experience_matched=experience_score > 0,
-            experience_score=round(experience_score, 2),
-            semantic_similarity=round(semantic_score, 2),
-            jd_level_similarity=round(jd_level_score, 2),
+            experience_score=round(exp_score, 2),
+            experience_matched=(exp_score >= 1.0),
+            location_score=round(loc_score, 2),
+            location_matched=(loc_score >= 1.0),
+            work_mode_score=round(mode_score, 2),
+            work_mode_matched=(mode_score >= 1.0),
+            semantic_similarity=round(s_score, 2),
+            jd_level_similarity=round(rag_candidate.jd_level_similarity, 2)
         )
         
         return ScoringResult(
             team_member_id=rag_candidate.team_member_id,
             match_score=round(match_score, 2),
-            confidence=0.9,  # TODO: Implement confidence logic
+            confidence=0.9,
             score_breakdown=score_breakdown,
-            weighted_components=weighted_components,
             detailed_breakdown=detailed,
             is_available=profile_data.get("is_available", True),
             available_capacity=profile_data.get("available_capacity", 100.0)
         )
     
     def validate_input(self, input_data: Any) -> bool:
-        """Validate that input is RAGCandidate."""
-        if not isinstance(input_data, RAGCandidate):
-            self.logger.warning(f"Input must be RAGCandidate, got {type(input_data)}")
-            return False
-        return True
+        return isinstance(input_data, RAGCandidate)
     
     def format_output(self, result: ScoringResult) -> ScoringResult:
-        """Format output - already in correct format."""
         return result

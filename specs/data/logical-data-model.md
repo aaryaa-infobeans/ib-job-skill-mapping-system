@@ -9,7 +9,7 @@ This document specifies the logical data model for the Job Description to Team M
 
 ## 3. Entity Relationship Diagram (ERD) - Conceptual
 -   A `team_member` has many `team_member_skill` records and many `team_member_allocation` records.
--   A `team_member_skill` is a linking table between `team_member` and `skill_master`. It can have many `skill_certification` records.
+-   A `team_member_skill` is a linking table between `team_member` and `skill_master`. It can have many `team_member_skill_certification` records.
 -   A `skill_master` belongs to one `category_master`.
 -   A `requisition_request` is submitted by an `auth_client` and has a `status` from `requisition_status_master`.
 -   Each `requisition_request` has a one-to-one relationship with a `requisition_detail` record.
@@ -115,7 +115,7 @@ This document specifies the logical data model for the Job Description to Team M
   - `experience_in_months` (INTEGER, Nullable)
   - `is_deleted` (BOOLEAN, Default: FALSE)
 
-### `skill_certification`
+### `team_member_skill_certification`
 - **Purpose**: Stores certification details for a specific team member's skill.
 - **Columns**:
   - `id` (INT, PK, Identity)

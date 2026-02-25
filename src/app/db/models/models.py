@@ -202,13 +202,13 @@ class TeamMemberSkill(Base):
     # Relationships
     team_member = relationship("TeamMember", back_populates="skills")
     skill = relationship("SkillMaster", back_populates="team_member_skills")
-    certifications = relationship("SkillCertification", back_populates="team_member_skill")
+    certifications = relationship("TeamMemberSkillCertification", back_populates="team_member_skill")
 
 
-class SkillCertification(Base):
+class TeamMemberSkillCertification(Base):
     """Certification details for a specific team member's skill."""
 
-    __tablename__ = "skill_certification"
+    __tablename__ = "team_member_skill_certification"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     certification_id = Column(String(100), nullable=True)
@@ -292,7 +292,7 @@ class TeamMemberEmbedding(Base):
     team_member_id = Column(String(50), ForeignKey("team_member.team_member_id"), primary_key=True)
     # Use Text for SQLite/non-PG, Vector for PostgreSQL
     embedding = Column(
-        Text().with_variant(Vector(3072), "postgresql")
+        Text().with_variant(Vector(768), "postgresql")
     )
     profile_text = Column(Text, nullable=True)
     # Use JSON for cross-compatibility

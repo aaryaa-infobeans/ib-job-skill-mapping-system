@@ -55,38 +55,29 @@ class RankingAgent(BaseAgent):
         return result
     
     def _generate_narrative(self, candidate: ScoringResult) -> str:
-        """
-        Generate a professional narrative justification for a candidate.
-        
-        Args:
-            candidate: ScoringResult with match score and breakdown
-            
-        Returns:
-            Professional narrative string
-        """
+        """Generate a professional narrative justification with hybrid search insights."""
         breakdown = candidate.score_breakdown
-        
-        # Identify key strengths
         strengths = []
         
-        if breakdown.get("mandatory_skills", 0) > 0.7:
+        if breakdown.get("mandatory_skills", 0) > 0.8:
             strengths.append("strong alignment in mandatory skills")
-        
-        if breakdown.get("preferred_skills", 0) > 0.7:
-            strengths.append("relevant preferred skills")
-        
-        if breakdown.get("certification", 0) > 0.5:
-            strengths.append("relevant certifications")
-        
-        if breakdown.get("experience", 0) > 0.7:
+        if breakdown.get("experience", 0) > 0.8:
             strengths.append("suitable experience level")
-        
+        if breakdown.get("semantic_similarity", 0) > 0.7:
+            strengths.append("high semantic relevance")
+            
         # Build narrative
         if not strengths:
             narrative = f"Candidate shows baseline fit with a match score of {candidate.match_score:.2%}."
         else:
-            strengths_str = " with ".join(strengths)
-            narrative = f"Strong match with {strengths_str}. Match score: {candidate.match_score:.2%}."
+            strengths_str = ", ".join(strengths)
+            narrative = f"Strong match with {strengths_str}. "
+            
+            # Add hybrid search insight if available
+            if candidate.score_breakdown.get("semantic_similarity", 0) > 0.6:
+                narrative += "Retrieval confirmed via hybrid search (Vector + Keyword) for higher accuracy. "
+                
+            narrative += f"Final Match Score: {candidate.match_score:.2%}."
         
         return narrative
     

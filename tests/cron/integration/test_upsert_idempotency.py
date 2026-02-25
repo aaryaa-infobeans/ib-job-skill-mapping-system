@@ -40,7 +40,7 @@ def session(integration_engine):
     
     # Clean up test data before each test
     with integration_engine.begin() as conn:
-        conn.execute(text("DELETE FROM skill_certification WHERE team_member_id LIKE 'idem-%'"))
+        conn.execute(text("DELETE FROM team_member_team_member_skill_certification WHERE team_member_id LIKE 'idem-%'"))
         conn.execute(text("DELETE FROM team_member_allocation WHERE team_member_id LIKE 'idem-%'"))
         conn.execute(text("DELETE FROM team_member_skill WHERE team_member_id LIKE 'idem-%'"))
         conn.execute(text("DELETE FROM team_member WHERE team_member_id LIKE 'idem-%'"))
@@ -381,7 +381,7 @@ class TestCertificationIdempotency:
         
         # Verify only one record exists
         count = session.execute(
-            text("SELECT COUNT(*) FROM skill_certification WHERE team_member_id = 'idem-tm-005' AND certification_name = 'Idem Certification Alpha'")
+            text("SELECT COUNT(*) FROM team_member_team_member_skill_certification WHERE team_member_id = 'idem-tm-005' AND certification_name = 'Idem Certification Alpha'")
         ).scalar()
         assert count == 1
 
@@ -467,7 +467,7 @@ class TestFullBatchIdempotency:
             text("SELECT COUNT(*) FROM team_member_allocation WHERE team_member_id = 'idem-tm-006'")
         ).scalar()
         cert_count_1 = session.execute(
-            text("SELECT COUNT(*) FROM skill_certification WHERE team_member_id = 'idem-tm-006'")
+            text("SELECT COUNT(*) FROM team_member_team_member_skill_certification WHERE team_member_id = 'idem-tm-006'")
         ).scalar()
         
         # Process batch second time (with updated data)
@@ -499,7 +499,7 @@ class TestFullBatchIdempotency:
             text("SELECT COUNT(*) FROM team_member_allocation WHERE team_member_id = 'idem-tm-006'")
         ).scalar()
         cert_count_2 = session.execute(
-            text("SELECT COUNT(*) FROM skill_certification WHERE team_member_id = 'idem-tm-006'")
+            text("SELECT COUNT(*) FROM team_member_team_member_skill_certification WHERE team_member_id = 'idem-tm-006'")
         ).scalar()
         
         # Verify no duplicates created

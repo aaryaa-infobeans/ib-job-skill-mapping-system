@@ -44,7 +44,7 @@ def session(integration_engine):
     # Clean up test data before each test
     with integration_engine.begin() as conn:
         # Delete in reverse order of foreign key dependencies
-        conn.execute(text("DELETE FROM skill_certification WHERE team_member_id LIKE 'test-%'"))
+        conn.execute(text("DELETE FROM team_member_team_member_skill_certification WHERE team_member_id LIKE 'test-%'"))
         conn.execute(text("DELETE FROM team_member_allocation WHERE team_member_id LIKE 'test-%'"))
         conn.execute(text("DELETE FROM team_member_skill WHERE team_member_id LIKE 'test-%'"))
         conn.execute(text("DELETE FROM team_member WHERE team_member_id LIKE 'test-%'"))
@@ -206,7 +206,7 @@ class TestBatchProcessingIntegration:
         
         # Verify certifications created
         certifications = session.execute(
-            text("SELECT * FROM skill_certification WHERE team_member_id = :id"),
+            text("SELECT * FROM team_member_team_member_skill_certification WHERE team_member_id = :id"),
             {"id": "test-tm-001"}
         ).fetchall()
         assert len(certifications) == 1
@@ -529,7 +529,7 @@ class TestBatchProcessingIntegration:
         
         # Verify no certifications
         certifications = session.execute(
-            text("SELECT COUNT(*) FROM skill_certification WHERE team_member_id = 'test-tm-006'")
+            text("SELECT COUNT(*) FROM team_member_team_member_skill_certification WHERE team_member_id = 'test-tm-006'")
         ).scalar()
         assert certifications == 0
 
@@ -678,7 +678,7 @@ class TestBatchProcessingIntegration:
         
         # Verify certifications reference both team_member and skill
         certifications = session.execute(
-            text("SELECT * FROM skill_certification WHERE team_member_id = 'test-tm-008' AND skill_id = 'test-fk-skill'")
+            text("SELECT * FROM team_member_team_member_skill_certification WHERE team_member_id = 'test-tm-008' AND skill_id = 'test-fk-skill'")
         ).fetchall()
         assert len(certifications) == 2
 

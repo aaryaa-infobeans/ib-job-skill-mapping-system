@@ -217,7 +217,7 @@ CREATE TABLE team_member_skill (
 CREATE INDEX idx_team_member_skill_skill
 ON team_member_skill(skill_id);
 
-CREATE TABLE skill_certification (
+CREATE TABLE team_member_skill_certification (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     certification_id    VARCHAR(100),
     team_member_id      VARCHAR(50)  NOT NULL,

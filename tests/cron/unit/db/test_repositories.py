@@ -107,8 +107,8 @@ team_member_skill = Table(
     Column("is_deleted", Boolean, default=False),
 )
 
-skill_certification = Table(
-    "skill_certification",
+team_member_team_member_skill_certification = Table(
+    "team_member_team_member_skill_certification",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("certification_id", String(100), nullable=True),
@@ -591,8 +591,8 @@ class TestUpsertCertifications:
         await session.commit()
         
         # Verify
-        stmt = select(skill_certification).where(
-            skill_certification.c.certification_id == 'CERT001'
+        stmt = select(team_member_team_member_skill_certification).where(
+            team_member_team_member_skill_certification.c.certification_id == 'CERT001'
         )
         result = await session.execute(stmt)
         row = result.fetchone()

@@ -146,7 +146,7 @@ sequenceDiagram
             PROC->>DB: UPSERT team_member
             PROC->>DB: UPSERT team_member_skill
             PROC->>DB: UPSERT team_member_allocation
-            PROC->>DB: UPSERT skill_certification
+            PROC->>DB: UPSERT team_member_skill_certification
             PROC->>STATE: Update batch status = SUCCESS
             PROC->>AUDIT: Log batch completion
             PROC->>DB: COMMIT
@@ -231,7 +231,7 @@ graph LR
         MEMBER[team_member]
         TM_SKILL[team_member_skill]
         TM_ALLOC[team_member_allocation]
-        CERT[skill_certification]
+        CERT[team_member_skill_certification]
     end
     
     META --> STATE[(ingestion_batch_state)]
@@ -250,7 +250,7 @@ graph LR
 3. **team_member** (independent)
 4. **team_member_skill** (depends on team_member + skill_master)
 5. **team_member_allocation** (depends on team_member)
-6. **skill_certification** (depends on team_member + skill_master)
+6. **team_member_skill_certification** (depends on team_member + skill_master)
 
 ---
 
@@ -500,7 +500,7 @@ GRANT SELECT, INSERT, UPDATE ON TABLE skill_master TO ingestion_service;
 GRANT SELECT, INSERT, UPDATE ON TABLE team_member TO ingestion_service;
 GRANT SELECT, INSERT, UPDATE ON TABLE team_member_skill TO ingestion_service;
 GRANT SELECT, INSERT, UPDATE ON TABLE team_member_allocation TO ingestion_service;
-GRANT SELECT, INSERT, UPDATE ON TABLE skill_certification TO ingestion_service;
+GRANT SELECT, INSERT, UPDATE ON TABLE team_member_skill_certification TO ingestion_service;
 
 GRANT SELECT, INSERT, UPDATE ON TABLE ingestion_batch_state TO ingestion_service;
 GRANT INSERT ON TABLE ingestion_audit_log TO ingestion_service;

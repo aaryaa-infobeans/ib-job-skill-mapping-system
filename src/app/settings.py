@@ -30,11 +30,18 @@ class Settings(BaseSettings):
     secrets_backend: str = "env"  # Options: env, aws, vault
     
     # LLM Configuration
+    llm_provider: str = "openai"  # openai, groq, google
     openai_api_key: Optional[str] = None
-    openai_model: str
-    openai_embedding_model: str
-    openai_input_rate: Optional[float]
-    openai_output_rate: Optional[float]
+    openai_model: str = "gpt-4o-mini"
+    openai_embedding_model: str = "text-embedding-3-large"
+    openai_input_rate: Optional[float] = None
+    openai_output_rate: Optional[float] = None
+    
+    groq_api_key: Optional[str] = None
+    groq_model: str = "llama-3.3-70b-versatile"
+    
+    google_api_key: Optional[str] = None
+    google_model: str = "gemini-2.5-flash"
     
     # Agent Weights
     weight_mandatory_skills: float

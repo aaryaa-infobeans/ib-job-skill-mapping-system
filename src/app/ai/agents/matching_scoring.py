@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.ai.availability import evaluate_availability
 from app.ai.utils.scoring import ScoringAgent
+from app.ai.utils.scoring_audit import ScoringAudit
 from app.ai.utils.models import RAGCandidate
 from app.ai.state import GraphState
-from app.db.models import TeamMember, TeamMemberSkill, SkillCertification
+from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification
 from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,9 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     4. Populates state.candidate_scores with ranked results
     """
     logger.info("Executing Matching_Scoring_Agent node")
+    
+    # Reset error message for this node run
+    state["error_message"] = None
     
     # Extract required data from state
     normalized_skills = state.get("normalized_skills")
@@ -64,7 +68,6 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     db: Session = SessionLocal()
     try:
         if retrieved_candidates:
-            # Filter members by retrieved IDs and store RAG results for lookup
             retrieved_results = {c["team_member_id"]: c for c in retrieved_candidates}
             retrieved_ids = list(retrieved_results.keys())
             
@@ -75,16 +78,19 @@ def matching_scoring_node(state: GraphState) -> GraphState:
             logger.info(f"Evaluating {len(team_members)} candidates filtered by RAG")
         else:
             retrieved_results = {}
-            # Fallback to all active members
             team_members = db.query(TeamMember).filter(TeamMember.is_active == True).all()
             logger.info(f"Found {len(team_members)} active team members to evaluate (No RAG filter)")
         
         candidate_scores = []
         scoring_agent = ScoringAgent(logger=logger)
+        from app.ai.utils.ai_confidence import get_ai_fit_confidence, calculate_ai_boost
+        from app.db.models.models import TeamMemberEmbedding
+        
+        jd_text = parsed_jd.get("jd_text", "")
         
         for member in team_members:
             try:
-                # Get member's skills
+                # 1. Fetch skills, certs, and profile text
                 member_skill_ids = [
                     skill.skill_id 
                     for skill in db.query(TeamMemberSkill)
@@ -92,15 +98,20 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     .all()
                 ]
                 
-                # Get member's certifications
                 member_certs = [
                     cert.certificate
-                    for cert in db.query(SkillCertification)
-                    .filter(SkillCertification.team_member_id == member.team_member_id)
+                    for cert in db.query(TeamMemberSkillCertification)
+                    .filter(TeamMemberSkillCertification.team_member_id == member.team_member_id)
                     .all()
                 ]
                 
-                # Evaluate availability
+                # Fetch profile text for AI Confidence
+                embedding_record = db.query(TeamMemberEmbedding).filter(
+                    TeamMemberEmbedding.team_member_id == member.team_member_id
+                ).first()
+                profile_text = embedding_record.profile_text if embedding_record else ""
+                
+                # 2. Evaluate availability
                 availability_result = evaluate_availability(
                     db,
                     member.team_member_id,
@@ -109,9 +120,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     threshold_percentage=80.0,
                 )
                 
-                # Prepare profile data for scoring agent
-                rag_scores = retrieved_results.get(member.team_member_id, {})
-                
+                # 3. Deterministic Agentic Scoring (Phase 1 core)
+                rag_scores_dict = retrieved_results.get(member.team_member_id, {})
                 profile_data = {
                     "skill_ids": member_skill_ids,
                     "mandatory_skill_ids": mandatory_skill_ids,
@@ -127,66 +137,94 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "required_locations": required_locations,
                     "work_mode": member.work_type.value if member.work_type else None,
                     "required_work_modes": required_work_modes,
+                    "jd_level": parsed_jd.get("level", "MID"),
                     "is_available": availability_result["is_available"],
                     "available_capacity": availability_result["available_capacity"],
                 }
                 
-                # Create RAG candidate object
                 rag_candidate = RAGCandidate(
                     team_member_id=member.team_member_id,
-                    final_similarity=rag_scores.get("final_similarity", 0.5) if rag_scores else 0.5,
-                    mandatory_similarity=rag_scores.get("mandatory_similarity", 0.5) if rag_scores else 0.5,
-                    preferred_similarity=rag_scores.get("preferred_similarity", 0.5) if rag_scores else 0.5,
-                    jd_level_similarity=rag_scores.get("jd_level_similarity", 0.5) if rag_scores else 0.5,
-                    certification_similarity=rag_scores.get("certification_similarity", 0.5) if rag_scores else 0.5,
+                    final_similarity=rag_scores_dict.get("final_similarity", 0.5),
+                    mandatory_similarity=rag_scores_dict.get("mandatory_similarity", 0.5),
+                    preferred_similarity=rag_scores_dict.get("preferred_similarity", 0.5),
+                    jd_level_similarity=rag_scores_dict.get("jd_level_similarity", 0.5),
+                    certification_similarity=rag_scores_dict.get("certification_similarity", 0.5),
+                    phase0_score_breakdown=rag_scores_dict.get("phase0_score_breakdown", {})
                 )
                 
-                # Calculate complete candidate score using multi-agent utility
                 scoring_result = scoring_agent.execute(rag_candidate, profile_data)
                 
-                # Convert back to dict format expected by the rest of the app
-                # The 'skill_score' shown to users is typically a weighted combination 
-                # of mandatory (0.7) and preferred (0.3)
-                combined_skill_score = (
-                    0.7 * scoring_result.detailed_breakdown.mandatory_score + 
-                    0.3 * scoring_result.detailed_breakdown.preferred_score
-                )
+                # 4. AI Fit Confidence (TASK-08)
+                ai_fit = get_ai_fit_confidence(jd_text, profile_text)
+                confidence_score = ai_fit["confidence_score"]
+                ai_boost = calculate_ai_boost(confidence_score)
+                
+                # Log AI Confidence LLM call
+                if "llm_call_logs" not in state or state["llm_call_logs"] is None:
+                    state["llm_call_logs"] = []
+                
+                if ai_fit.get("usage"):
+                    usage = ai_fit["usage"]
+                    state["llm_call_logs"].append({
+                        "agent_name": "matching_scoring",
+                        "prompt_name": "ai_fit_confidence",
+                        "model": usage.get("model", "llama-3.1-8b"),
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                        "cost_usd": 0.0
+                    })
+                
+                # Apply boost to final match score
+                final_agentic_score = scoring_result.match_score + ai_boost
+                final_agentic_score = round(max(0.0, min(1.0, final_agentic_score)), 4)
+                
+                # AI Override Check (SPEC-002)
+                ai_override_applied = (confidence_score >= 0.75 and scoring_result.score_breakdown["role_type"] == "SENIOR")
+                
+                # Check Role Fit Threshold (GATE)
+                role_type = scoring_result.score_breakdown["role_type"]
+                role_weights = ScoringAgent.ROLE_WEIGHTS[role_type]
+                role_fit_threshold = role_weights["GATE"]
+                meets_threshold = final_agentic_score >= role_fit_threshold
                 
                 score_dict = {
                     "team_member_id": scoring_result.team_member_id,
-                    "skill_score": round(combined_skill_score, 2),
-                    "experience_score": round(scoring_result.score_breakdown["experience"], 2),
-                    "certification_score": round(scoring_result.score_breakdown["certification"], 2),
-                    "location_score": round(scoring_result.score_breakdown["location"], 2),
-                    "work_mode_score": round(scoring_result.score_breakdown["work_mode"], 2),
-                    "availability_score": round(scoring_result.available_capacity / 100.0, 2),
-                    "semantic_similarity": round(scoring_result.score_breakdown["semantic_similarity"], 2),
-                    "jd_level_similarity": round(scoring_result.score_breakdown["jd_level"], 2),
-                    "final_score": scoring_result.match_score,
+                    "final_score": final_agentic_score,
+                    "base_agentic_score": scoring_result.match_score,
+                    "ai_confidence_score": confidence_score,
+                    "ai_boost": ai_boost,
+                    "ai_override_applied": ai_override_applied,
+                    "ai_reasoning": ai_fit["reasoning"],
+                    "role_type": role_type,
+                    "role_fit_threshold": role_fit_threshold,
+                    "meets_threshold": meets_threshold,
                     "is_available": scoring_result.is_available,
-                    "certifications": member_certs,
-                    "location": member.base_location,
-                    "work_mode": member.work_type.value if member.work_type else None,
-                    "experience_in_months": member.experience_in_months or 0,
+                    "semantic_similarity": round(scoring_result.detailed_breakdown.semantic_similarity, 2),
+                    "experience_score": round(scoring_result.detailed_breakdown.experience_score, 2),
+                    "phase0_ledger": rag_candidate.phase0_score_breakdown,
+                    "score_breakdown": scoring_result.score_breakdown,
                     "match_reasons": {
-                        "skills_matched": scoring_result.detailed_breakdown.skills_matched,
-                        "mandatory_matched": scoring_result.detailed_breakdown.mandatory_matched,
-                        "preferred_matched": scoring_result.detailed_breakdown.preferred_matched,
+                        "ai_reasoning": ai_fit["reasoning"],
+                        "strengths": ai_fit.get("key_strengths", []),
+                        "gaps": ai_fit.get("major_gaps", []),
                         "mandatory_score": scoring_result.detailed_breakdown.mandatory_score,
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
-                        "certification_matched": scoring_result.detailed_breakdown.certification_matched,
-                        "certification_missing": scoring_result.detailed_breakdown.certification_missing,
-                        "certification_score": scoring_result.detailed_breakdown.certification_score,
-                        "location_matched": scoring_result.detailed_breakdown.location_matched,
-                        "location_score": scoring_result.detailed_breakdown.location_score,
-                        "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,
-                        "work_mode_score": scoring_result.detailed_breakdown.work_mode_score,
-                        "experience_matched": scoring_result.detailed_breakdown.experience_matched,
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
+                        "certification_score": scoring_result.detailed_breakdown.certification_score,
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
-                        "jd_level_similarity": scoring_result.detailed_breakdown.jd_level_similarity,
-                    }
+                        "location_matched": scoring_result.detailed_breakdown.location_matched,
+                        "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,
+                    },
+                    "total_m": len(mandatory_skill_ids),
+                    "weight_m": role_weights.get("M", 0.5),
+                    "weight_p": role_weights.get("P", 0.2),
+                    "weight_s": role_weights.get("S", 0.25),
+                    "reason": "Low Semantic Similarity (0.0)" if scoring_result.detailed_breakdown.semantic_similarity == 0.0 else "Baseline Evaluation"
                 }
+                
+                # Log detailed walkthrough
+                ScoringAudit.log_candidate_walkthrough(score_dict)
                 
                 candidate_scores.append(score_dict)
                 
@@ -194,15 +232,15 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 logger.error(f"Error scoring team member {member.team_member_id}: {str(e)}", exc_info=True)
                 continue
         
-        # Sort candidates by final_score descending
+        # Sort by final_score descending
         candidate_scores.sort(key=lambda x: x["final_score"], reverse=True)
         
         state["candidate_scores"] = candidate_scores
-        logger.info(f"Matching_Scoring_Agent completed with {len(candidate_scores)} scored candidates")
+        logger.info(f"Phase 1 Agentic Scoring completed with {len(candidate_scores)} candidates")
         
     except Exception as e:
         logger.error(f"Error in matching_scoring_node: {str(e)}", exc_info=True)
-        state["error_message"] = f"Matching scoring failed: {str(e)}"
+        state["error_message"] = f"Phase 1 Scoring failed: {str(e)}"
     finally:
         db.close()
     

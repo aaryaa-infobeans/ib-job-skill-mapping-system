@@ -133,6 +133,9 @@ def skill_normalization_node(state: GraphState) -> GraphState:
     """
     logger.info("Executing Skill_Normalization_Agent node with ontology")
     
+    # Reset error message for this node run
+    state["error_message"] = None
+    
     # Ensure state keys exist
     if state.get("llm_call_logs") is None:
         state["llm_call_logs"] = []
@@ -189,45 +192,44 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "ontology": ontology_data
         }
         
-        # Initialize OpenAI client
-        api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment or settings")
-            
-        client = OpenAI(api_key=api_key)
+        from app.ai.utils.llm_client import llm_client
         
         # Call LLM for fuzzy-logic normalization and enrichment
         logger.info("Calling LLM for skill normalization")
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4",
+        content, usage = llm_client.chat_completion(
             messages=[
                 {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
                 {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
             ],
-            temperature=0.0
+            temperature=0.0,
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
         
+        if not content:
+            raise ValueError("LLM normalization failed - no content returned")
+
         # Parse result
-        result_text = response.choices[0].message.content
-        result = json.loads(result_text)
+        result = json.loads(content)
         
         # Extract metadata for logging
-        usage = response.usage
-        cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
+        cost = 0.0
+        if usage:
+            cost = (usage["prompt_tokens"] / 1_000_000 * 0.03) + (usage["completion_tokens"] / 1_000_000 * 0.06)
         
         # Add to LLM logs for observability
         state["llm_call_logs"].append({
             "agent_name": "skill_normalization",
             "prompt_name": "skill_ontology_normalization",
-            "model": "gpt-4",
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "total_tokens": usage.total_tokens,
+            "model": usage.get("model", "unknown") if usage else "unknown",
+            "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
+            "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+            "total_tokens": usage.get("total_tokens", 0) if usage else 0,
             "cost_usd": cost
         })
         
         # Update cumulative metrics
-        state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + usage.total_tokens
+        if usage:
+            state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + usage["total_tokens"]
         state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + cost
 
         # Map results to skill IDs and enriched terms
@@ -260,6 +262,11 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                 # Store unique IDs for this requirement group
                 if skill_group:
                     mandatory_alternatives[canonical] = list(set(skill_group))
+                else:
+                    # If no core skill match, preserve the original raw name in the alternatives map
+                    # This allows subsequent scoring to at least show it was requested.
+                    raw_name = item.get("raw") or canonical
+                    mandatory_alternatives[raw_name] = []
         
         normalized_preferred_ids = []
         preferred_enriched = {}
@@ -290,6 +297,10 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                 # Store unique IDs for this requirement group
                 if skill_group:
                     preferred_alternatives[canonical] = list(set(skill_group))
+                else:
+                    # If no core skill match, preserve the original raw name in the alternatives map
+                    raw_name = item.get("raw") or canonical
+                    preferred_alternatives[raw_name] = []
                     
         normalized_certs = []
         certification_enriched = {}
