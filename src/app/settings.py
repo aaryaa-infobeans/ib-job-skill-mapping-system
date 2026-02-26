@@ -13,45 +13,59 @@ class Settings(BaseSettings):
     """Application settings with secure secrets handling."""
 
     # API Configuration
-    api_v1_prefix: str = "/api/v1"
-    project_name: str = "IB Job Skill Mapping System"
+    api_v1_prefix: str
+    project_name: str
+
     
     # Logging
-    log_level: str = "INFO"
+    log_level: str
     
-    # Database Configuration (fallback values)
+    # Database Configuration
     database_url: Optional[str] = None
     
-    # JWT/OAuth2 Configuration (fallback values)
+    # JWT/OAuth2 Configuration
     jwt_secret_key: Optional[str] = None
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str
     
     # Secrets Manager Configuration
-    secrets_backend: str = "env"  # Options: env, aws, vault
+    secrets_backend: str
+
     
     # LLM Configuration
-    llm_provider: str = "openai"  # openai, groq, google
+    llm_provider: str
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4o-mini"
-    openai_embedding_model: str = "text-embedding-3-large"
+    openai_model: str
+    openai_embedding_model: str
     openai_input_rate: Optional[float] = None
     openai_output_rate: Optional[float] = None
     
     groq_api_key: Optional[str] = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str
+    input_cost_groq: Optional[float] = None
+    output_cost_groq: Optional[float] = None
     
     google_api_key: Optional[str] = None
-    google_model: str = "gemini-2.5-flash"
+    google_model: str
+    input_cost_google: Optional[float] = None
+    output_cost_google: Optional[float] = None
+    
+    llm_max_tokens: int
+    llm_temperature: float
+
+
     
     # Agent Weights
     weight_mandatory_skills: float
     weight_preferred_skills: float
     weight_experience: float
-    weight_semantic_similarity: float
+    weight_semantic_fit: float
     weight_certification: float
-    weight_jd_text: float
+    weight_context_boost: float
+    weight_jd_text: float = 0.10
     weight_location: float
     weight_work_mode: float
+
+
     
     # Thresholds
     fit_score_threshold: float
@@ -84,42 +98,27 @@ class Settings(BaseSettings):
     def get_database_url(self) -> str:
         """
         Get database URL from secrets manager or fallback to settings.
-        
-        Priority:
-        1. Secrets manager (DB_URL or DATABASE_URL)
-        2. Environment variable
-        3. Settings default
         """
         from app.secrets import get_secret
         
         # Try secrets manager first
         db_url = get_secret("DB_URL") or get_secret("DATABASE_URL")
         
-        # Fall back to config
-        if not db_url:
-            db_url = self.database_url or os.getenv(
-                "DATABASE_URL",
-                "postgresql+psycopg2://user:password@localhost:5433/ib_job_skill_mapping"
-            )
-        
-        return db_url
+        # Fall back to config (loaded from .env)
+        return db_url or self.database_url
     
     def get_jwt_secret_key(self) -> Optional[str]:
         """
-        Get JWT secret key from secrets manager.
-        
-        Returns None in development to allow unsigned token validation.
+        Get JWT secret key from secrets manager or fallback to settings.
         """
         from app.secrets import get_secret
         
         # Try secrets manager
         secret = get_secret("JWT_SECRET_KEY") or get_secret("SECRET_KEY")
         
-        # Fall back to config
-        if not secret:
-            secret = self.jwt_secret_key or os.getenv("JWT_SECRET_KEY")
-        
-        return secret
+        # Fall back to config (loaded from .env)
+        return secret or self.jwt_secret_key
+
 
 
 settings = Settings()

@@ -52,22 +52,8 @@ def result_aggregation_node(state: GraphState) -> GraphState:
     
     for candidate in candidate_scores:
         final_score = candidate.get("final_score", 0.0)
-        role_fit_threshold = candidate.get("role_fit_threshold", 0.5)
-        
-        # 1. Check Score Threshold (GATE)
-        passed_score_gate = final_score >= role_fit_threshold
-        
-        # 2. Check Mandatory Gates
-        # Semantic similarity gate: >= 0.50
-        semantic_sim = candidate.get("semantic_similarity", 0.0)
-        passed_semantic_gate = semantic_sim >= 0.50
-        
-        # 3. AI Override (SPEC-003)
-        ai_override_applied = candidate.get("ai_override_applied", False)
-        
-        # Final Qualification Decision
-        # QUALIFIED if: Score Gate passed AND (Semantic Gate passed OR AI Override)
-        is_qualified = passed_score_gate and (passed_semantic_gate or ai_override_applied)
+        is_qualified = candidate.get("is_qualified", False)
+        qualification_reason = candidate.get("qualification_reason", "No reason provided")
         
         status = "QUALIFIED" if is_qualified else "DISQUALIFIED"
         if is_qualified:
@@ -75,20 +61,16 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             
         fit_level = determine_fit_level(final_score)
         
-        # Build explanation list
+        # Build explanation list (Legacy support, but primarily narrative based now)
         explanation = []
         explanation.append(f"Status: {status}")
-        explanation.append(f"Final Score: {final_score*100:.0f}% (Threshold: {role_fit_threshold*100:.0f}%)")
+        explanation.append(f"Reasoning: {qualification_reason}")
         
-        if ai_override_applied:
-            explanation.append("🤖 AI Override: Semantic gate waived for senior profile.")
-        elif not passed_semantic_gate:
-            explanation.append("❌ Disqualified: Did not meet semantic similarity threshold (0.50).")
-            
         # Add AI reasoning if available
         ai_reasoning = candidate.get("ai_reasoning", "")
         if ai_reasoning:
-            explanation.append(f"🧠 AI Reasoning: {ai_reasoning}")
+            explanation.append(f"🧠 AI Analysis: {ai_reasoning}")
+
             
         # Create result entry
         result_entry = {
@@ -105,18 +87,24 @@ def result_aggregation_node(state: GraphState) -> GraphState:
                 "ai_confidence_score": candidate.get("ai_confidence_score"),
                 "ai_boost_applied": candidate.get("ai_boost", 0.0),
                 "role_type": candidate.get("role_type"),
-                "gates": {
-                    "score_gate": passed_score_gate,
-                    "semantic_gate": passed_semantic_gate,
-                    "ai_override": ai_override_applied
-                }
+                "is_qualified": is_qualified,
+                "qualification_reason": qualification_reason
             }
         }
+
         
         final_results.append(result_entry)
     
     state["total_qualified"] = total_qualified
     state["final_results"] = final_results
+    
+    # Consolidate metrics for easier retrieval and caching
+    state["metrics"] = {
+        "total_evaluated": len(final_results),
+        "total_qualified": total_qualified,
+        "token_count": state.get("cumulative_tokens", 0),
+        "cost_usd": state.get("cumulative_cost_usd", 0.0)
+    }
     
     logger.info(f"Phase 2 completed: {total_qualified} qualified out of {len(final_results)} evaluated")
     return state

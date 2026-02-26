@@ -140,13 +140,25 @@ class RAGRetrievalAgent(BaseAgent):
         # 1. is_active != true -> FAIL
         query = query.filter(TeamMember.is_active == True)
         
+        # Ensure IDs are strings for VARCHAR columns
+        mandatory_ids = [str(i) for i in mandatory_ids]
+        preferred_ids = [str(i) for i in preferred_ids]
+
+        
         # 2. experience < min_months -> FAIL
         if min_months is not None:
             query = query.filter(TeamMember.experience_in_months >= min_months)
+
+
         
         # 3. no mandatory OR preferred skill match -> FAIL
-        # We only take those who have at least ONE match in m_count or p_count
         query = query.filter(sa.or_(m_count_sq.c.team_member_id != None, p_count_sq.c.team_member_id != None))
+
+
+
+
+
+
 
         if filter_ids:
             query = query.filter(TeamMember.team_member_id.in_(filter_ids))

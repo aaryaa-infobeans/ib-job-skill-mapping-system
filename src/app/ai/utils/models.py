@@ -96,6 +96,11 @@ class ScoringBreakdown:
     experience_score: float = 0.0
     semantic_similarity: float = 0.0
     jd_level_similarity: float = 0.0
+    # Multi-stage scoring fields
+    stage1_passed: bool = True
+    role_type: str = "MID"
+    qualification_reason: str = ""
+
 
 
 @dataclass
@@ -109,6 +114,8 @@ class ScoringResult:
     detailed_breakdown: Optional[ScoringBreakdown] = None
     is_available: bool = True
     available_capacity: float = 100.0
+    is_qualified: bool = True
+
 
 
 @dataclass

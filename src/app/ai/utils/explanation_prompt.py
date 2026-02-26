@@ -39,11 +39,12 @@ Required Location: {job_location}
 - Total Penalties applied: {penalties:.2f}
 - (e.g. Skill-family mismatch, Missing mandatory groups)
 
-**6. AI Fit Confidence (Groq llama-3.1-8b):**
+**6. AI Fit Confidence (AI Analysis):**
 - AI Confidence Score: {ai_confidence:.2f}
 - AI Score Boost: +{ai_boost:.4f}
 - AI Semantic Override: {'Applied' if ai_override_applied else 'Not Applied'}
 - AI Reasoning: {ai_reasoning}
+
 
 === YOUR TASK ===
 Generate a detailed, professional explanation (3-5 sentences) that:

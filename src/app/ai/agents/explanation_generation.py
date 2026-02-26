@@ -55,10 +55,12 @@ def _generate_llm_explanation(
                 {"role": "system", "content": "You are an expert HR recruitment assistant. Provide professional candidate evaluations based on the provided match ledger."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.1-8b-instant",
-            temperature=0.0,
+            model=None, # Use system default from settings via llm_client
             response_format={"type": "json_object"}
         )
+
+
+
         
         if not content:
             return None
@@ -87,10 +89,11 @@ def explanation_generation_node(state: GraphState) -> GraphState:
             llm_result = _generate_llm_explanation(
                 team_member_id=candidate["team_member_id"],
                 final_score=candidate["final_score"],
-                fit_level="HIGH" if candidate["final_score"] >= 0.75 else "MEDIUM",
+                fit_level="HIGH" if candidate.get("is_qualified") and candidate["final_score"] >= 0.75 else "MEDIUM" if candidate.get("is_qualified") else "LOW",
                 parsed_jd=parsed_jd,
                 candidate_data=candidate
             )
+
             if llm_result:
                 candidate["detailed_explanation"] = llm_result
             else:

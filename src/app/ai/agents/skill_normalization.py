@@ -201,9 +201,9 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                 {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
                 {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
             ],
-            temperature=0.0,
             response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
+
         
         if not content:
             raise ValueError("LLM normalization failed - no content returned")
@@ -212,9 +212,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         result = json.loads(content)
         
         # Extract metadata for logging
-        cost = 0.0
-        if usage:
-            cost = (usage["prompt_tokens"] / 1_000_000 * 0.03) + (usage["completion_tokens"] / 1_000_000 * 0.06)
+        cost = llm_client.get_completion_cost(usage) if usage else 0.0
         
         # Add to LLM logs for observability
         state["llm_call_logs"].append({
@@ -237,7 +235,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         mandatory_enriched = {}
         mandatory_alternatives = {}
         
-        for item in result.get("mandatory", []):
+        for item in (result.get("mandatory") or []):
             canonical = item.get("canonical")
             if canonical:
                 # Skill group for this requirement
@@ -272,7 +270,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         preferred_enriched = {}
         preferred_alternatives = {}
         
-        for item in result.get("preferred", []):
+        for item in (result.get("preferred") or []):
             canonical = item.get("canonical")
             if canonical:
                 # Skill group for this requirement
@@ -304,7 +302,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                     
         normalized_certs = []
         certification_enriched = {}
-        for item in result.get("certifications", []):
+        for item in (result.get("certifications") or []):
             canonical = item.get("canonical")
             if canonical:
                 # Resolve alias if exists
@@ -313,6 +311,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
 
                 normalized_certs.append(canonical)
                 certification_enriched[canonical] = item.get("enriched", [])
+
                 
         # Populate state
         state["normalized_skills"] = {

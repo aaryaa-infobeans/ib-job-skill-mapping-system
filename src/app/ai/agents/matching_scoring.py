@@ -105,11 +105,22 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     .all()
                 ]
                 
-                # Fetch profile text for AI Confidence
+                # Fetch profile text and skill names for AI Confidence and Penalty
                 embedding_record = db.query(TeamMemberEmbedding).filter(
                     TeamMemberEmbedding.team_member_id == member.team_member_id
                 ).first()
                 profile_text = embedding_record.profile_text if embedding_record else ""
+                
+                # Fetch skill names (needed for family penalty check in refined logic)
+                from app.db.models import SkillMaster
+                member_skill_names = [
+                    res.skill_name 
+                    for res in db.query(SkillMaster.skill_name)
+                    .join(TeamMemberSkill, SkillMaster.skill_id == TeamMemberSkill.skill_id)
+                    .filter(TeamMemberSkill.team_member_id == member.team_member_id)
+                    .all()
+                ]
+
                 
                 # 2. Evaluate availability
                 availability_result = evaluate_availability(
@@ -124,6 +135,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 rag_scores_dict = retrieved_results.get(member.team_member_id, {})
                 profile_data = {
                     "skill_ids": member_skill_ids,
+                    "skill_names": member_skill_names,
                     "mandatory_skill_ids": mandatory_skill_ids,
                     "preferred_skill_ids": preferred_skill_ids,
                     "mandatory_alternatives": mandatory_alternatives,
@@ -138,9 +150,12 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "work_mode": member.work_type.value if member.work_type else None,
                     "required_work_modes": required_work_modes,
                     "jd_level": parsed_jd.get("level", "MID"),
+                    "jd_text": jd_text,
+                    "profile_text": profile_text,
                     "is_available": availability_result["is_available"],
                     "available_capacity": availability_result["available_capacity"],
                 }
+
                 
                 rag_candidate = RAGCandidate(
                     team_member_id=member.team_member_id,
@@ -154,51 +169,52 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 
                 scoring_result = scoring_agent.execute(rag_candidate, profile_data)
                 
-                # 4. AI Fit Confidence (TASK-08)
+                # Extract role_type and qualification from breakdown
+                is_qualified = scoring_result.detailed_breakdown.stage1_passed
+                role_type = scoring_result.detailed_breakdown.role_type
+                
+                # AI Fit Confidence (TASK-08+)
                 ai_fit = get_ai_fit_confidence(jd_text, profile_text)
                 confidence_score = ai_fit["confidence_score"]
-                ai_boost = calculate_ai_boost(confidence_score)
                 
-                # Log AI Confidence LLM call
-                if "llm_call_logs" not in state or state["llm_call_logs"] is None:
-                    state["llm_call_logs"] = []
+                # --- PHASES 3 & 4: AI Override & Refined Boost (from good code) ---
+                is_senior = (role_type == "SENIOR")
+                ai_boost = 0.0
+                ai_override_applied = False
                 
-                if ai_fit.get("usage"):
-                    usage = ai_fit["usage"]
-                    state["llm_call_logs"].append({
-                        "agent_name": "matching_scoring",
-                        "prompt_name": "ai_fit_confidence",
-                        "model": usage.get("model", "llama-3.1-8b"),
-                        "prompt_tokens": usage.get("prompt_tokens", 0),
-                        "completion_tokens": usage.get("completion_tokens", 0),
-                        "total_tokens": usage.get("total_tokens", 0),
-                        "cost_usd": 0.0
-                    })
+                # 1. AI Waiver for Seniors (Stage 1 Waiver)
+                # If Senior fails semantic gate but has very high AI confidence, we waive the gate
+                if not is_qualified and is_senior and confidence_score >= 0.75:
+                    if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
+                        is_qualified = True
+                        ai_override_applied = True
+                        logger.info(f"AI Override: Waiving semantic gate for Senior {member.team_member_id} (Conf: {confidence_score})")
                 
-                # Apply boost to final match score
-                final_agentic_score = scoring_result.match_score + ai_boost
+                # 2. Refined AI Boost (only applied if qualified)
+                if is_qualified and confidence_score >= 0.7:
+                    # External logic: 0.08 for senior, 0.05 for others
+                    ai_boost = 0.08 if is_senior else 0.05
+                
+                final_agentic_score = scoring_result.match_score
+                if is_qualified:
+                    final_agentic_score += ai_boost
+                
                 final_agentic_score = round(max(0.0, min(1.0, final_agentic_score)), 4)
-                
-                # AI Override Check (SPEC-002)
-                ai_override_applied = (confidence_score >= 0.75 and scoring_result.score_breakdown["role_type"] == "SENIOR")
-                
-                # Check Role Fit Threshold (GATE)
-                role_type = scoring_result.score_breakdown["role_type"]
-                role_weights = ScoringAgent.ROLE_WEIGHTS[role_type]
-                role_fit_threshold = role_weights["GATE"]
-                meets_threshold = final_agentic_score >= role_fit_threshold
+
                 
                 score_dict = {
                     "team_member_id": scoring_result.team_member_id,
                     "final_score": final_agentic_score,
+                    "is_qualified": is_qualified,
+                    "qualification_reason": scoring_result.detailed_breakdown.qualification_reason,
                     "base_agentic_score": scoring_result.match_score,
                     "ai_confidence_score": confidence_score,
-                    "ai_boost": ai_boost,
+                    "ai_boost": ai_boost if is_qualified else 0.0,
                     "ai_override_applied": ai_override_applied,
                     "ai_reasoning": ai_fit["reasoning"],
                     "role_type": role_type,
-                    "role_fit_threshold": role_fit_threshold,
-                    "meets_threshold": meets_threshold,
+                    "meets_threshold": is_qualified, # Threshold is now internal to ScoringAgent
+
                     "is_available": scoring_result.is_available,
                     "semantic_similarity": round(scoring_result.detailed_breakdown.semantic_similarity, 2),
                     "experience_score": round(scoring_result.detailed_breakdown.experience_score, 2),
@@ -215,13 +231,19 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched": scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,
+                        "qualification_status": "QUALIFIED" if scoring_result.is_qualified else "DISQUALIFIED",
+                        "qualification_reason": scoring_result.detailed_breakdown.qualification_reason
                     },
                     "total_m": len(mandatory_skill_ids),
-                    "weight_m": role_weights.get("M", 0.5),
-                    "weight_p": role_weights.get("P", 0.2),
-                    "weight_s": role_weights.get("S", 0.25),
-                    "reason": "Low Semantic Similarity (0.0)" if scoring_result.detailed_breakdown.semantic_similarity == 0.0 else "Baseline Evaluation"
+                    "weight_m": scoring_result.score_breakdown.get("weight_m", 0.0),
+                    "weight_p": scoring_result.score_breakdown.get("weight_p", 0.0),
+                    "weight_s": scoring_result.score_breakdown.get("weight_s", 0.0),
+                    "weight_c": scoring_result.score_breakdown.get("weight_c", 0.0),
+
+
+                    "reason": scoring_result.detailed_breakdown.qualification_reason
                 }
+
                 
                 # Log detailed walkthrough
                 ScoringAudit.log_candidate_walkthrough(score_dict)

@@ -81,9 +81,9 @@ def parse_requisition_with_llm(
                 {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
                 {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
             ],
-            temperature=0.0,
             response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
+
         
         if not content:
             logger.error("LLM parsing failed - no content returned")
@@ -95,12 +95,13 @@ def parse_requisition_with_llm(
         enriched_jd = {
             "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
             "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
-            "extracted_mandatory_skills": list(set(llm_output.get("extracted_mandatory_skills", []) + job_description.get("mandatory_skills", []))),
-            "extracted_preferred_skills": list(set(llm_output.get("extracted_preferred_skills", []) + job_description.get("preferred_skills", []))),
+            "extracted_mandatory_skills": list(set(llm_output.get("extracted_mandatory_skills", []) + (job_description.get("mandatory_skills") or []))),
+            "extracted_preferred_skills": list(set(llm_output.get("extracted_preferred_skills", []) + (job_description.get("preferred_skills") or []))),
             "experience": llm_output.get("experience", job_description.get("experience")),
             "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
             "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
-            "certifications_required": list(set(llm_output.get("certifications_required", []) + job_description.get("certifications_required", []))),
+            "certifications_required": list(set(llm_output.get("certifications_required", []) + (job_description.get("certifications_required") or job_description.get("certifications") or []))),
+
             
             # Original Payload fields preserved
             "client_name": job_description.get("client_name"),
@@ -112,10 +113,7 @@ def parse_requisition_with_llm(
         }
         
         # Track tokens and cost
-        cost = 0.0
-        if usage:
-            # Simple cost estimate if usage data is available
-            cost = (usage["prompt_tokens"] / 1_000_000 * 0.03) + (usage["completion_tokens"] / 1_000_000 * 0.06)
+        cost = llm_client.get_completion_cost(usage) if usage else 0.0
         
         metrics = {
             "agent_name": "requisition_parsing",

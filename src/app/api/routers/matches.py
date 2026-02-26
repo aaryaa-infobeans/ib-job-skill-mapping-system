@@ -92,11 +92,21 @@ async def get_matches(
             
             if checkpoint and checkpoint.state_json and "final_results" in checkpoint.state_json:
                 final_results = checkpoint.state_json["final_results"]
-                metrics = checkpoint.state_json.get("metrics", {})
+                
+                # Recover metrics from state
+                metrics_data = checkpoint.state_json.get("metrics")
+                if not metrics_data:
+                    # Fallback: metrics might be at top level
+                    metrics_data = {
+                        "total_evaluated": checkpoint.state_json.get("total_evaluated"),
+                        "total_qualified": checkpoint.state_json.get("total_qualified"),
+                        "token_count": checkpoint.state_json.get("cumulative_tokens"),
+                        "cost_usd": checkpoint.state_json.get("cumulative_cost_usd")
+                    }
                 
                 # Re-populate cache for subsequent requests
-                store_results(correlation_id, final_results, metrics)
-                cached_data = {"results": final_results, "metrics": metrics}
+                store_results(correlation_id, final_results, metrics_data)
+                cached_data = {"results": final_results, "metrics": metrics_data}
             else:
                 # No results checkpoint found - return completed with zero matches
                 return MatchesResponse(
@@ -177,24 +187,36 @@ async def get_matches(
     ]
     
     # Get metrics from cache
-    metrics = None
+    metrics_obj = None
     if cached_metrics:
-        metrics = MatchesMetrics(
+        metrics_obj = MatchesMetrics(
             total_evaluated=cached_metrics.get("total_evaluated"),
             total_qualified=cached_metrics.get("total_qualified"),
-            token_count=cached_metrics.get("token_count"),
-            cost_usd=round(cached_metrics.get("cost_usd", 0.0), 4) if cached_metrics.get("cost_usd") is not None else None,
+            token_count=cached_metrics.get("token_count") or cached_metrics.get("cumulative_tokens"),
+            cost_usd=round(cached_metrics.get("cost_usd") or cached_metrics.get("cumulative_cost_usd", 0.0), 4) 
+                     if (cached_metrics.get("cost_usd") is not None or cached_metrics.get("cumulative_cost_usd") is not None) 
+                     else None,
         )
         # Calculate qualification rate if possible
-        if metrics.total_evaluated and metrics.total_evaluated > 0:
-            rate = (metrics.total_qualified or 0) / metrics.total_evaluated
-            metrics.qualification_rate = round(rate, 2)
+        if metrics_obj.total_evaluated and metrics_obj.total_evaluated > 0:
+            rate = (metrics_obj.total_qualified or 0) / metrics_obj.total_evaluated
+            metrics_obj.qualification_rate = round(rate, 2)
     
+    # Check if we have any fields set in metrics
+    has_metrics = False
+    if metrics_obj:
+        # Pydantic v2 uses model_fields instead of __fields__
+        fields = getattr(metrics_obj, "model_fields", getattr(metrics_obj, "__fields__", {}))
+        for field in fields:
+            if getattr(metrics_obj, field, None) is not None:
+                has_metrics = True
+                break
+
     return MatchesResponse(
         correlation_id=correlation_id,
         status="COMPLETED",
         total_matches=len(matches),
         matches=matches,
-        metrics=metrics if any(getattr(metrics, f, None) is not None for f in metrics.__fields__) else None,
+        metrics=metrics_obj if has_metrics else None,
     )
 
