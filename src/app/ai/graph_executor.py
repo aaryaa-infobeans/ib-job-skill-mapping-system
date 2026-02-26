@@ -82,42 +82,46 @@ def execute_graph_with_audit(
                     processed_logs_count = len(llm_logs)
                 
                 # 2b. Prepare and save checkpoint
-                checkpoint_state = {"correlation_id": correlation_id}
+                # We save a subset of the state to keep the DB lean but sufficient for resumption.
+                # Redundant fields like llm_call_logs are excluded as they are in their own table.
+                checkpoint_state = {
+                    "correlation_id": correlation_id,
+                    "parsed_jd": current_state.get("parsed_jd"),
+                    "normalized_skills": current_state.get("normalized_skills"),
+                    "retrieved_candidates": current_state.get("retrieved_candidates"),
+                    "candidate_scores": current_state.get("candidate_scores"),
+                    "final_results": current_state.get("final_results"),
+                    "total_evaluated": current_state.get("total_evaluated"),
+                    "total_qualified": current_state.get("total_qualified"),
+                    "cumulative_tokens": current_state.get("cumulative_tokens"),
+                    "cumulative_cost_usd": current_state.get("cumulative_cost_usd"),
+                }
                 
+                # Update status based on node completion
                 if node_name == "requisition_parsing":
-                    checkpoint_state["parsed_jd"] = current_state.get("parsed_jd")
-                    # Update status to MATCHING (3) after JD is parsed
                     if req_record:
                         repo.update_requisition_status(req_record.id, 3) # MATCHING
                         db.commit()
-                elif node_name == "skill_normalization":
-                    checkpoint_state["normalized_skills"] = current_state.get("normalized_skills")
-                elif node_name == "embedding":
-                    checkpoint_state["model"] = current_state.get("embedding_result", {}).get("model")
-                elif node_name == "rag_retrieval":
-                    checkpoint_state["candidate_count"] = len(current_state.get("retrieved_candidates", []))
-                elif node_name == "matching_scoring":
-                    checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
-                elif node_name == "explanation_generation":
-                    checkpoint_state["candidate_count"] = len(current_state.get("candidate_scores", []))
-                    checkpoint_state["qualified_count"] = current_state.get("total_qualified", 0)
-                elif node_name == "result_aggregation":
-                    checkpoint_state["final_results"] = current_state.get("final_results", [])
-                    checkpoint_state["metrics"] = {
-                        "total_evaluated": current_state.get("total_evaluated", 0),
-                        "total_qualified": current_state.get("total_qualified", 0),
-                        "token_count": current_state.get("cumulative_tokens", 0),
-                        "cost_usd": current_state.get("cumulative_cost_usd", 0.0),
-                    }
-                    checkpoint_state["status"] = "completed"
                 
-                # Handle error state if node reported an error
-                if current_state.get("error_message"):
-                    checkpoint_state["error_message"] = current_state["error_message"]
-                    save_checkpoint(db, request_id, "error", checkpoint_state)
-                    if req_record:
-                        repo.update_requisition_status(req_record.id, 5) # FAILED
-                        db.commit()
+                # Handle error state if node reported a FATAL error
+                error_message = current_state.get("error_message")
+                if error_message:
+                    checkpoint_state["error_message"] = error_message
+                    # Save with actual node name but include error_message
+                    save_checkpoint(
+                        db=db,
+                        request_id=request_id,
+                        node_name=node_name,
+                        state=checkpoint_state,
+                        token_count=token_count
+                    )
+                    
+                    # If it's a fatal error (not a fallback), we might want to stop
+                    if "fallback" not in error_message.lower():
+                        logger.error(f"Fatal error in node {node_name}: {error_message}")
+                        if req_record:
+                            repo.update_requisition_status(req_record.id, 5) # FAILED
+                            db.commit()
                 else:
                     # Save normal node checkpoint
                     save_checkpoint(

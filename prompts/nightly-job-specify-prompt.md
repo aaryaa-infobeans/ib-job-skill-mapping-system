@@ -24,7 +24,7 @@ Generate a **complete technical specification** for a **Python-based nightly bat
    * `team_member`
    * `team_member_allocation`
    * `team_member_skill`
-   * `skill_certification`
+   * `team_member_skill_certification`
 5. Uses **Alembic** to manage **database schema migrations**
 6. Retries **only the failed batch** based on `batch_id`
 7. Runs as a **Python script schedulable nightly at 2:00 AM IST**

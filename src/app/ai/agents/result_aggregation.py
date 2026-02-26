@@ -25,19 +25,16 @@ def determine_fit_level(final_score: float) -> str:
 
 
 def result_aggregation_node(state: GraphState) -> GraphState:
-    """Format final ranked list of candidates for API response.
-    
-    This node:
-    1. Filters candidates by FIT_SCORE_THRESHOLD
-    2. Takes candidate_scores from state
-    3. Formats each candidate for API response
-    4. Derives fit_level from final_score
-    5. Includes availability information
-    6. Populates state.final_results with sorted list
+    """
+    Phase 2: Qualification Decision.
+    Establishes QUALIFIED/DISQUALIFIED status based on SPEC-003.
     """
     import os
     
-    logger.info("Executing Result_Aggregation_Agent node")
+    logger.info("Executing Result_Aggregation_Agent node (Phase 2)")
+    
+    # Reset error message
+    state["error_message"] = None
     
     candidate_scores = state.get("candidate_scores")
     if not candidate_scores:
@@ -47,111 +44,67 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         state["total_qualified"] = 0
         return state
     
-    # Load FIT_SCORE_THRESHOLD from environment
-    fit_score_threshold = float(os.getenv("FIT_SCORE_THRESHOLD", "0.5"))
-    
-    # Filter candidates by threshold (COST OPTIMIZATION: Only explain qualified candidates)
-    qualified_candidates = [
-        c for c in candidate_scores 
-        if c.get("final_score", 0) >= fit_score_threshold
-    ]
-    
-    logger.info(
-        f"Filtered candidates: {len(qualified_candidates)} qualified out of {len(candidate_scores)} evaluated "
-        f"(threshold: {fit_score_threshold:.2f})"
-    )
-    
     # Track evaluation metrics
     state["total_evaluated"] = len(candidate_scores)
-    state["total_qualified"] = len(qualified_candidates)
     
-    # Format results for API response
     final_results = []
+    total_qualified = 0
     
-    for candidate in qualified_candidates:
-        # Determine fit level from score
-        fit_level = determine_fit_level(candidate["final_score"])
+    for candidate in candidate_scores:
+        final_score = candidate.get("final_score", 0.0)
+        is_qualified = candidate.get("is_qualified", False)
+        qualification_reason = candidate.get("qualification_reason", "No reason provided")
         
-        # Build explanation list - start with LLM-generated detailed explanation if available
+        status = "QUALIFIED" if is_qualified else "DISQUALIFIED"
+        if is_qualified:
+            total_qualified += 1
+            
+        fit_level = determine_fit_level(final_score)
+        
+        # Build explanation list (Legacy support, but primarily narrative based now)
         explanation = []
+        explanation.append(f"Status: {status}")
+        explanation.append(f"Reasoning: {qualification_reason}")
         
-        # Add detailed LLM explanation if available
-        detailed_explanation = candidate.get("detailed_explanation", {})
-        if detailed_explanation:
-            # Include LLM-generated summary and analysis
-            if "summary" in detailed_explanation:
-                explanation.append(f"📌 {detailed_explanation['summary']}")
+        # Add AI reasoning if available
+        ai_reasoning = candidate.get("ai_reasoning", "")
+        if ai_reasoning:
+            explanation.append(f"🧠 AI Analysis: {ai_reasoning}")
+
             
-            if detailed_explanation.get("strengths"):
-                strengths_str = ", ".join(detailed_explanation["strengths"])
-                explanation.append(f"✅ Strengths: {strengths_str}")
-            
-            if detailed_explanation.get("gaps"):
-                gaps_str = ", ".join(detailed_explanation["gaps"])
-                explanation.append(f"⚠️  Gaps: {gaps_str}")
-            
-            if "fit_analysis" in detailed_explanation:
-                explanation.append(f"📊 Fit Analysis: {detailed_explanation['fit_analysis']}")
-            
-            if "recommendation" in detailed_explanation:
-                explanation.append(f"💡 Recommendation: {detailed_explanation['recommendation']}")
-        else:
-            # Fallback to structured summary if LLM explanation not available
-            explanation.append(
-                f"Overall match score: {candidate['final_score']*100:.0f}% ({fit_level} fit)"
-            )
-            
-            # Add skill match details
-            skill_score = candidate.get("skill_score", 0.0)
-            matched_skills = candidate.get("match_reasons", {}).get("skills_matched", [])
-            if matched_skills:
-                explanation.append(
-                    f"Skills matched: {', '.join(matched_skills)} (score: {skill_score*100:.0f}%)"
-                )
-            else:
-                explanation.append(f"Skill match score: {skill_score*100:.0f}%")
-            
-            # Add experience details
-            experience_score = candidate.get("experience_score", 0.0)
-            explanation.append(f"Experience match score: {experience_score*100:.0f}%")
-            
-            # Add certification details
-            certification_score = candidate.get("certification_score", 0.0)
-            cert_details = candidate.get("match_reasons", {}).get("certification_matched", [])
-            if cert_details:
-                explanation.append(f"Certifications matched: {', '.join(cert_details)} (score: {certification_score*100:.0f}%)")
-            else:
-                explanation.append(f"Certification match score: {certification_score*100:.0f}%")
-            
-            # Add availability details
-            is_available = candidate.get("is_available", False)
-            availability_score = candidate.get("availability_score", 0.0)
-            availability_pct = availability_score * 100
-            explanation.append(
-                f"Availability: {availability_pct:.0f}% capacity "
-                f"({'Available' if is_available else 'Limited availability'})"
-            )
-        
-        # Create result entry with detailed explanation
+        # Create result entry
         result_entry = {
             "team_member_id": candidate["team_member_id"],
-            "profile_score": round(candidate["final_score"] * 100, 2),
+            "profile_score": round(final_score * 100, 2),
             "fit_level": fit_level,
+            "status": status,
             "availability_match": candidate.get("is_available", False),
             "explanation": explanation,
             "detailed_breakdown": {
-                "llm_explanation": detailed_explanation if detailed_explanation else None,
+                "phase0_ledger": candidate.get("phase0_ledger"),
+                "score_breakdown": candidate.get("score_breakdown"),
                 "match_reasons": candidate.get("match_reasons", {}),
-                "certifications": candidate.get("certifications", []),
+                "ai_confidence_score": candidate.get("ai_confidence_score"),
+                "ai_boost_applied": candidate.get("ai_boost", 0.0),
+                "role_type": candidate.get("role_type"),
+                "is_qualified": is_qualified,
+                "qualification_reason": qualification_reason
             }
         }
+
         
         final_results.append(result_entry)
     
-    # Results are already sorted by final_score from matching_scoring_node
+    state["total_qualified"] = total_qualified
     state["final_results"] = final_results
     
-    logger.info(f"Result_Aggregation_Agent completed with {len(final_results)} results")
-    logger.debug(f"Top 3 candidates: {[r['team_member_id'] for r in final_results[:3]]}")
+    # Consolidate metrics for easier retrieval and caching
+    state["metrics"] = {
+        "total_evaluated": len(final_results),
+        "total_qualified": total_qualified,
+        "token_count": state.get("cumulative_tokens", 0),
+        "cost_usd": state.get("cumulative_cost_usd", 0.0)
+    }
     
+    logger.info(f"Phase 2 completed: {total_qualified} qualified out of {len(final_results)} evaluated")
     return state

@@ -41,7 +41,7 @@ class TestMigrationImpactAnalysis:
             "team_member",
             "team_member_allocation",
             "team_member_skill",
-            "skill_certification",
+            "team_member_team_member_skill_certification",
             "langgraph_checkpoints",
             "alembic_version",
         }

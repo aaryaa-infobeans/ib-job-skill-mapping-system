@@ -147,7 +147,7 @@ def resume_requisition(request_id: str, db: Session) -> Optional[Dict[str, Any]]
                 else:
                     logger.error(f"Fatal error in node {node_name}: {error_msg}")
                     save_checkpoint(db, request_id, "error", {"error_message": error_msg, "correlation_id": correlation_id})
-                    repo.update_requisition_status(req.id, 5) # FAILED status
+                    repo.update_requisition_status(req_obj.id, 5) # FAILED status
                     db.commit()
                     return current_state
             

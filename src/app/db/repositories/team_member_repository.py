@@ -14,7 +14,7 @@ from app.api.schemas.team_member import (
 )
 from app.db.models.models import (
     CategoryMaster,
-    SkillCertification,
+    TeamMemberSkillCertification,
     SkillMaster,
     TeamMember,
     TeamMemberAllocation,
@@ -177,8 +177,8 @@ class TeamMemberRepository:
                     existing_cert = None
                     if cert.certification_id:
                         existing_cert = (
-                            self.db.query(SkillCertification)
-                            .filter(SkillCertification.certification_id == cert.certification_id)
+                            self.db.query(TeamMemberSkillCertification)
+                            .filter(TeamMemberSkillCertification.certification_id == cert.certification_id)
                             .first()
                         )
 
@@ -188,7 +188,7 @@ class TeamMemberRepository:
                         existing_cert.issued_date = cert.issued_date
                         existing_cert.valid_till = cert.valid_till
                     else:
-                        new_cert = SkillCertification(
+                        new_cert = TeamMemberSkillCertification(
                             certification_id=cert.certification_id,
                             team_member_id=team_member_id,
                             skill_id=skill_data.skill_id,

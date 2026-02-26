@@ -1381,7 +1381,7 @@ tests/cron/unit/db/test_repositories.py
 - team_member: team_member_id, designation, profile_type, is_active (derived from team_member_status), experience_in_months, base_location, work_type (from work-mode: wfh/wfo/hybrid), profile_url (from profile)
 - team_member_allocation: team_member_id, project_id, allocation_percentage, start_date, end_date, billable, is_deleted
 - team_member_skill: team_member_id, skill_id, rating, experience_in_months, is_deleted (from payload)
-- skill_certification: certifications array in payload (if not empty)
+- team_member_skill_certification: certifications array in payload (if not empty)
 
 **Acceptance Criteria:**
 - [ ] All UPSERT methods implemented
@@ -1453,7 +1453,7 @@ tests/cron/unit/processing/test_batch_processor.py
    - UPSERT team_member (map work-mode → work_type, profile → profile_url, team_member_status → is_active)
    - UPSERT team_member_skill using skill.rating, skill.experience_in_months, skill.is_deleted
    - UPSERT team_member_allocation from allocations array
-   - UPSERT skill_certification from skill.certifications array (if not empty)
+   - UPSERT team_member_skill_certification from skill.certifications array (if not empty)
 4. Update to SUCCESS/FAILED
 5. Audit log entry
 

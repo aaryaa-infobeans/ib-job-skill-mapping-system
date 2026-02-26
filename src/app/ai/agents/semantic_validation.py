@@ -7,31 +7,7 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Global client cache
-_client_cache = {}
-
-
-def _get_openai_client():
-    """Get or create OpenAI client."""
-    if "client" in _client_cache:
-        return _client_cache["client"], True
-        
-    from app.settings import settings
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    
-    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
-        logger.warning("⚠️  OPENAI_API_KEY not configured for semantic validation")
-        return None, False
-        
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        _client_cache["client"] = client
-        return client, True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
-        return None, False
-
+from app.ai.utils.llm_client import llm_client
 
 SEMANTIC_VALIDATION_PROMPT = """You are a data quality validator for job requisitions. Your task is to identify nonsensical, garbage, or invalid values in the requisition data.
 
@@ -59,31 +35,10 @@ If all data appears valid and professional, return:
 Be strict but reasonable. Minor typos are acceptable, but obvious garbage data (random characters, keyboard mashing, nonsensical values) should be flagged.
 """
 
-
 def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) -> Tuple[bool, List[str]]:
     """
     Use LLM to validate semantic quality of requisition data.
-    
-    This function checks if the requisition contains meaningful, professional data
-    or if it's filled with garbage/nonsensical values.
-    
-    Args:
-        job_description: Job description dict from requisition_input
-        max_retries: Maximum number of retry attempts for LLM call
-        
-    Returns:
-        Tuple of (is_valid, validation_errors)
-        - is_valid: True if data appears valid, False if garbage detected
-        - validation_errors: List of semantic validation error messages
     """
-    client, llm_enabled = _get_openai_client()
-    
-    if not llm_enabled:
-        logger.warning("⚠️  LLM not available for semantic validation - skipping quality check")
-        # If LLM is not available, we can't do semantic validation
-        # Return True to allow processing (basic validation already passed)
-        return True, []
-    
     try:
         # Prepare data for validation
         validation_context = {
@@ -98,19 +53,21 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         
         logger.info("🔍 Running LLM semantic validation...")
         
-        from app.settings import settings
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4o-mini",
+        content, usage = llm_client.chat_completion(
             messages=[
                 {"role": "system", "content": SEMANTIC_VALIDATION_PROMPT},
                 {"role": "user", "content": f"Validate this requisition data:\n{json.dumps(validation_context, indent=2)}"}
             ],
-            temperature=0.0,  # Deterministic validation
-            max_tokens=500
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
+
         
+        if not content:
+            logger.warning("⚠️  LLM call failed for semantic validation - skipping quality check")
+            return True, []
+
         # Parse LLM response
-        llm_output = json.loads(response.choices[0].message.content)
+        llm_output = json.loads(content)
         
         is_valid = llm_output.get("is_valid", True)
         validation_errors = llm_output.get("validation_errors", [])

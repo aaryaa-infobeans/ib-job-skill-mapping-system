@@ -131,8 +131,8 @@ team_member_skill = Table(
     extend_existing=True,
 )
 
-skill_certification = Table(
-    "skill_certification",
+team_member_skill_certification = Table(
+    "team_member_skill_certification",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("certification_id", String(100), nullable=True),
@@ -206,7 +206,7 @@ __all__ = [
     "team_member",
     "team_member_allocation",
     "team_member_skill",
-    "skill_certification",
+    "team_member_skill_certification",
     # Auth tables
     "auth_clients",
     # Requisition tables

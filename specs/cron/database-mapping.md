@@ -144,8 +144,8 @@ CREATE TABLE team_member_allocation (
     UNIQUE (team_member_id, project_id, start_date)
 );
 
--- 6. skill_certification (depends on team_member + skill_master)
-CREATE TABLE skill_certification (
+-- 6. team_member_skill_certification (depends on team_member + skill_master)
+CREATE TABLE team_member_skill_certification (
     certification_id SERIAL PRIMARY KEY,
     team_member_id VARCHAR(50) REFERENCES team_member(team_member_id),
     skill_id VARCHAR(50) REFERENCES skill_master(skill_id),
@@ -172,7 +172,7 @@ graph TD
     C --> D[3. Upsert team_member]
     D --> E[4. Upsert team_member_skill]
     D --> F[5. Upsert team_member_allocation]
-    C --> G[6. Upsert skill_certification]
+    C --> G[6. Upsert team_member_skill_certification]
     D --> G
     E --> H[Commit Transaction]
     F --> H
@@ -188,7 +188,7 @@ graph TD
 | **team_member** | `team_member_id` | UPSERT (ON CONFLICT UPDATE all fields) |
 | **team_member_skill** | `(team_member_id, skill_id)` | UPSERT (ON CONFLICT UPDATE rating, experience) |
 | **team_member_allocation** | `(team_member_id, project_id, start_date)` | UPSERT (ON CONFLICT UPDATE allocation_percentage, end_date) |
-| **skill_certification** | `(team_member_id, skill_id, certification_name)` | UPSERT (ON CONFLICT UPDATE issued_by, dates, url) |
+| **team_member_skill_certification** | `(team_member_id, skill_id, certification_name)` | UPSERT (ON CONFLICT UPDATE issued_by, dates, url) |
 
 ---
 
@@ -348,12 +348,12 @@ for member in payload["team_members"]:
 | `allocations[].start_date` | `start_date` | None | ISO 8601 date |
 | `allocations[].end_date` | `end_date` | None | Nullable |
 
-### 5.6 Payload → skill_certification
+### 5.6 Payload → team_member_skill_certification
 
 ```python
 for member in payload["team_members"]:
     for cert in member.get("certifications", []):
-        stmt = insert(skill_certification).values(
+        stmt = insert(team_member_skill_certification).values(
             team_member_id=member["team_member_id"],
             skill_id=cert["skill_id"],
             certification_name=cert["certification_name"],
@@ -752,7 +752,7 @@ SELECT 'team_member_skill', COUNT(*) FROM team_member_skill
 UNION ALL
 SELECT 'team_member_allocation', COUNT(*) FROM team_member_allocation
 UNION ALL
-SELECT 'skill_certification', COUNT(*) FROM skill_certification;
+SELECT 'team_member_skill_certification', COUNT(*) FROM team_member_skill_certification;
 ```
 
 ---

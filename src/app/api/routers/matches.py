@@ -1,18 +1,26 @@
 """Matches router."""
 
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import verify_token
 from app.ai.results_cache import get_results
 from app.db.repositories.requisition_repository import RequisitionRepository
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 
 router = APIRouter(prefix="/jd-skill-mapping", tags=["matches"])
 
+async def background_resumption(request_id: str):
+    """Background task to resume processing."""
+    db = SessionLocal()
+    try:
+        from app.ai.resumption import resume_requisition
+        resume_requisition(request_id, db)
+    finally:
+        db.close()
 
 class MatchResult(BaseModel):
     """Individual match result with detailed explanation."""
@@ -50,6 +58,7 @@ class MatchesResponse(BaseModel):
 @router.get("/{correlation_id}/matches", response_model=MatchesResponse)
 async def get_matches(
     correlation_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     token: dict = Depends(verify_token),
 ):
@@ -83,11 +92,21 @@ async def get_matches(
             
             if checkpoint and checkpoint.state_json and "final_results" in checkpoint.state_json:
                 final_results = checkpoint.state_json["final_results"]
-                metrics = checkpoint.state_json.get("metrics", {})
+                
+                # Recover metrics from state
+                metrics_data = checkpoint.state_json.get("metrics")
+                if not metrics_data:
+                    # Fallback: metrics might be at top level
+                    metrics_data = {
+                        "total_evaluated": checkpoint.state_json.get("total_evaluated"),
+                        "total_qualified": checkpoint.state_json.get("total_qualified"),
+                        "token_count": checkpoint.state_json.get("cumulative_tokens"),
+                        "cost_usd": checkpoint.state_json.get("cumulative_cost_usd")
+                    }
                 
                 # Re-populate cache for subsequent requests
-                store_results(correlation_id, final_results, metrics)
-                cached_data = {"results": final_results, "metrics": metrics}
+                store_results(correlation_id, final_results, metrics_data)
+                cached_data = {"results": final_results, "metrics": metrics_data}
             else:
                 # No results checkpoint found - return completed with zero matches
                 return MatchesResponse(
@@ -101,9 +120,8 @@ async def get_matches(
             
             # Retrieve error message from checkpoint
             error_checkpoint = db.query(LangGraphCheckpoint).filter(
-                LangGraphCheckpoint.request_id == requisition.request_id,
-                LangGraphCheckpoint.node_name == "error"
-            ).first()
+                LangGraphCheckpoint.request_id == requisition.request_id
+            ).order_by(LangGraphCheckpoint.created_at.desc()).first()
             
             error_message = None
             validation_errors = None
@@ -129,6 +147,22 @@ async def get_matches(
             )
         else:
             # Requisition is still being processed
+            # CHECK FOR STUCK REQUISITION
+            # If processing for more than 5 minutes and no results in cache, trigger resumption
+            if requisition.received_at:
+                processing_time = datetime.utcnow() - requisition.received_at
+                if processing_time > timedelta(minutes=5):
+                    from app.ai.audit import get_checkpoints_for_request
+                    checkpoints = get_checkpoints_for_request(db, requisition.request_id)
+                    
+                    # Only resume if we have some checkpoints but not COMPLETED
+                    if checkpoints:
+                        # Check if we already tried to resume recently (e.g. within last 2 minutes)
+                        # We can use the last checkpoint's creation time to avoid spamming resumption
+                        last_cp_time = checkpoints[-1].created_at if checkpoints else requisition.received_at
+                        if datetime.utcnow() - last_cp_time > timedelta(minutes=2):
+                            background_tasks.add_task(background_resumption, requisition.request_id)
+            
             return MatchesResponse(
                 correlation_id=correlation_id,
                 status="PROCESSING",
@@ -153,24 +187,36 @@ async def get_matches(
     ]
     
     # Get metrics from cache
-    metrics = None
+    metrics_obj = None
     if cached_metrics:
-        metrics = MatchesMetrics(
+        metrics_obj = MatchesMetrics(
             total_evaluated=cached_metrics.get("total_evaluated"),
             total_qualified=cached_metrics.get("total_qualified"),
-            token_count=cached_metrics.get("token_count"),
-            cost_usd=round(cached_metrics.get("cost_usd", 0.0), 4) if cached_metrics.get("cost_usd") is not None else None,
+            token_count=cached_metrics.get("token_count") or cached_metrics.get("cumulative_tokens"),
+            cost_usd=round(cached_metrics.get("cost_usd") or cached_metrics.get("cumulative_cost_usd", 0.0), 4) 
+                     if (cached_metrics.get("cost_usd") is not None or cached_metrics.get("cumulative_cost_usd") is not None) 
+                     else None,
         )
         # Calculate qualification rate if possible
-        if metrics.total_evaluated and metrics.total_evaluated > 0:
-            rate = (metrics.total_qualified or 0) / metrics.total_evaluated
-            metrics.qualification_rate = round(rate, 2)
+        if metrics_obj.total_evaluated and metrics_obj.total_evaluated > 0:
+            rate = (metrics_obj.total_qualified or 0) / metrics_obj.total_evaluated
+            metrics_obj.qualification_rate = round(rate, 2)
     
+    # Check if we have any fields set in metrics
+    has_metrics = False
+    if metrics_obj:
+        # Pydantic v2 uses model_fields instead of __fields__
+        fields = getattr(metrics_obj, "model_fields", getattr(metrics_obj, "__fields__", {}))
+        for field in fields:
+            if getattr(metrics_obj, field, None) is not None:
+                has_metrics = True
+                break
+
     return MatchesResponse(
         correlation_id=correlation_id,
         status="COMPLETED",
         total_matches=len(matches),
         matches=matches,
-        metrics=metrics if any(getattr(metrics, f, None) is not None for f in metrics.__fields__) else None,
+        metrics=metrics_obj if has_metrics else None,
     )
 

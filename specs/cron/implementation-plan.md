@@ -448,7 +448,7 @@ pytest tests/ -v
 
 #### Task 1.1: Create Alembic Migration 002
 
-**Description:** Generate Alembic migration for `ingestion_batch_state` and `ingestion_audit_log` tables. Note that the core tables (`category_master`, `skill_master`, `team_member`, `team_member_allocation`, `team_member_skill`, `skill_certification`) already exist from migration 001 and will be reused.
+**Description:** Generate Alembic migration for `ingestion_batch_state` and `ingestion_audit_log` tables. Note that the core tables (`category_master`, `skill_master`, `team_member`, `team_member_allocation`, `team_member_skill`, `team_member_skill_certification`) already exist from migration 001 and will be reused.
 
 **Location:** `alembic/versions/0002_nightly_batch_ingestion_schema.py`
 
@@ -743,7 +743,7 @@ def test_connection(engine: Engine) -> bool:
 
 #### Task 1.4: Define Database Metadata
 
-**Description:** Define SQLAlchemy metadata for new batch state tables. Note: Existing tables (category_master, skill_master, team_member, team_member_allocation, team_member_skill, skill_certification) are already defined in src/app/db/models.py and will be imported from there.
+**Description:** Define SQLAlchemy metadata for new batch state tables. Note: Existing tables (category_master, skill_master, team_member, team_member_allocation, team_member_skill, team_member_skill_certification) are already defined in src/app/db/models.py and will be imported from there.
 
 **Location:** `app/cron/db/metadata.py`
 
@@ -1369,7 +1369,7 @@ from src.app.db.models import (
     team_member,
     team_member_skill,
     team_member_allocation,
-    skill_certification
+    team_member_skill_certification
 )
 
 from app.cron.db.metadata import ingestion_batch_state, ingestion_audit_log
@@ -1388,7 +1388,7 @@ class TeamMemberRepository:
                                start_date, end_date, billable, is_deleted
     - team_member_skill: team_member_id, skill_id (PK), rating, 
                          experience_in_months, is_deleted
-    - skill_certification: id (GENERATED ALWAYS), certification_id, team_member_id,
+    - team_member_skill_certification: id (GENERATED ALWAYS), certification_id, team_member_id,
                            skill_id, certificate, issuer, issued_date, valid_till
     """
     
@@ -1565,10 +1565,10 @@ class TeamMemberRepository:
             # UPSERT skill master first
             skill_id = self.upsert_skill(cert_data["skill_name"], category_id)
             
-            # Note: skill_certification has composite FK (team_member_id, skill_id) to team_member_skill
+            # Note: team_member_skill_certification has composite FK (team_member_id, skill_id) to team_member_skill
             # Ensure team_member_skill exists first
             
-            stmt = pg_insert(skill_certification).values(
+            stmt = pg_insert(team_member_skill_certification).values(
                 certification_id=cert_data.get("certification_id"),
                 team_member_id=team_member_id,
                 skill_id=skill_id,

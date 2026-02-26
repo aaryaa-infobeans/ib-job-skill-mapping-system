@@ -11,27 +11,7 @@ from app.ai.state import GraphState
 logger = logging.getLogger(__name__)
 from app.settings import settings
 
-# Global client cache
-_client_cache = {}
-
-def _get_openai_client():
-    if "client" in _client_cache:
-        return _client_cache["client"], True
-        
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    logger.info(f"DEBUG REQ PARSING: api_key length: {len(api_key) if api_key else 0}")
-    if not api_key or api_key == "sk-your-openai-api-key-here" or len(api_key) < 20:
-        logger.warning("⚠️  OPENAI_API_KEY not configured for parsing")
-        return None, False
-        
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        _client_cache["client"] = client
-        return client, True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
-        return None, False
+from app.ai.utils.llm_client import llm_client
 
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
@@ -76,22 +56,7 @@ def parse_requisition_with_llm(
     job_description: dict,
     max_retries: int = 2
 ) -> Optional[dict]:
-    """Enrich requisition data using LLM.
-    
-    This function merges the original payload with LLM-normalized and extracted data.
-    
-    Args:
-        job_description: Job description dict from requisition_input
-        max_retries: Maximum number of retry attempts
-    
-    Returns:
-        Enriched requisition dict (ParsedJD) or None on failure
-    """
-    client, llm_enabled = _get_openai_client()
-    if not llm_enabled:
-        logger.info("LLM not enabled, using fallback parsing logic")
-        return _fallback_parse(job_description), None
-    
+    """Enrich requisition data using LLM."""
     try:
         # Prepare context for LLM
         context = {
@@ -111,27 +76,32 @@ def parse_requisition_with_llm(
                 return obj.isoformat()
             raise TypeError(f"Type {type(obj)} not serializable")
 
-        response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4",
+        content, usage = llm_client.chat_completion(
             messages=[
                 {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
                 {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
             ],
-            temperature=0.0 # Deterministic extraction
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
+
         
-        llm_output = json.loads(response.choices[0].message.content)
+        if not content:
+            logger.error("LLM parsing failed - no content returned")
+            return _fallback_parse(job_description), None
+
+        llm_output = json.loads(content)
         
         # Merge LLM enrichment back into the full context
         enriched_jd = {
             "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
             "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
-            "extracted_mandatory_skills": llm_output.get("extracted_mandatory_skills", []),
-            "extracted_preferred_skills": llm_output.get("extracted_preferred_skills", []),
+            "extracted_mandatory_skills": list(set(llm_output.get("extracted_mandatory_skills", []) + (job_description.get("mandatory_skills") or []))),
+            "extracted_preferred_skills": list(set(llm_output.get("extracted_preferred_skills", []) + (job_description.get("preferred_skills") or []))),
             "experience": llm_output.get("experience", job_description.get("experience")),
             "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
             "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
-            "certifications_required": list(set(llm_output.get("certifications_required", []) + job_description.get("certifications_required", []))),
+            "certifications_required": list(set(llm_output.get("certifications_required", []) + (job_description.get("certifications_required") or job_description.get("certifications") or []))),
+
             
             # Original Payload fields preserved
             "client_name": job_description.get("client_name"),
@@ -143,18 +113,15 @@ def parse_requisition_with_llm(
         }
         
         # Track tokens and cost
-        usage = response.usage
-        cost = (usage.prompt_tokens / 1_000_000 * 0.03) + (usage.completion_tokens / 1_000_000 * 0.06)
+        cost = llm_client.get_completion_cost(usage) if usage else 0.0
         
-        # Add to LLM logs if request_id is available in a global way or passed
-        # For now, we will return the metrics along with enriched_jd
         metrics = {
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
-            "model": settings.openai_model or "gpt-4",
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "total_tokens": usage.total_tokens,
+            "model": usage.get("model", "unknown") if usage else "unknown",
+            "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
+            "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+            "total_tokens": usage.get("total_tokens", 0) if usage else 0,
             "cost_usd": cost,
             "status": "SUCCESS"
         }
@@ -168,7 +135,7 @@ def parse_requisition_with_llm(
         metrics = {
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
-            "model": settings.openai_model or "gpt-4",
+            "model": "unknown",
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "total_tokens": 0,
@@ -212,6 +179,8 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
     logger.info("Executing Requisition_Parsing_Agent node")
     logger.info(f"Processing request_id: {state['requisition_input']['request_id']}")
     
+    # Reset error message for this node run
+    state["error_message"] = None
     requisition_input = state.get("requisition_input")
     if not requisition_input:
         logger.error("Missing requisition_input in state")

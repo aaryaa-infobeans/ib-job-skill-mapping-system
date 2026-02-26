@@ -5,8 +5,9 @@ import sys
 import json
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any
+from jose import jwt
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -15,11 +16,25 @@ load_dotenv()
 # Add src to path
 sys.path.insert(0, "src")
 
+from app.settings import settings
 from app.main import app
 from fastapi.testclient import TestClient
 
+def generate_token():
+    """Generate a valid JWT token using application settings."""
+    secret_key = settings.get_jwt_secret_key()
+    if not secret_key:
+        return "no-secret-configured"
+    
+    payload = {
+        "sub": "test-client",
+        "client_id": "test-client",
+        "exp": datetime.now(timezone.utc) + timedelta(days=1)
+    }
+    return jwt.encode(payload, secret_key, algorithm=settings.jwt_algorithm)
+
 # API Authentication Token
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LWNsaWVudCIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50IiwiZXhwIjoxODAyNTk0MTE3fQ.AbwiHnkMJfs7YB7nf1zoQfx7CVzQiYCB_I02AVV-R8M"
+AUTH_TOKEN = generate_token()
 headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 # Create test client
@@ -49,18 +64,18 @@ payload = {
     "client_name": "LM",
     "job_description": {
         "client_name": "SMBC",
-        "title": "Salesforce Engineer",
-        "role": "Salesforce Engineer",
+        "title": "Python Engineer",
+        "role": "Python Engineer",
         "requisition_duration_month": 6,
         "expected_start_date": date.today().isoformat(),
         "priority": "HIGH",
         "location": ["Remote", "Pune", "Indore", "Bangalore"],
         "work_mode": ["Hybrid", "Remote", "WFO"],
-        "experience": {"min_months": 24, "max_months": 240},
-        "mandatory_skills": ["salesforce",  "Docker", "AWS"],
-        "preferred_skills": ["salesforce"],
-        "certifications_required": ["AWS Solutions Architect", "PHP Certified", "AI Certified"],
-        "jd_text": "We are looking for an experienced Salesforce engineer to build and deploy app in the cloud. Candidates MUST have AWS Solutions Architect certification.",
+        "experience": {"min_months": 12, "max_months": 240},
+        "mandatory_skills": [ "Python", "AI", "SQL"],
+        "preferred_skills": ["AWS", "ML"],
+        "certifications": ["AWS Solutions Architect - Associate"],
+        "jd_text": "Senior Engineer - expert in Python and AI ML with SQL knowledge",
     },
     "metadata": {"submitted_by": "recruiter@test.com", "department": "Engineering"},
 }

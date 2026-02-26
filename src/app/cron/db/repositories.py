@@ -18,7 +18,7 @@ from app.cron.db.metadata import (
     team_member,
     team_member_skill,
     team_member_allocation,
-    skill_certification,
+    team_member_skill_certification,
     ingestion_batch_state,
     ingestion_audit_log,
 )
@@ -34,7 +34,7 @@ class TeamMemberRepository:
     - team_member
     - team_member_skill
     - team_member_allocation
-    - skill_certification
+    - team_member_skill_certification
     """
     
     def __init__(self, session: AsyncSession):
@@ -385,12 +385,12 @@ class TeamMemberRepository:
             
             if certification_id:
                 # Update existing certification by certification_id
-                stmt = update(skill_certification).where(
-                    skill_certification.c.certification_id == certification_id
+                stmt = update(team_member_skill_certification).where(
+                    team_member_skill_certification.c.certification_id == certification_id
                 ).values(**values)
             else:
                 # Insert new certification (no natural key, so simple insert)
-                stmt = insert(skill_certification).values(**values)
+                stmt = insert(team_member_skill_certification).values(**values)
             
             await self.session.execute(stmt)
 
