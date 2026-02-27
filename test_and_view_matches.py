@@ -149,7 +149,12 @@ if response.status_code == 202:
             # Show Explanation Summary
             exp = match.get("explanation", [])
             if exp:
-                print(f"    Reasoning: {exp[0] if isinstance(exp, list) else exp}")
+                print("    Reasoning:")
+                if isinstance(exp, list):
+                    for line in exp:
+                        print(f"      - {line}")
+                else:
+                    print(f"      - {exp}")
 
     # Step 3: Database Analysis
     print("\n" + "="*60)
