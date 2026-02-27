@@ -61,15 +61,36 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             
         fit_level = determine_fit_level(final_score)
         
-        # Build explanation list (Legacy support, but primarily narrative based now)
+        # Build explanation list (Enriched with detailed narrative)
         explanation = []
-        explanation.append(f"Status: {status}")
-        explanation.append(f"Reasoning: {qualification_reason}")
+        detailed_exp = candidate.get("detailed_explanation")
         
-        # Add AI reasoning if available
-        ai_reasoning = candidate.get("ai_reasoning", "")
-        if ai_reasoning:
-            explanation.append(f"🧠 AI Analysis: {ai_reasoning}")
+        if detailed_exp:
+            # Use LLM-generated or Template-based detailed explanation
+            explanation.append(f"Summary: {detailed_exp.get('summary', 'No summary available')}")
+            
+            fit_analysis = detailed_exp.get('fit_analysis', '')
+            if fit_analysis:
+                explanation.append(f"Analysis: {fit_analysis}")
+            
+            strengths = detailed_exp.get('strengths', [])
+            if strengths:
+                explanation.append(f"Strengths: {', '.join(strengths)}")
+            
+            gaps = detailed_exp.get('gaps', [])
+            if gaps:
+                explanation.append(f"Gaps: {', '.join(gaps)}")
+                
+            rec = detailed_exp.get('recommendation', '')
+            if rec:
+                explanation.append(f"Recommendation: {rec}")
+        else:
+            # Legacy/Fallback if detailed_explanation is somehow missing
+            explanation.append(f"Status: {status}")
+            explanation.append(f"Reasoning: {qualification_reason}")
+            ai_reasoning = candidate.get("ai_reasoning", "")
+            if ai_reasoning:
+                explanation.append(f"🧠 AI Analysis: {ai_reasoning}")
 
             
         # Create result entry

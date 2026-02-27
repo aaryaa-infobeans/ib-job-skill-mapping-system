@@ -228,6 +228,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
+                        "certification_matched": scoring_result.detailed_breakdown.certification_matched,
+                        "certification_missing": scoring_result.detailed_breakdown.certification_missing,
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched": scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,

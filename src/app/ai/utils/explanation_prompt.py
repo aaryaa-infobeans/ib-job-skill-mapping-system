@@ -27,32 +27,37 @@ Required Location: {job_location}
 - Matched Preferred: {matched_preferred_skills}
 - Missing Preferred: {missing_preferred_skills}
 
-**3. Semantic Similarity & JD Alignment:**
+**3. Certifications:**
+- Matched Certs: {matched_certs}
+- Missing Certs: {missing_certs}
+
+**4. Semantic Similarity & JD Alignment:**
 - Semantic Similarity Score: {semantic_score:.2%}
 
-**4. Context Support Boost:**
+**5. Location & Work Mode Fit:**
+- Location Matched: {location_matched_icon}
+- Work Mode Matched: {work_mode_matched_icon}
+
+**6. Context Support Boost:**
 - Context Boost Applied: {context_boost:.4f} (Max 0.08)
-- (Includes Experience, Certifications, Location, Work Mode)
 - Candidate Experience: {candidate_experience} months
 
-**5. Penalties & Deficiencies:**
+**7. Penalties & Deficiencies:**
 - Total Penalties applied: {penalties:.2f}
-- (e.g. Skill-family mismatch, Missing mandatory groups)
 
-**6. AI Fit Confidence (AI Analysis):**
+**8. AI Fit Confidence (AI Analysis):**
 - AI Confidence Score: {ai_confidence:.2f}
 - AI Score Boost: +{ai_boost:.4f}
-- AI Semantic Override: {'Applied' if ai_override_applied else 'Not Applied'}
+- AI Semantic Override: {ai_override_icon}
 - AI Reasoning: {ai_reasoning}
 
 
 === YOUR TASK ===
-Generate a detailed, professional explanation (3-5 sentences) that:
-1. Summarizes the overall fit and status (Qualified/Disqualified)
-2. Highlights how the Role Category influenced the weights
-3. Explains specific strengths (e.g. Mandatory group satisfaction, AI boost)
-4. Addresses any penalties or gaps (e.g. Why the score was reduced)
-5. Provides a clear recommendation based on the ledger evidence.
+Generate a professional, concise "medium explanation" (3-4 sentences) that:
+1. Summarizes the overall fit and status (Qualified/Disqualified).
+2. Highlights key match strengths (Skills, Experience, Location, or AI Boost).
+3. Addresses critical gaps or penalties (Missing mandatory skills, Location mismatch, etc.).
+4. Provides a clear recommendation based on the ledger evidence.
 
 === RESPONSE FORMAT ===
 Provide the explanation as a JSON object with this structure:
@@ -60,7 +65,7 @@ Provide the explanation as a JSON object with this structure:
     "summary": "Brief overall assessment (1-2 sentences)",
     "strengths": ["Strength 1", "Strength 2"],
     "gaps": ["Gap 1", "Gap 2"],
-    "fit_analysis": "Detailed explanation of factors and ledger impact",
+    "fit_analysis": "Concise explanation of factors and ledger impact",
     "recommendation": "Brief recommendation"
 }}
 """
@@ -89,6 +94,11 @@ def format_explanation_prompt(
     candidate_experience: int,
     is_available: bool,
     ai_reasoning: str,
+    # New Phase 1 Ledger Fields
+    matched_certs: list = None,
+    missing_certs: list = None,
+    location_matched: bool = False,
+    work_mode_matched: bool = False
 ) -> str:
     """Format the Phase 1 Agentic Scoring Ledger prompt."""
     
@@ -107,11 +117,15 @@ def format_explanation_prompt(
         penalties=penalties,
         ai_confidence=ai_confidence,
         ai_boost=ai_boost,
-        ai_override_applied=ai_override_applied,
+        ai_override_icon="Applied" if ai_override_applied else "Not Applied",
         matched_mandatory_skills=", ".join(matched_mandatory_skills) if matched_mandatory_skills else "None",
         missing_mandatory_skills=", ".join(missing_mandatory_skills) if missing_mandatory_skills else "None",
         matched_preferred_skills=", ".join(matched_preferred_skills) if matched_preferred_skills else "None",
         missing_preferred_skills=", ".join(missing_preferred_skills) if missing_preferred_skills else "None",
+        matched_certs=", ".join(matched_certs) if matched_certs else "None",
+        missing_certs=", ".join(missing_certs) if missing_certs else "None",
+        location_matched_icon="✅" if location_matched else "❌",
+        work_mode_matched_icon="✅" if work_mode_matched else "❌",
         candidate_experience=candidate_experience,
         ai_reasoning=ai_reasoning
     )
