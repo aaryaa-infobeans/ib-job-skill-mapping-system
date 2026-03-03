@@ -298,3 +298,27 @@ class TeamMemberEmbedding(Base):
     # Use JSON for cross-compatibility
     extra_metadata = Column("metadata", JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RequisitionMatchTeamMemberFeedback(Base):
+    """Reviewer feedback for a candidate match."""
+
+    __tablename__ = "requisition_match_team_member_feedback"
+
+    id = Column(sa.Integer, primary_key=True, autoincrement=True)
+    team_member_id = Column(String(50), nullable=False)
+    correlation_id = Column(String(100), nullable=False)
+    reviewer_email = Column(String(100), nullable=False)
+    liked = Column(Boolean, nullable=False, default=False)
+    rating = Column(SmallInteger, nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+
+    # Constraints
+    __table_args__ = (
+        sa.UniqueConstraint('team_member_id', 'correlation_id', 'reviewer_email', name='uq_feedback_reviewer_match'),
+        sa.CheckConstraint('rating >= 1 AND rating <= 5', name='check_rating_range'),
+        sa.Index('idx_feedback_correlation_id', 'correlation_id'),
+        sa.Index('idx_feedback_team_member_id', 'team_member_id'),
+    )
