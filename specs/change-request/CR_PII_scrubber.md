@@ -1076,8 +1076,11 @@ AND pii_scrubbed = TRUE;
 - `functional/fr-6-logging-monitoring-audit.md` (Audit requirements)
 
 **Dependencies:**
-- SpaCy `en_core_web_trf` NER model (560MB)
+- SpaCy `en_core_web_sm` (CPU-based, 12.8MB) or `en_core_web_trf` (Transformer-based, 560MB)
+  - **Python 3.13:** Use `en_core_web_sm` (pre-built wheels available)
+  - **Python 3.11/3.12:** Use `en_core_web_trf` for higher accuracy (requires compatible wheels)
 - PostgreSQL ≥ 13 (for improved JSONB performance)
+- Redis ≥ 5.0 (for caching scrubbed data)
 
 **Backward Compatibility:**
 - **Breaking Change:** Existing unscrubbed embeddings incompatible with new queries

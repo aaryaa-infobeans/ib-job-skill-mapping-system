@@ -31,8 +31,10 @@ class PIIConfig:
     gpu_batch_size: int = 32
     
     # SpaCy Model
-    spacy_model: str = "en_core_web_trf"
-    ner_confidence_threshold: float = 0.90
+    # Using en_core_web_sm (CPU-based) for Python 3.13 compatibility
+    # For en_core_web_trf (transformer), use Python 3.11/3.12
+    spacy_model: str = "en_core_web_sm"
+    ner_confidence_threshold: float = 0.85  # Adjusted for CPU model (was 0.90 for transformer)
     
     # Tokenization
     tokenization_salt_env_var: str = "PII_TOKENIZATION_SALT"
@@ -150,9 +152,11 @@ class PIIConfig:
         Returns:
             PIIConfig: Validated configuration
         """
-        return cls(
+        config = cls(
             use_gpu=os.getenv("PII_USE_GPU", "true").lower() == "true",
             cuda_device=int(os.getenv("PII_CUDA_DEVICE", "0")),
             gpu_batch_size=int(os.getenv("PII_GPU_BATCH_SIZE", "32")),
             enable_audit=os.getenv("PII_ENABLE_AUDIT", "true").lower() == "true",
         )
+        logger.info(f"PIIConfig.from_env() created with spacy_model={config.spacy_model}")
+        return config

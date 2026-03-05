@@ -48,7 +48,7 @@ def upgrade() -> None:
     # Create audit table
     op.create_table(
         'pii_scrub_audit',
-        sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column('id', sa.BigInteger(), autoincrement=True),
         sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('NOW()')),
         sa.Column('operation', sa.String(50), nullable=False),  # 'scrub', 'tokenize', 'validate'
         sa.Column('entity_type', sa.String(50), nullable=True),  # 'requisition', 'team_member'
@@ -63,6 +63,9 @@ def upgrade() -> None:
         sa.Column('user_id', sa.BigInteger(), nullable=True),
         sa.Column('session_id', sa.String(100), nullable=True),
         sa.Column('metadata', postgresql.JSONB(), nullable=True),  # Additional context
+        
+        # PRIMARY KEY must include partition key (timestamp) for partitioned tables
+        sa.PrimaryKeyConstraint('id', 'timestamp'),
         
         # Immutability constraint: Prevent updates/deletes
         # This is enforced at application level and via database triggers

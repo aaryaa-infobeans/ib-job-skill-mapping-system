@@ -22,6 +22,7 @@ Linked Specs:
 import logging
 from typing import Dict
 import os
+from enum import Enum
 
 from app.ai.state import GraphState
 from app.pii.scrubber import PIIScrubber
@@ -93,6 +94,17 @@ def pii_scrubber_node(state: GraphState) -> GraphState:
         }
         
         for field, value in job_description.items():
+            # Skip None/empty values
+            if value is None:
+                scrubbed_jd[field] = value
+                continue
+            
+            # Handle enum types - convert to string value
+            if isinstance(value, Enum):
+                scrubbed_jd[field] = value.value
+                continue
+            
+            # Handle string fields that need scrubbing
             if isinstance(value, str) and value.strip():
                 logger.debug(f"Scrubbing field: {field}")
                 
@@ -113,7 +125,7 @@ def pii_scrubber_node(state: GraphState) -> GraphState:
                         pii_metadata["detections"].append(detection)
                     pii_metadata["total_pii_found"] += len(result.detections)
             else:
-                # Non-string fields pass through unchanged
+                # Non-string fields (lists, dicts, numbers) pass through unchanged
                 scrubbed_jd[field] = value
         
         # Update state with scrubbed content

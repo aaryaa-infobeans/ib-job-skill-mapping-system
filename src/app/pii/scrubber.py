@@ -99,6 +99,9 @@ class PIIScrubber:
         # Initialize tokenizer
         self.tokenizer = PIITokenizer(salt=self.config.tokenization_salt)
         
+        # Log the model being used
+        logger.info(f"Initializing NERDetector with model={self.config.spacy_model}, gpu={self.config.use_gpu}, threshold={self.config.ner_confidence_threshold}")
+        
         # Initialize NER detector
         self.ner_detector = NERDetector(
             model_name=self.config.spacy_model,
