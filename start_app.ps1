@@ -1,3 +1,7 @@
+param(
+    [switch]$ResetDb = $false
+)
+
 # Configuration
 $APP_PORT = 9000
 $DB_PORT = 5432
@@ -16,8 +20,14 @@ if ($appProcess) {
     Stop-Process -Id $appProcess -Force -ErrorAction SilentlyContinue
 }
 
-# 2. Start Database via Docker Compose
+# 2. Optionally reset Database (containers + volume) for a clean start
 Set-Location $PROJECT_DIR
+if ($ResetDb) {
+    Write-Host "Resetting PostgreSQL containers and volume (local data will be LOST)..." -ForegroundColor Yellow
+    docker compose down -v
+}
+
+# 3. Start Database via Docker Compose
 Write-Host "Starting PostgreSQL database..." -ForegroundColor Cyan
 docker compose up -d postgres
 
@@ -26,7 +36,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# 3. Wait for Database to be ready
+# 4. Wait for Database to be ready
 Write-Host "Waiting for database to be ready..." -ForegroundColor Yellow
 $MAX_RETRIES = 30
 $COUNT = 0
@@ -49,7 +59,7 @@ if ($COUNT -eq $MAX_RETRIES) {
 }
 Write-Host "Database is ready!" -ForegroundColor Green
 
-# 4. Activate Virtual Environment and Run Migrations
+# 5. Activate Virtual Environment and Run Migrations
 $venvActivate = Join-Path $VENV_DIR "Scripts\Activate.ps1"
 if (Test-Path $venvActivate) {
     Write-Host "Activating virtual environment..." -ForegroundColor Cyan
@@ -71,7 +81,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# 5. Start Backend Application
+# 6. Start Backend Application
 Write-Host "Starting FastAPI backend on port $APP_PORT..." -ForegroundColor Green
 Write-Host "---------------------------------------------------" -ForegroundColor Cyan
 Write-Host "App URL: http://127.0.0.1:$APP_PORT" -ForegroundColor Green

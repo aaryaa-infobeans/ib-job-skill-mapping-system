@@ -9,13 +9,19 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Expected migration revision for ingestion service
+# This represents the minimum revision that guarantees ingestion tables exist.
 EXPECTED_REVISION = "ba97cf8e4fdf"
 EXPECTED_REVISION_SHORT = "0002"
 
-# Acceptable revisions (includes merge revisions that contain the expected revision)
+# Acceptable revisions (includes merge and newer revisions that contain the expected revision)
 ACCEPTABLE_REVISIONS = {
     "ba97cf8e4fdf",  # Direct revision with ingestion tables
     "045d300d07a8",  # Merge revision that includes ba97cf8e4fdf
+    "937cc5c69c28",  # Feedback table
+    "20260305_01",   # Rename skill_certification -> team_member_skill_certification
+    "20260305_02",   # Add status/error_message to llm_request_log
+    "20260305_03",   # Fix skill_ontology PK to id
+    "20260305_04",   # Fix jd_certification_requirements PK to id (current head)
 }
 
 
@@ -57,11 +63,20 @@ def get_migration_info(engine: Engine) -> Tuple[str, str]:
             )
 
             # Extract short version from revision history
-            # Revision sequence: None -> e8a217c84204 (0001) -> ba97cf8e4fdf (0002) -> 045d300d07a8 (merge)
+            # Known milestones in migration sequence:
+            #   None -> e8a217c84204 (0001)
+            #        -> ba97cf8e4fdf (0002, ingestion tables)
+            #        -> 045d300d07a8 (0002-merge, merges ingestion + other branch)
+            #        -> 937cc5c69c28 (0003, current head with feedback table)
             revision_map = {
                 "e8a217c84204": "0001",
                 "ba97cf8e4fdf": "0002",
                 "045d300d07a8": "0002-merge",
+                "937cc5c69c28": "0003",
+                "20260305_01": "0004",
+                "20260305_02": "0005",
+                "20260305_03": "0006",
+                "20260305_04": "0007",
             }
             short_version = revision_map.get(version_num, "unknown")
 
