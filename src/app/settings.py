@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     """Application settings with secure secrets handling."""
 
     # API Configuration
-    api_v1_prefix: str
-    project_name: str
+    api_v1_prefix: str = "/api/v1"
+    project_name: str = "IB Job Skill Mapping System"
 
     
     # Logging
@@ -25,32 +25,32 @@ class Settings(BaseSettings):
     
     # JWT/OAuth2 Configuration
     jwt_secret_key: Optional[str] = None
-    jwt_algorithm: str
+    jwt_algorithm: str = "HS256"
     
     # Secrets Manager Configuration
     secrets_backend: str
 
     
     # LLM Configuration
-    llm_provider: str
+    llm_provider: str = "openai"
     openai_api_key: Optional[str] = None
-    openai_model: str
-    openai_embedding_model: str
+    openai_model: str = "gpt-4-turbo-preview"
+    openai_embedding_model: str = "text-embedding-ada-002"
     openai_input_rate: Optional[float] = None
     openai_output_rate: Optional[float] = None
     
     groq_api_key: Optional[str] = None
-    groq_model: str
+    groq_model: str = "llama3-70b-8192"
     input_cost_groq: Optional[float] = None
     output_cost_groq: Optional[float] = None
     
     google_api_key: Optional[str] = None
-    google_model: str
+    google_model: str = "gemini-2.5-flash"
     input_cost_google: Optional[float] = None
     output_cost_google: Optional[float] = None
     
-    llm_max_tokens: int
-    llm_temperature: float
+    llm_max_tokens: int = 4096
+    llm_temperature: float = 0.1
 
 
     
@@ -58,9 +58,9 @@ class Settings(BaseSettings):
     weight_mandatory_skills: float
     weight_preferred_skills: float
     weight_experience: float
-    weight_semantic_fit: float
-    weight_certification: float
-    weight_context_boost: float
+    weight_semantic_fit: float = 0.15
+    weight_certification: float = 0.10
+    weight_context_boost: float = 0.05
     weight_jd_text: float = 0.10
     weight_location: float
     weight_work_mode: float

@@ -217,6 +217,7 @@ class TeamDataClient:
         
         try:
             access_token = self.oauth_client.get_access_token()
+            access_token = "dev-token-12345"
             
             headers = {
                 "Authorization": f"Bearer {access_token}",

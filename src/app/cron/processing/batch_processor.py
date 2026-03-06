@@ -159,51 +159,54 @@ class BatchProcessor:
             Tuple of (successful_batch_ids, failed_batch_ids)
         """
         metadata = payload.get('metadata', {})
-        correlation_id = metadata.get('correlation_id', 'unknown')
-        batches = payload.get('batches', [])
-        
+        correlation_id = metadata.get('correlation_id', metadata.get('batch_id', 'unknown'))
+        batch_id = metadata.get('batch_id')
+        team_members = payload.get('team_members', [])
+
         self.logger.info(
             "Processing all batches",
             correlation_id=correlation_id,
-            total_batches=len(batches)
+            total_batches=1 if team_members else 0,
+            batch_id=batch_id
         )
-        
+
         successful = []
         failed = []
-        
-        for batch_data in batches:
-            batch_id = batch_data.get('batch_id')
-            team_members = batch_data.get('team_members', [])
-            
-            if not batch_id:
-                self.logger.warning(
-                    "Skipping batch without batch_id",
-                    correlation_id=correlation_id
-                )
-                continue
-            
-            try:
-                # Each batch gets its own transaction via new session
-                # (caller should provide fresh session for each batch)
-                success = await self.process_batch(
-                    batch_id=batch_id,
-                    correlation_id=correlation_id,
-                    team_members=team_members,
-                    metadata=metadata
-                )
-                
-                if success:
-                    successful.append(batch_id)
-                else:
-                    failed.append(batch_id)
-            
-            except Exception as error:
+
+        if not batch_id:
+            self.logger.warning(
+                "Skipping payload without batch_id",
+                correlation_id=correlation_id
+            )
+            return successful, failed
+
+        if not team_members:
+            self.logger.warning(
+                "Skipping empty team_members payload",
+                batch_id=batch_id
+            )
+            return successful, failed
+
+        try:
+            success = await self.process_batch(
+                batch_id=batch_id,
+                correlation_id=correlation_id,
+                team_members=team_members,
+                metadata=metadata
+            )
+
+            if success:
+                successful.append(batch_id)
+            else:
                 failed.append(batch_id)
-                self.logger.error(
-                    "Batch processing exception",
-                    batch_id=batch_id,
-                    error=str(error)
-                )
+
+        except Exception as error:
+            failed.append(batch_id)
+            self.logger.error(
+                "Batch processing exception",
+                batch_id=batch_id,
+                error=str(error)
+            )
         
         self.logger.info(
             "All batches processed",
@@ -232,10 +235,11 @@ class BatchProcessor:
         Raises:
             Exception: Any validation or database errors
         """
-        team_member_id = member_data.get('team_member_id')
-        
+        team_member_id = str(member_data.get('team_member_id') or '')
+
         if not team_member_id:
             raise ValueError("team_member_id is required")
+        member_data = {**member_data, 'team_member_id': team_member_id}
         
         self.logger.debug("Processing team member", team_member_id=team_member_id)
         
@@ -281,8 +285,10 @@ class BatchProcessor:
                 # Add skill_name to each certification for skill lookup
                 skill_name = skill.get('skill_name')
                 for cert in skill_certs:
-                    cert_with_skill = cert.copy()
-                    cert_with_skill['skill_name'] = skill_name
+                    if isinstance(cert, str):
+                        cert_with_skill = {'certificate': cert, 'skill_name': skill_name}
+                    else:
+                        cert_with_skill = {**cert, 'skill_name': skill_name}
                     certifications_data.append(cert_with_skill)
         
         if certifications_data:

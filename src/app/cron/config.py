@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     db_host: str = "localhost"
     db_port: int = 5433
     db_name: str = "ib_job_skill_mapping"
-    db_user: str = "postgres"
+    db_user: str = "user"
     db_password: str = "password"  # Default for unit tests
     
     # OAuth Configuration
