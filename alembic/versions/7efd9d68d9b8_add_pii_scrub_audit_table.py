@@ -19,7 +19,7 @@ Validation (DoD):
 - Rollback script tested
 
 Revision ID: 7efd9d68d9b8
-Revises: 045d300d07a8
+Revises: 20260305_05
 Create Date: 2026-02-17 17:59:57.043691
 
 """
@@ -32,7 +32,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = '7efd9d68d9b8'
-down_revision: Union[str, None] = '045d300d07a8'
+down_revision: Union[str, None] = '20260305_05'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
