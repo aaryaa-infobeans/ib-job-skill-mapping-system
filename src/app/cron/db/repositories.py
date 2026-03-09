@@ -156,7 +156,7 @@ class TeamMemberRepository:
         
         Maps external API fields to database schema:
         - work-mode → work_type enum
-        - profile → profile_url
+        - profile_url (or legacy 'profile') → profile_url
         - team_member_status (active/inactive) → is_active boolean
         
         Args:
@@ -168,7 +168,7 @@ class TeamMemberRepository:
                 - experience_in_months
                 - base_location
                 - work-mode
-                - profile
+                - profile_url (or 'profile')
         
         Returns:
             team_member_id: Primary key
@@ -197,7 +197,7 @@ class TeamMemberRepository:
             'experience_in_months': member_data.get('experience_in_months'),
             'base_location': member_data.get('base_location'),
             'work_type': work_type,
-            'profile_url': member_data.get('profile'),
+            'profile_url': member_data.get('profile_url') or member_data.get('profile'),
         }
         
         # UPSERT: on conflict update all fields

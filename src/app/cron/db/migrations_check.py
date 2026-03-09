@@ -21,7 +21,8 @@ ACCEPTABLE_REVISIONS = {
     "20260305_01",   # Rename skill_certification -> team_member_skill_certification
     "20260305_02",   # Add status/error_message to llm_request_log
     "20260305_03",   # Fix skill_ontology PK to id
-    "20260305_04",   # Fix jd_certification_requirements PK to id (current head)
+    "20260305_04",   # Fix jd_certification_requirements PK to id
+    "20260305_05",   # Seed auth_clients with default dev client (current head)
 }
 
 
@@ -77,6 +78,7 @@ def get_migration_info(engine: Engine) -> Tuple[str, str]:
                 "20260305_02": "0005",
                 "20260305_03": "0006",
                 "20260305_04": "0007",
+                "20260305_05": "0008",
             }
             short_version = revision_map.get(version_num, "unknown")
 
