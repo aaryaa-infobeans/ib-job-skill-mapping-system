@@ -32,7 +32,7 @@ INSERT INTO requisition_status_master (status_id, status_key, status_message) VA
 ON CONFLICT (status_key) DO NOTHING;
 
 -- Insert skill certification requirements
-INSERT INTO skill_certification (role_name, required_skills, desired_skills, years_of_experience) VALUES
+INSERT INTO team_member_skill_certification (role_name, required_skills, desired_skills, years_of_experience) VALUES
   ('Backend Engineer', '["python", "postgresql"]', '["fastapi", "aws"]', 3),
   ('Cloud Engineer', '["azure", "kubernetes"]', '["aws", "postgresql"]', 4),
   ('AI Engineer', '["python", "langchain", "langgraph"]', '["azure", "aws"]', 2),
@@ -49,4 +49,4 @@ SELECT * FROM skill_master;
 SELECT 'Status:' as section;
 SELECT * FROM requisition_status_master;
 SELECT 'Certifications:' as section;
-SELECT * FROM skill_certification;
+SELECT * FROM team_member_skill_certification;

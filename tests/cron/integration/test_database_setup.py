@@ -8,6 +8,7 @@ from app.cron.db.migrations_check import (
     validate_schema_version,
     EXPECTED_REVISION,
     EXPECTED_REVISION_SHORT,
+    ACCEPTABLE_REVISIONS,
 )
 
 
@@ -42,9 +43,13 @@ class TestDatabaseIntegration:
     def test_schema_version_check(self, integration_engine):
         """Test migration version checking."""
         full_revision, short_version = get_migration_info(integration_engine)
+        # Database should be at one of the acceptable revisions
+        assert full_revision in ACCEPTABLE_REVISIONS
 
-        assert full_revision == EXPECTED_REVISION
-        assert short_version == EXPECTED_REVISION_SHORT
+        # When database is exactly at the baseline expected revision,
+        # the short version should match EXPECTED_REVISION_SHORT.
+        if full_revision == EXPECTED_REVISION:
+            assert short_version == EXPECTED_REVISION_SHORT
 
     def test_schema_validation(self, integration_engine):
         """Test schema validation passes."""

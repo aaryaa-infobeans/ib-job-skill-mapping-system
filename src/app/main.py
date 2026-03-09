@@ -9,7 +9,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 
-from app.api.routers import health, jd_skill_mapping, matches, metrics, candidate_availability
+from app.api.routers import health, jd_skill_mapping, matches, metrics, candidate_availability, feedback
 from app.logging_config import configure_logging
 from app.middleware import CorrelationIdMiddleware
 from app.middleware.auth import OAuth2Middleware
@@ -50,6 +50,7 @@ app.include_router(
     jd_skill_mapping.router, prefix=settings.api_v1_prefix, tags=["jd-skill-mapping"]
 )
 app.include_router(matches.router, prefix=settings.api_v1_prefix, tags=["matches"])
+app.include_router(feedback.router, prefix=settings.api_v1_prefix, tags=["feedback"])
 
 
 @app.get("/")

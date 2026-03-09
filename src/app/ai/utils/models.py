@@ -44,22 +44,24 @@ class NormalizedRequisition:
 @dataclass
 class EmbeddingResult:
     """Embedding vectors for JD components."""
-    jd_level_vector: np.ndarray  # 3072-dim
-    mandatory_vector: np.ndarray  # 3072-dim
-    preferred_vector: np.ndarray  # 3072-dim
-    certification_vector: Optional[np.ndarray] = None  # 3072-dim
-    model: str = "text-embedding-3-large"
+    jd_level_vector: np.ndarray  # 768-dim (updated for Gemma)
+    mandatory_vector: np.ndarray  # 768-dim
+    preferred_vector: np.ndarray  # 768-dim
+    certification_vector: Optional[np.ndarray] = None  # 768-dim
+    model: str = "models/embedding-001"
     
     def __post_init__(self):
         """Validate vector dimensions."""
+        # Support both 3072 (OpenAI) and 768 (Gemma) or other common sizes
+        expected_dim = 768 
         for name, vec in [
             ("jd_level", self.jd_level_vector),
             ("mandatory", self.mandatory_vector),
             ("preferred", self.preferred_vector),
             ("certification", self.certification_vector)
         ]:
-            if vec is not None and len(vec) != 3072:
-                raise ValueError(f"{name}_vector must be 3072-dimensional, got {len(vec)}")
+            if vec is not None and len(vec) not in [3072, 768]:
+                raise ValueError(f"{name}_vector must be 768 or 3072-dimensional, got {len(vec)}")
 
 
 @dataclass
@@ -72,6 +74,7 @@ class RAGCandidate:
     jd_level_similarity: float
     certification_similarity: float = 0.0
     profile_text: Optional[str] = None
+    phase0_score_breakdown: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -93,6 +96,11 @@ class ScoringBreakdown:
     experience_score: float = 0.0
     semantic_similarity: float = 0.0
     jd_level_similarity: float = 0.0
+    # Multi-stage scoring fields
+    stage1_passed: bool = True
+    role_type: str = "MID"
+    qualification_reason: str = ""
+
 
 
 @dataclass
@@ -106,6 +114,8 @@ class ScoringResult:
     detailed_breakdown: Optional[ScoringBreakdown] = None
     is_available: bool = True
     available_capacity: float = 100.0
+    is_qualified: bool = True
+
 
 
 @dataclass

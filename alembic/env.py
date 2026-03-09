@@ -1,4 +1,10 @@
-"""Alembic environment configuration."""
+"""Alembic environment configuration.
+
+This module is intentionally lightweight and avoids importing the full
+application settings to prevent pydantic validation errors during
+`alembic` CLI usage in minimally configured environments. It resolves the
+database URL directly via the secrets helper or `DATABASE_URL`.
+"""
 
 import os
 import sys
@@ -9,12 +15,16 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Add src to path to import app modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+# Ensure the project src/ directory is on sys.path so `app.*` imports work
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+SRC_PATH = os.path.join(PROJECT_ROOT, "src")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
 
-# Import the Base and settings
+# Import the Base and secrets helper
 from app.db.base import Base
-from app.settings import settings
+from app.secrets import get_secret
 
 # Import all models so they're registered with Base.metadata
 import app.db.models  # noqa: F401
@@ -22,8 +32,33 @@ import app.db.models  # noqa: F401
 # this is the Alembic Config object
 config = context.config
 
-# Set the sqlalchemy.url from settings
-config.set_main_option("sqlalchemy.url", settings.get_database_url())
+
+def _resolve_database_url() -> str:
+    """Resolve database URL for Alembic migrations.
+
+    Tries secrets manager keys first, then falls back to the
+    `DATABASE_URL` environment variable. This mirrors the logic in
+    `Settings.get_database_url` without requiring the Settings model.
+    """
+
+    db_url = get_secret("DB_URL") or get_secret("DATABASE_URL") or os.getenv(
+        "DATABASE_URL"
+    )
+
+    if not db_url:
+        # Fallback to connection parameters commonly used in local dev
+        host = os.getenv("DB_HOST", "localhost")
+        port = os.getenv("DB_PORT", "5433")
+        name = os.getenv("DB_NAME", "ib_job_skill_mapping")
+        user = os.getenv("DB_USER", "user")
+        password = os.getenv("DB_PASSWORD", "password")
+        db_url = f"postgresql://{user}:{password}@{host}:{port}/{name}"
+
+    return db_url
+
+
+# Set the sqlalchemy.url from resolved database URL
+config.set_main_option("sqlalchemy.url", _resolve_database_url())
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

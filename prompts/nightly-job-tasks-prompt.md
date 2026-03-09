@@ -178,7 +178,7 @@ Tasks for:
   * `team_member`
   * `team_member_allocation`
   * `team_member_skill`
-  * `skill_certification`
+  * `team_member_skill_certification`
 * Transaction boundary enforcement
 * Unit tests covering:
 

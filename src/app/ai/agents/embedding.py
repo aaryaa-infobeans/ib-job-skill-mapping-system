@@ -13,6 +13,9 @@ def embedding_node(state: GraphState) -> GraphState:
     """Generate embeddings for JD components."""
     logger.info("Executing Embedding_Agent node")
     
+    # Reset error message for this node run
+    state["error_message"] = None
+    
     parsed_jd = state.get("parsed_jd")
     normalized_skills = state.get("normalized_skills")
     

@@ -1,4 +1,4 @@
-"""Embedding Agent - Generate 3072-dimensional embeddings for JD components."""
+"""Embedding Agent - Generate 768-dimensional embeddings for JD components using Gemma."""
 
 import logging
 import numpy as np
@@ -9,25 +9,26 @@ from app.ai.utils.models import NormalizedRequisition, EmbeddingResult
 
 
 class EmbeddingAgent(BaseAgent):
-    """Generate embeddings for JD components using OpenAI API."""
+    """Generate embeddings for JD components using Google Generative AI (Gemma)."""
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__("embedding", logger)
-        self.model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
-        self.openai_client = None
-        self._init_openai()
+        # Fallback to gemini-embedding-001 as embedding-gemma-300m is not in the list
+        self.model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001") 
+        self.genai_client = None
+        self._init_genai()
     
-    def _init_openai(self):
-        """Initialize OpenAI client."""
+    def _init_genai(self):
+        """Initialize Google Generative AI client."""
         try:
-            from openai import OpenAI
-            api_key = os.getenv("OPENAI_API_KEY")
+            from google import genai
+            api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
             if not api_key:
-                self.logger.warning("OPENAI_API_KEY not set, using mock embeddings")
+                self.logger.warning("GOOGLE_API_KEY not set, using mock embeddings")
                 return
-            self.openai_client = OpenAI(api_key=api_key)
+            self.genai_client = genai.Client(api_key=api_key)
         except ImportError:
-            self.logger.warning("OpenAI library not installed, using mock embeddings")
+            self.logger.warning("google-genai library not installed, using mock embeddings")
     
     def execute(self, normalized_requisition: NormalizedRequisition) -> EmbeddingResult:
         """
@@ -40,11 +41,11 @@ class EmbeddingAgent(BaseAgent):
             EmbeddingResult with all vectors
         """
         # Prepare texts to embed
-        jd_level_text = f"Job level: {normalized_requisition.original_requisition.jd_level}"
+        jd_level_text = f"Job level: {getattr(normalized_requisition.original_requisition, 'jd_level', 'N/A')}"
         mandatory_text = f"Required skills: {', '.join(normalized_requisition.original_mandatory_skills)}"
         preferred_text = f"Preferred skills: {', '.join(normalized_requisition.original_preferred_skills)}"
         
-        # Build certification text using both original names and enriched terms
+        # Build certification text
         cert_names = normalized_requisition.normalized_certifications or normalized_requisition.original_certifications
         enriched_certs = normalized_requisition.expanded_certification_terms
         certification_text = f"Certifications: {', '.join(cert_names)}"
@@ -52,10 +53,10 @@ class EmbeddingAgent(BaseAgent):
             certification_text += f". Related concepts: {', '.join(enriched_certs)}"
         
         # Generate embeddings
-        jd_level_vec = self._embed_text(jd_level_text)
-        mandatory_vec = self._embed_text(mandatory_text)
-        preferred_vec = self._embed_text(preferred_text)
-        certification_vec = self._embed_text(certification_text) if certification_text else None
+        jd_level_vec = self.embed_text(jd_level_text)
+        mandatory_vec = self.embed_text(mandatory_text)
+        preferred_vec = self.embed_text(preferred_text)
+        certification_vec = self.embed_text(certification_text) if certification_text else None
         
         result = EmbeddingResult(
             jd_level_vector=jd_level_vec,
@@ -67,31 +68,33 @@ class EmbeddingAgent(BaseAgent):
         
         return result
     
-    def _embed_text(self, text: str) -> np.ndarray:
+    def embed_text(self, text_input: str) -> np.ndarray:
         """
-        Generate embedding for a text string.
+        Generate embedding for a text string using Google's embedding model.
         
-        Args:
-            text: Text to embed
-            
         Returns:
-            3072-dimensional embedding vector
+            768-dimensional embedding vector (default for text-embedding-004)
         """
-        if not self.openai_client:
+        dimension = 768
+        if not self.genai_client:
             # Return mock embedding for testing
-            return np.random.randn(3072).astype(np.float32)
+            return np.random.randn(dimension).astype(np.float32)
         
         try:
-            response = self.openai_client.embeddings.create(
+            # New google.genai client syntax
+            # Note: text-embedding-004 default dimension is 768
+            response = self.genai_client.models.embed_content(
                 model=self.model,
-                input=text
+                contents=text_input,
+                config={
+                    "task_type": "RETRIEVAL_QUERY"
+                }
             )
-            embedding = response.data[0].embedding
-            return np.array(embedding, dtype=np.float32)
+            embedding = response.embeddings[0].values
+            return np.array(embedding, dtype=np.float32)[:dimension]
         except Exception as e:
-            self.logger.error(f"Failed to embed text: {str(e)}", exc_info=True)
-            # Return mock embedding on error
-            return np.random.randn(3072).astype(np.float32)
+            self.logger.error(f"Failed to embed text with Google API: {str(e)}", exc_info=True)
+            return np.random.randn(dimension).astype(np.float32)
     
     def validate_input(self, input_data: Any) -> bool:
         """Validate that input is NormalizedRequisition."""
@@ -101,5 +104,5 @@ class EmbeddingAgent(BaseAgent):
         return True
     
     def format_output(self, result: EmbeddingResult) -> EmbeddingResult:
-        """Format output - already in correct format."""
+        """Format output."""
         return result

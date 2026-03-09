@@ -7,7 +7,7 @@ and natural key conflict handling.
 
 import re
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,10 +18,22 @@ from app.cron.db.metadata import (
     team_member,
     team_member_skill,
     team_member_allocation,
-    skill_certification,
+    team_member_skill_certification,
     ingestion_batch_state,
     ingestion_audit_log,
 )
+
+
+def _parse_date(value) -> Optional[date]:
+    """Convert a string like '2026-01-29' to a date object, or return None."""
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.strptime(str(value), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
 
 
 class TeamMemberRepository:
@@ -34,7 +46,7 @@ class TeamMemberRepository:
     - team_member
     - team_member_skill
     - team_member_allocation
-    - skill_certification
+    - team_member_skill_certification
     """
     
     def __init__(self, session: AsyncSession):
@@ -144,7 +156,7 @@ class TeamMemberRepository:
         
         Maps external API fields to database schema:
         - work-mode → work_type enum
-        - profile → profile_url
+        - profile_url (or legacy 'profile') → profile_url
         - team_member_status (active/inactive) → is_active boolean
         
         Args:
@@ -156,7 +168,7 @@ class TeamMemberRepository:
                 - experience_in_months
                 - base_location
                 - work-mode
-                - profile
+                - profile_url (or 'profile')
         
         Returns:
             team_member_id: Primary key
@@ -167,12 +179,12 @@ class TeamMemberRepository:
         team_member_id = member_data.get('team_member_id')
         if not team_member_id:
             raise ValueError("team_member_id is required")
-        
+        team_member_id = str(team_member_id)
+
         # Map external API fields to database schema
-        work_mode = member_data.get('work-mode', '').upper()
-        work_type = None
-        if work_mode in ['HYBRID', 'REMOTE', 'OFFICE']:
-            work_type = work_mode
+        work_mode = member_data.get('work-mode', '').lower()
+        _work_mode_map = {'hybrid': 'hybrid', 'remote': 'wfh', 'wfh': 'wfh', 'office': 'wfo', 'wfo': 'wfo'}
+        work_type = _work_mode_map.get(work_mode)
         
         status = member_data.get('team_member_status', '').lower()
         is_active = status == 'active'
@@ -185,7 +197,7 @@ class TeamMemberRepository:
             'experience_in_months': member_data.get('experience_in_months'),
             'base_location': member_data.get('base_location'),
             'work_type': work_type,
-            'profile_url': member_data.get('profile'),
+            'profile_url': member_data.get('profile_url') or member_data.get('profile'),
         }
         
         # UPSERT: on conflict update all fields
@@ -312,8 +324,8 @@ class TeamMemberRepository:
                 'team_member_id': team_member_id,
                 'project_id': project_id,
                 'allocation_percentage': alloc_data.get('allocation_percentage'),
-                'start_date': alloc_data.get('start_date'),
-                'end_date': alloc_data.get('end_date'),
+                'start_date': _parse_date(alloc_data.get('start_date')),
+                'end_date': _parse_date(alloc_data.get('end_date')),
                 'billable': alloc_data.get('billable'),
                 'is_deleted': is_deleted,
             }
@@ -379,18 +391,18 @@ class TeamMemberRepository:
                 'skill_id': skill_id,
                 'certificate': cert_data.get('certificate'),
                 'issuer': cert_data.get('issuer'),
-                'issued_date': cert_data.get('issued_date'),
-                'valid_till': cert_data.get('valid_till'),
+                'issued_date': _parse_date(cert_data.get('issued_date')),
+                'valid_till': _parse_date(cert_data.get('valid_till')),
             }
             
             if certification_id:
                 # Update existing certification by certification_id
-                stmt = update(skill_certification).where(
-                    skill_certification.c.certification_id == certification_id
+                stmt = update(team_member_skill_certification).where(
+                    team_member_skill_certification.c.certification_id == certification_id
                 ).values(**values)
             else:
                 # Insert new certification (no natural key, so simple insert)
-                stmt = insert(skill_certification).values(**values)
+                stmt = insert(team_member_skill_certification).values(**values)
             
             await self.session.execute(stmt)
 
@@ -448,7 +460,9 @@ class BatchStateRepository:
             'metadata': metadata or {},
         }
         
-        stmt = insert(ingestion_batch_state).values(**values)
+        stmt = pg_insert(ingestion_batch_state).values(**values).on_conflict_do_nothing(
+            index_elements=['batch_id']
+        )
         await self.session.execute(stmt)
         
         # Audit log entry for initialization
@@ -600,9 +614,7 @@ class BatchStateRepository:
             'batch_id': batch_id,
             'correlation_id': correlation_id,
             'event_type': event_type,
-            'status': status,
-            'message': message,
-            'event_details': event_details or {},
+            'event_details': {**(event_details or {}), 'status': status, 'message': message},
             'timestamp': datetime.utcnow(),
             'severity': severity,
             'source': source,

@@ -202,13 +202,13 @@ class TeamMemberSkill(Base):
     # Relationships
     team_member = relationship("TeamMember", back_populates="skills")
     skill = relationship("SkillMaster", back_populates="team_member_skills")
-    certifications = relationship("SkillCertification", back_populates="team_member_skill")
+    certifications = relationship("TeamMemberSkillCertification", back_populates="team_member_skill")
 
 
-class SkillCertification(Base):
+class TeamMemberSkillCertification(Base):
     """Certification details for a specific team member's skill."""
 
-    __tablename__ = "skill_certification"
+    __tablename__ = "team_member_skill_certification"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     certification_id = Column(String(100), nullable=True)
@@ -292,9 +292,33 @@ class TeamMemberEmbedding(Base):
     team_member_id = Column(String(50), ForeignKey("team_member.team_member_id"), primary_key=True)
     # Use Text for SQLite/non-PG, Vector for PostgreSQL
     embedding = Column(
-        Text().with_variant(Vector(3072), "postgresql")
+        Text().with_variant(Vector(768), "postgresql")
     )
     profile_text = Column(Text, nullable=True)
     # Use JSON for cross-compatibility
     extra_metadata = Column("metadata", JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RequisitionMatchTeamMemberFeedback(Base):
+    """Reviewer feedback for a candidate match."""
+
+    __tablename__ = "requisition_match_team_member_feedback"
+
+    id = Column(sa.Integer, primary_key=True, autoincrement=True)
+    team_member_id = Column(String(50), nullable=False)
+    correlation_id = Column(String(100), nullable=False)
+    reviewer_email = Column(String(100), nullable=False)
+    liked = Column(Boolean, nullable=False, default=False)
+    rating = Column(SmallInteger, nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+
+    # Constraints
+    __table_args__ = (
+        sa.UniqueConstraint('team_member_id', 'correlation_id', 'reviewer_email', name='uq_feedback_reviewer_match'),
+        sa.CheckConstraint('rating >= 1 AND rating <= 5', name='check_rating_range'),
+        sa.Index('idx_feedback_correlation_id', 'correlation_id'),
+        sa.Index('idx_feedback_team_member_id', 'team_member_id'),
+    )
