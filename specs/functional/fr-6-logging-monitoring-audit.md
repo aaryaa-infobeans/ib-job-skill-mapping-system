@@ -1,5 +1,9 @@
 # FR-6: Logging, Monitoring, and Audit
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This document specifies the requirements for logging, monitoring, and auditing to ensure system observability, traceability, and compliance.
 
@@ -24,6 +28,44 @@ This document specifies the requirements for logging, monitoring, and auditing t
   - The number of tokens used in the interaction.
   - A timestamp.
 - This data is critical for compliance, cost analysis, and debugging AI agent behavior.
+
+### 2.3. PII Scrubbing Audit Trail (NEW: CR-PII-001)
+- **Traceability**: CR-PII-001 (NFR-PII-003)
+- The system MUST store an immutable audit trail for every PII scrubbing operation.
+- Each audit record in `pii_scrub_audit` table MUST include:
+  - `audit_id` (UUID): Unique identifier
+  - `timestamp`: When scrubbing occurred
+  - `source_table` and `source_record_id`: What data was scrubbed
+  - `pii_detected` (JSONB): Array of detected PII types with confidence scores
+    - Example: `[{"type": "email", "confidence": 1.0, "action": "hash"}, {"type": "person", "confidence": 0.92, "action": "redact"}]`
+  - `rule_version`: Version of scrubbing rules applied
+  - `scrubber_version`: Version of scrubbing service
+  - `triggered_by`: What initiated scrubbing (e.g., "ingestion_api")
+  - `processing_time_ms`: Latency measurement
+- **Retention**: 7 years (regulatory requirement)
+- **Immutability**: No UPDATE/DELETE operations allowed (database constraint)
+- **Access**: Query API at `GET /api/v1/admin/pii-audit?source_id={id}&from={date}&to={date}`
+
+### 2.4. Log Sanitization (NEW: CR-PII-001)
+- **Traceability**: CR-PII-001 (NFR-PII-002)
+- All application logs, error logs, and debug logs MUST NOT contain raw PII.
+- **Implementation**:
+  - Structured logging with explicit PII-safe fields only
+  - Log aggregation pipeline applies final scrubbing pass
+  - Automated daily scans detect PII patterns in stored logs
+- **Example Safe Logging**:
+  ```python
+  logger.info(
+      "Scrubbed email",
+      extra={
+          "pii_type": "email",
+          "action": "hash",
+          "input_length": len(email),
+          "output_hash_prefix": hashed_email[:8],
+          "confidence": 1.0
+      }
+  )
+  ```
 
 ## 3. Monitoring
 - **Traceability**: FR-6.3

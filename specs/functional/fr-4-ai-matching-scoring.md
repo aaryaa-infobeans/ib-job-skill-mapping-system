@@ -1,11 +1,18 @@
 # FR-4: AI Matching & Scoring
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated:** 2026-02-16  
+
 ## 1. Purpose
 This document specifies the functional requirements for the AI-driven matching and scoring process. This is the core logic that evaluates and ranks team members against job requisitions.
+
+**Note (CR-PII-001):** All AI agents in this pipeline receive PII-scrubbed data from Node 0 (PII_Scrubber_Agent). Team member profiles, requisition data, and embeddings are sanitized before processing.
 
 ## 2. AI Agent Orchestration
 - **Traceability**: FR-4.1, FR-4.2
 
+- **PII Scrubbing (CR-PII-001)**: Before any processing, the `PII_Scrubber_Agent` (Node 0) sanitizes all incoming data. Agents below receive only scrubbed data.
 - The system SHALL use a `JD/Requisition Parsing Agent` to normalize the role, title, and seniority from the incoming requisition, and to extract skills from all relevant fields (`mandatory_skills`, `preferred_skills`, `jd_text`).
 - The system SHALL use a `Skill Extraction & Normalization Agent` to map all skill strings (from both requisitions and team member profiles) to a canonical skill dictionary (e.g., "JS", "Javascript" -> "JavaScript").
 

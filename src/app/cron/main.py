@@ -82,7 +82,32 @@ Examples:
         default="INFO",
         help="Logging level (default: INFO)"
     )
-    
+
+    # CR-EMB-002: subcommands (TASK-EMB-034)
+    subparsers = parser.add_subparsers(dest="subcommand")
+
+    embed_parser = subparsers.add_parser(
+        "embed",
+        help="Run embedding phase only (does not re-ingest team data)",
+    )
+    embed_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-embed all members even if content hash unchanged",
+    )
+
+    ingest_embed_parser = subparsers.add_parser(
+        "ingest-embed",
+        help="Run ingest phase then embed phase (separate transactions)",
+    )
+    ingest_embed_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-embed all members after ingestion",
+    )
+
     return parser.parse_args()
 
 
@@ -425,8 +450,15 @@ def main() -> int:
         correlation_id=correlation_id,
         retry_mode=args.retry_failed,
         dry_run=args.dry_run,
-        log_level=args.log_level
+        log_level=args.log_level,
+        subcommand=getattr(args, "subcommand", None),
     )
+
+    # CR-EMB-002: embed / ingest-embed subcommands
+    if getattr(args, "subcommand", None) == "embed":
+        return _run_embed_phase(args, correlation_id)
+    if getattr(args, "subcommand", None) == "ingest-embed":
+        return _run_ingest_embed(args, correlation_id)
     
     # Run async main
     import asyncio
@@ -455,6 +487,91 @@ def main() -> int:
     
     return exit_code
 
+
+
+
+# ---------------------------------------------------------------------------
+# CR-EMB-002: embed phase helpers (TASK-EMB-034)
+# ---------------------------------------------------------------------------
+
+
+def _run_embed_phase(args, correlation_id: str) -> int:
+    """
+    Run the embedding phase only.
+    Uses a sync SQLAlchemy session (not the async ingestion path).
+    """
+    from sqlalchemy.orm import Session
+    from app.cron.db.engine import create_ingestion_engine
+    from app.cron.embedding.mcp_client import MCPResumeClient
+    from app.cron.embedding.embedding_processor import EmbeddingProcessor
+    from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
+    from app.settings import settings
+
+    force = getattr(args, "force", False)
+    logger.info("Starting embed phase", correlation_id=correlation_id, force=force)
+
+    engine = create_ingestion_engine()
+    try:
+        with Session(engine) as db:
+            mcp_client = MCPResumeClient(
+                server_script=settings.mcp_gdrive_server_path,
+                sa_key_path=settings.google_service_account_file,
+            )
+            embedding_agent = GemmaEmbeddingAgent(
+                device=settings.embedding_device,
+                model_name=settings.gemma_model_path or None,
+            )
+            processor = EmbeddingProcessor(
+                db=db, mcp_client=mcp_client, embedding_agent=embedding_agent
+            )
+            result = processor.run(force=force)
+            logger.info(
+                "Embed phase complete",
+                correlation_id=correlation_id,
+                success=result.success_count,
+                skipped=result.skip_count,
+                errors=result.error_count,
+            )
+        if result.error_count > 0 and result.success_count == 0:
+            return EXIT_FATAL_ERROR
+        if result.error_count > 0:
+            return EXIT_PARTIAL_SUCCESS
+        return EXIT_SUCCESS
+    except Exception as exc:
+        logger.error(
+            "Embed phase fatal error",
+            correlation_id=correlation_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return EXIT_FATAL_ERROR
+    finally:
+        engine.dispose()
+
+
+def _run_ingest_embed(args, correlation_id: str) -> int:
+    """
+    Run ingest phase first (committed), then embed phase (separate transaction).
+    MCP crash during embed MUST NOT roll back ingestion data.
+    """
+    import asyncio
+
+    # Step 1: ingest (existing async path)
+    ingest_code = asyncio.run(main_async(args, correlation_id))
+    if ingest_code == EXIT_FATAL_ERROR:
+        logger.error(
+            "Ingest phase failed; skipping embed phase",
+            correlation_id=correlation_id,
+        )
+        return ingest_code
+
+    # Step 2: embed (separate transaction)
+    embed_code = _run_embed_phase(args, correlation_id)
+    if ingest_code == EXIT_SUCCESS and embed_code == EXIT_SUCCESS:
+        return EXIT_SUCCESS
+    if embed_code == EXIT_FATAL_ERROR:
+        return EXIT_PARTIAL_SUCCESS  # ingest succeeded; embed failed partially
+    return EXIT_PARTIAL_SUCCESS
 
 if __name__ == "__main__":
     sys.exit(main())

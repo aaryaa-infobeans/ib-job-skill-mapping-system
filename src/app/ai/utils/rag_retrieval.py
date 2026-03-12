@@ -111,15 +111,41 @@ class RAGRetrievalAgent(BaseAgent):
             func.count(TeamMemberSkill.skill_id).label('p_count')
         ).filter(TeamMemberSkill.skill_id.in_(preferred_ids)).group_by(TeamMemberSkill.team_member_id).subquery()
         
+        # CR-EMB-002: Multi-vector routing + NULL fallback (TASK-EMB-042, 043)
+        # mandatory/preferred -> skills_embedding  (fallback: legacy embedding)
+        # jd_level            -> resume_embedding   (fallback: legacy embedding)
+        # certifications      -> certifications_embedding (fallback: 0.0 sim)
+
+        def _cosine_sim(col, vec):
+            return 1 - type_coerce(col, Vector(self.vector_dim)).cosine_distance(vec)
+
+        mandatory_sim_expr = sa.case(
+            (TeamMemberEmbedding.skills_embedding != None,
+             _cosine_sim(TeamMemberEmbedding.skills_embedding, mandatory_vec)),
+            else_=_cosine_sim(TeamMemberEmbedding.embedding, mandatory_vec),
+        ).label("mandatory_sim")
+
+        preferred_sim_expr = sa.case(
+            (TeamMemberEmbedding.skills_embedding != None,
+             _cosine_sim(TeamMemberEmbedding.skills_embedding, preferred_vec)),
+            else_=_cosine_sim(TeamMemberEmbedding.embedding, preferred_vec),
+        ).label("preferred_sim")
+
+        jd_level_sim_expr = sa.case(
+            (TeamMemberEmbedding.resume_embedding != None,
+             _cosine_sim(TeamMemberEmbedding.resume_embedding, jd_level_vec)),
+            else_=_cosine_sim(TeamMemberEmbedding.embedding, jd_level_vec),
+        ).label("jd_level_sim")
+
         query = self.db.query(
             TeamMember.team_member_id,
             TeamMember.experience_in_months,
             TeamMemberEmbedding.embedding,
-            func.coalesce(m_count_sq.c.m_count, 0).label('m_count'),
-            func.coalesce(p_count_sq.c.p_count, 0).label('p_count'),
-            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(self.vector_dim)).cosine_distance(mandatory_vec)).label('mandatory_sim'),
-            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(self.vector_dim)).cosine_distance(preferred_vec)).label('preferred_sim'),
-            (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(self.vector_dim)).cosine_distance(jd_level_vec)).label('jd_level_sim')
+            func.coalesce(m_count_sq.c.m_count, 0).label("m_count"),
+            func.coalesce(p_count_sq.c.p_count, 0).label("p_count"),
+            mandatory_sim_expr,
+            preferred_sim_expr,
+            jd_level_sim_expr,
         ).join(
             TeamMemberEmbedding, TeamMember.team_member_id == TeamMemberEmbedding.team_member_id
         ).outerjoin(
@@ -127,14 +153,17 @@ class RAGRetrievalAgent(BaseAgent):
         ).outerjoin(
             p_count_sq, TeamMember.team_member_id == p_count_sq.c.team_member_id
         )
-        
+
         if embedding_result.certification_vector is not None:
             cert_vec = embedding_result.certification_vector.tolist()
-            query = query.add_columns(
-                (1 - type_coerce(TeamMemberEmbedding.embedding, Vector(self.vector_dim)).cosine_distance(cert_vec)).label('cert_sim')
-            )
+            cert_sim_expr = sa.case(
+                (TeamMemberEmbedding.certifications_embedding != None,
+                 _cosine_sim(TeamMemberEmbedding.certifications_embedding, cert_vec)),
+                else_=sa.literal(0.0),
+            ).label("cert_sim")
+            query = query.add_columns(cert_sim_expr)
         else:
-            query = query.add_columns(sa.literal(0.0).label('cert_sim'))
+            query = query.add_columns(sa.literal(0.0).label("cert_sim"))
 
         # TASK-02: Hard Filters (Fail-fast gating)
         # 1. is_active != true -> FAIL

@@ -69,8 +69,55 @@ if (Test-Path $venvActivate) {
     Write-Host "Creating virtual environment..." -ForegroundColor Yellow
     python -m venv venv
     & $venvActivate
+    Write-Host "Upgrading pip..." -ForegroundColor Yellow
+    python -m pip install --upgrade pip
     Write-Host "Installing dependencies..." -ForegroundColor Yellow
     pip install -r requirements.txt
+    
+    Write-Host "Downloading SpaCy NER model (en_core_web_trf)..." -ForegroundColor Yellow
+    python -m spacy download en_core_web_trf
+}
+
+# Ensure pip is up to date (for existing venvs)
+python -m pip install --upgrade pip --quiet
+
+# Check if SpaCy is installed
+Write-Host "Checking SpaCy installation..." -ForegroundColor Cyan
+$spacyInstalled = python -c "import spacy" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "SpaCy not found. Installing from requirements.txt..." -ForegroundColor Yellow
+    pip install -r requirements.txt
+    
+    # If still not installed, try installing just spacy with --only-binary
+    $spacyCheck = python -c "import spacy" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Attempting to install SpaCy with pre-built wheels only..." -ForegroundColor Yellow
+        pip install --only-binary=:all: "spacy>=3.7,<3.8"
+        
+        # Final check
+        $spacyFinal = python -c "import spacy" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "WARNING: Could not install SpaCy. PII scrubbing will not be available." -ForegroundColor Red
+            Write-Host "Consider using Python 3.11 or 3.12 for better package compatibility." -ForegroundColor Yellow
+        }
+    }
+}
+
+# Check if SpaCy NER model is installed (for existing venvs)
+Write-Host "Checking SpaCy NER model..." -ForegroundColor Cyan
+$spacyModelCheck = python -c "import spacy; spacy.load('en_core_web_sm')" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "SpaCy NER model not found. Downloading en_core_web_sm (CPU-based, no compilation needed)..." -ForegroundColor Yellow
+    python -m spacy download en_core_web_sm
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to download SpaCy model. PII scrubbing may not work correctly." -ForegroundColor Red
+        Write-Host "NOTE: For better NER performance, use Python 3.11 or 3.12 to install en_core_web_trf" -ForegroundColor Yellow
+    } else {
+        Write-Host "SpaCy model downloaded successfully!" -ForegroundColor Green
+        Write-Host "NOTE: Using CPU-based model (en_core_web_sm). For transformer-based accuracy, use Python 3.11/3.12." -ForegroundColor Cyan
+    }
+} else {
+    Write-Host "SpaCy NER model already installed." -ForegroundColor Green
 }
 
 Write-Host "Running database migrations..." -ForegroundColor Cyan

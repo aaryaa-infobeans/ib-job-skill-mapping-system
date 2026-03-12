@@ -1,8 +1,15 @@
 # FR-3: Team Member Skills & Availability Upsert API (OBSOLETE - REMOVED)
 
+**Version:** 1.1  
+**Modified By:** CR_PII_scrubber (CR-PII-001)  
+**Last Updated (Removal):** 2026-02-11  
+**Last Updated (PII Note):** 2026-02-16  
+
 **Status:** REMOVED  
 **Date Removed:** 2026-02-11  
 **Reason:** Bulk upsert endpoint and all related functionality have been removed from the system.
+
+**Note (CR-PII-001):** If this endpoint is reinstated in the future, all team member data MUST pass through PII scrubbing (Node 0) before ingestion into the RAG pipeline.
 
 ---
 

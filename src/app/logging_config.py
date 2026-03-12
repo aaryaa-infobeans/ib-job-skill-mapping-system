@@ -79,6 +79,10 @@ def configure_logging(log_level: str = "INFO") -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
+    # Ensure stdout uses UTF-8 on Windows (avoids UnicodeEncodeError for non-ASCII tracebacks)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     # Add console handler with JSON formatter
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(json_formatter)

@@ -7,8 +7,47 @@ from sqlalchemy.orm import Session
 
 from app.ai.graph import create_graph
 from app.ai.audit import save_checkpoint
+from app.pii.audit_logger import PIIAuditLogger
 
 logger = logging.getLogger(__name__)
+
+
+def save_pii_audit_log(
+    db: Session,
+    request_id: str,
+    pii_metadata: Dict[str, Any]
+) -> None:
+    """Save PII scrubbing operation to audit trail.
+    
+    Args:
+        db: Database session
+        request_id: Request ID for linking
+        pii_metadata: Metadata from PII scrubbing operation
+    """
+    try:
+        audit_logger = PIIAuditLogger(db)
+        
+        for detection in pii_metadata.get("detections", []):
+            audit_logger.log_scrub_operation(
+                operation="scrub",
+                entity_type="job_description",
+                entity_id=request_id,
+                field_name=detection.get("field_name", "unknown"),
+                pii_type=detection.get("pii_type", "UNKNOWN"),
+                action_taken=detection.get("action", "unknown"),
+                scrubbed_value=f"[{detection.get('pii_type', 'UNKNOWN').upper()}_REDACTED]",
+                detection_method=detection.get("method", "unknown"),
+                confidence_score=detection.get("confidence", 1.0)
+            )
+        
+        db.commit()
+        logger.info(
+            f"PII audit log saved: {len(pii_metadata.get('detections', []))} detections",
+            extra={"request_id": request_id}
+        )
+    except Exception as e:
+        logger.error(f"Failed to save PII audit log: {str(e)}", exc_info=True)
+        db.rollback()
 
 
 def execute_graph_with_audit(
@@ -97,8 +136,19 @@ def execute_graph_with_audit(
                     "cumulative_cost_usd": current_state.get("cumulative_cost_usd"),
                 }
                 
-                # Update status based on node completion
-                if node_name == "requisition_parsing":
+                if node_name == "pii_scrubber":
+                    # Save PII scrubbing metadata and audit log
+                    pii_metadata = current_state.get("pii_scrub_metadata", {})
+                    checkpoint_state["pii_scrubbed"] = current_state.get("pii_scrubbed", False)
+                    checkpoint_state["total_pii_found"] = pii_metadata.get("total_pii_found", 0)
+                    checkpoint_state["fields_scrubbed"] = pii_metadata.get("fields_scrubbed", [])
+                    
+                    # Save to PII audit table if scrubbing occurred
+                    if pii_metadata.get("detections"):
+                        save_pii_audit_log(db, request_id, pii_metadata)
+                elif node_name == "requisition_parsing":
+                    checkpoint_state["parsed_jd"] = current_state.get("parsed_jd")
+                    # Update status to MATCHING (3) after JD is parsed
                     if req_record:
                         repo.update_requisition_status(req_record.id, 3) # MATCHING
                         db.commit()

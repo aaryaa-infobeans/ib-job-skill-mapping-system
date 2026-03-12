@@ -52,6 +52,32 @@ else
     exit 1
 fi
 
+# Ensure pip is up to date
+python -m pip install --upgrade pip --quiet
+
+# Check if SpaCy is installed
+echo "🔍 Checking SpaCy installation..."
+if ! python -c "import spacy" &> /dev/null; then
+    echo "📦 SpaCy not found. Installing from requirements.txt..."
+    pip install -r requirements.txt
+fi
+
+# Check if SpaCy NER model is installed
+echo "🔍 Checking SpaCy NER model..."
+if ! python -c "import spacy; spacy.load('en_core_web_sm')" &> /dev/null; then
+    echo "📦 SpaCy NER model not found. Downloading en_core_web_sm (CPU-based, no compilation needed)..."
+    python -m spacy download en_core_web_sm
+    if [ $? -ne 0 ]; then
+        echo "⚠️  Failed to download SpaCy model. PII scrubbing may not work correctly."
+        echo "NOTE: For better NER performance, use Python 3.11 or 3.12 to install en_core_web_trf"
+    else
+        echo "✅ SpaCy model downloaded successfully!"
+        echo "NOTE: Using CPU-based model (en_core_web_sm). For transformer-based accuracy, use Python 3.11/3.12."
+    fi
+else
+    echo "✅ SpaCy NER model already installed."
+fi
+
 echo "🔄 Running database migrations..."
 alembic upgrade head
 
