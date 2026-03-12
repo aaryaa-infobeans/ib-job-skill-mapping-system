@@ -622,3 +622,116 @@ class BatchStateRepository:
         
         stmt = insert(ingestion_audit_log).values(**values)
         await self.session.execute(stmt)
+
+
+# ---------------------------------------------------------------------------
+# CR-EMB-002: Embedding upsert (TASK-EMB-033)
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass, field
+from typing import Optional as _Opt
+import numpy as np
+
+
+@dataclass
+class EmbeddingPayload:
+    """Fields written by the embedding pipeline to team_member_embeddings."""
+
+    member_id: str
+    resume_embedding: _Opt[list] = None          # list[float] length 768
+    skills_embedding: _Opt[list] = None
+    certifications_embedding: _Opt[list] = None
+    embedding: _Opt[list] = None                  # legacy weighted average
+    resume_text: _Opt[str] = None
+    skills_text: _Opt[str] = None
+    certifications_text: _Opt[str] = None
+    embedding_model: str = "embedding-gemma-300m"
+    content_hash: _Opt[str] = None
+    resume_fetched_at: _Opt[object] = None        # datetime
+    embedding_updated_at: _Opt[object] = None     # datetime
+
+
+class EmbeddingRepository:
+    """
+    Sync SQLAlchemy repository for embedding upserts.
+
+    Uses raw SQLAlchemy Core INSERT ... ON CONFLICT DO UPDATE so it works
+    with the sync Session used by the cron embedding phase.
+    """
+
+    def __init__(self, session) -> None:
+        self.session = session
+
+    def upsert_team_member_embeddings(self, payload: "EmbeddingPayload") -> None:
+        """
+        Insert or update embedding columns for a team member.
+
+        Columns intentionally NOT touched: profile_text, metadata,
+        pii_scrubbed, scrubbed_at (owned by the ingestion phase).
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy import insert as sa_insert, text as sa_text
+        from datetime import datetime
+
+        # Detect dialect first (needed by _to_list)
+        bind = self.session.get_bind()
+        dialect = bind.dialect.name if bind is not None else "postgresql"
+
+        import json as _json
+
+        def _to_list(arr):
+            if arr is None:
+                return None
+            if isinstance(arr, np.ndarray):
+                lst = arr.tolist()
+            else:
+                lst = list(arr)
+            # SQLite doesn't accept Python lists; serialize to JSON string
+            if dialect != "postgresql":
+                return _json.dumps(lst)
+            return lst
+
+        now = datetime.utcnow()
+        values = {
+            "team_member_id": payload.member_id,
+            "resume_embedding": _to_list(payload.resume_embedding),
+            "skills_embedding": _to_list(payload.skills_embedding),
+            "certifications_embedding": _to_list(payload.certifications_embedding),
+            "embedding": _to_list(payload.embedding),
+            "resume_text": payload.resume_text,
+            "skills_text": payload.skills_text,
+            "certifications_text": payload.certifications_text,
+            "embedding_model": payload.embedding_model,
+            "content_hash": payload.content_hash,
+            "resume_fetched_at": payload.resume_fetched_at,
+            "embedding_updated_at": payload.embedding_updated_at or now,
+        }
+
+        if dialect == "postgresql":
+            from app.db.models.models import TeamMemberEmbedding
+            stmt = pg_insert(TeamMemberEmbedding.__table__).values(**values)
+            update_cols = {
+                k: stmt.excluded[k]
+                for k in values
+                if k != "team_member_id"
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["team_member_id"],
+                set_=update_cols,
+            )
+            self.session.execute(stmt)
+        else:
+            # SQLite / test fallback: plain upsert
+            from app.db.models.models import TeamMemberEmbedding
+            existing = (
+                self.session.query(TeamMemberEmbedding)
+                .filter_by(team_member_id=payload.member_id)
+                .first()
+            )
+            if existing is None:
+                row = TeamMemberEmbedding(**values)
+                self.session.add(row)
+            else:
+                for k, v in values.items():
+                    if k != "team_member_id":
+                        setattr(existing, k, v)

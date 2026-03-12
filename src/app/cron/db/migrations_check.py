@@ -24,7 +24,8 @@ ACCEPTABLE_REVISIONS = {
     "20260305_04",   # Fix jd_certification_requirements PK to id
     "20260305_05",   # Seed auth_clients with default dev client
     "7efd9d68d9b8",  # PII scrub audit table
-    "bca284b2d901",  # Add pii_scrubbed flag to embeddings (current head)
+    "bca284b2d901",  # Add pii_scrubbed flag to embeddings
+    "emb002_multi_vec",  # CR-EMB-002: Multi-vector embedding columns
 }
 
 
@@ -83,6 +84,7 @@ def get_migration_info(engine: Engine) -> Tuple[str, str]:
                 "20260305_05": "0008",
                 "7efd9d68d9b8": "0009",
                 "bca284b2d901": "0010",
+                "emb002_multi_vec": "0011",
             }
             short_version = revision_map.get(version_num, "unknown")
 

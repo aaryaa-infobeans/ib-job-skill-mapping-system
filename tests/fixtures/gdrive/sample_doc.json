@@ -1,0 +1,19 @@
+{
+  "documentId": "abc123xyz789",
+  "title": "Sample Resume",
+  "body": {
+    "content": [
+      {
+        "paragraph": {
+          "elements": [
+            {
+              "textRun": {
+                "content": "John Doe\nSoftware Engineer\nExperience: 5 years\n"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -106,3 +106,36 @@ class EmbeddingAgent(BaseAgent):
     def format_output(self, result: EmbeddingResult) -> EmbeddingResult:
         """Format output."""
         return result
+
+
+# ---------------------------------------------------------------------------
+# CR-EMB-002: Model factory (TASK-EMB-015)
+# ---------------------------------------------------------------------------
+
+def get_embedding_agent(model_name: str | None = None):
+    """
+    Return the correct embedding agent based on settings.embedding_model_name.
+
+    Routing:
+      "embedding-gemma-300m" → GemmaEmbeddingAgent (local transformer)
+      "gemini-*" / any other → existing EmbeddingAgent (Google GenAI)
+
+    This factory enables A/B testing (R1) by swapping agents via env var
+    EMBEDDING_MODEL_NAME without code changes.
+
+    Args:
+        model_name: Override; if None, reads from settings.
+
+    Returns:
+        An agent with an embed_text(str) -> np.ndarray method.
+    """
+    from app.settings import settings
+
+    name = model_name or settings.embedding_model_name
+
+    if name == "embedding-gemma-300m":
+        from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
+        return GemmaEmbeddingAgent(device=settings.embedding_device)
+
+    # Gemini / OpenAI / legacy path
+    return EmbeddingAgent()

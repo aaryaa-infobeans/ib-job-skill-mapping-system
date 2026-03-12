@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     
     # Runtime Configuration
     dry_run: bool = False
+
+    # CR-EMB-002: Embedding & MCP settings (TASK-EMB-024)
+    embedding_model: str = "embedding-gemma-300m"
+    mcp_server_script: str = "src/mcp_servers/gdrive/server.py"
+    mcp_server_env: dict = {}
+    embedding_batch_size: int = 32
+    force_re_embed: bool = False
+    mcp_client_max_retries: int = 3
     
     @property
     def database_url(self) -> str:

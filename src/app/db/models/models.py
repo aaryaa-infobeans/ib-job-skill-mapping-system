@@ -299,6 +299,26 @@ class TeamMemberEmbedding(Base):
     extra_metadata = Column("metadata", JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # CR-EMB-002: Multi-vector embedding columns (Phase 1)
+    resume_embedding = Column(
+        Text().with_variant(Vector(768), "postgresql"), nullable=True
+    )
+    skills_embedding = Column(
+        Text().with_variant(Vector(768), "postgresql"), nullable=True
+    )
+    certifications_embedding = Column(
+        Text().with_variant(Vector(768), "postgresql"), nullable=True
+    )
+    resume_text = Column(Text, nullable=True)
+    skills_text = Column(Text, nullable=True)
+    certifications_text = Column(Text, nullable=True)
+    embedding_model = Column(
+        String(100), nullable=True, server_default="embedding-gemma-300m"
+    )
+    content_hash = Column(CHAR(64), nullable=True)
+    resume_fetched_at = Column(DateTime, nullable=True)
+    embedding_updated_at = Column(DateTime, nullable=True)
+
 
 class RequisitionMatchTeamMemberFeedback(Base):
     """Reviewer feedback for a candidate match."""
