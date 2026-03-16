@@ -1,7 +1,7 @@
 """
 GemmaEmbeddingAgent — local transformer-based 768-dim embeddings.
 
-Model: google/embedding-gemma-300m
+Model: google/embeddinggemma-300m
 Dimension: 768
 Max tokens: 2048
 
@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 class GemmaEmbeddingAgent:
     """
-    Wraps google/embedding-gemma-300m for mean-pooling + L2-normalized embeddings.
+    Wraps google/embeddinggemma-300m for mean-pooling + L2-normalized embeddings.
 
     Model loading is deliberately separated from inference so memory profiling
     (RG-R6) can measure RSS before/after __init__().
     """
 
-    MODEL_NAME: str = "google/embedding-gemma-300m"
+    MODEL_NAME: str = "google/embeddinggemma-300m"
     DIMENSION: int = 768
     MAX_TOKENS: int = 2048
 

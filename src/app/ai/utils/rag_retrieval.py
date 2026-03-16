@@ -1,4 +1,4 @@
-"""RAG Retrieval Agent - Hybrid search (BM25 + Vector) from scratch."""
+"""RAG Retrieval Agent - Hybrid search (BM25 + Multi-Vector) supporting Gemma embeddings."""
 
 import logging
 import numpy as np
@@ -13,7 +13,7 @@ from app.ai.utils.models import EmbeddingResult, RAGCandidate
 from app.settings import settings
 
 class RAGRetrievalAgent(BaseAgent):
-    """Retrieve candidates using 70/30 Hybrid Search (BM25 + Vector)."""
+    """Retrieve candidates using 70/30 Hybrid Search (BM25 + Multi-Vector)."""
     
     def __init__(self, db_connection=None, logger: Optional[logging.Logger] = None):
         super().__init__("rag_retrieval", logger)
@@ -23,7 +23,9 @@ class RAGRetrievalAgent(BaseAgent):
         # New Ratios from USER_REQUEST
         self.ratio_bm25 = float(os.getenv("HYBRID_SEARCH_RATIO_BM25", "0.7"))
         self.ratio_vector = float(os.getenv("HYBRID_SEARCH_RATIO_VECTOR", "0.3"))
+        # Default threshold 0.5 (50%)
         self.threshold = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.5"))
+        self.logger.info(f"RAGRetrievalAgent initialized with threshold={self.threshold}")
 
     def execute(
         self, 
@@ -35,10 +37,11 @@ class RAGRetrievalAgent(BaseAgent):
         min_experience_months: Optional[int] = None
     ) -> List[RAGCandidate]:
         """
-        Execute Hybrid Search with 70% BM25 and 30% Vector.
-        Threshold: 0.5 (Combined Score)
+        Execute Hybrid Search with 70% BM25 and 30% Multi-Vector.
+        Retains top 40 candidates.
         """
         if not self.db:
+            self.logger.warning("No DB connection provided to RAGRetrievalAgent")
             return []
         
         try:
@@ -51,12 +54,12 @@ class RAGRetrievalAgent(BaseAgent):
                 min_experience_months
             )
             
-            # Sort by hybrid score and return top 40
+            # Additional sorting by hybrid score and return top 40 (As requested: out of ~39)
             candidates.sort(key=lambda c: c.final_similarity, reverse=True)
             return candidates[:40]
             
         except Exception as e:
-            self.logger.error(f"Hybrid retrieval failed: {str(e)}", exc_info=True)
+            self.logger.error(f"Hybrid retrieval execution failed: {str(e)}", exc_info=True)
             return []
 
     def _query_vector_and_filter(
@@ -68,21 +71,26 @@ class RAGRetrievalAgent(BaseAgent):
         preferred_ids: List[str],
         min_months: Optional[int]
     ) -> List[RAGCandidate]:
-        """Query using Hybrid (BM25 + 3-Vector) logic."""
+        """Core SQL Logic for Hybrid (BM25 + 3-Vector) search."""
         from app.db.models.models import TeamMember, TeamMemberEmbedding
         
-        self.logger.info(f"RAG Input: Query='{query_text}', MandatoryV={embedding_result.mandatory_vector is not None}")
-
-        # 1. Prepare Vector Expressions (0-1)
+        # 1. Prepare Vector Similarity Utility
         def _cos_sim(col, vec):
             if vec is None:
                 return literal(0.0)
-            # Ensure vec is a list for pgvector
+            
+            # Handle both numpy arrays and lists
             v_list = vec.tolist() if isinstance(vec, np.ndarray) else vec
+            
+            # Check for zero vector which results in NaN cosine distance
+            if all(v == 0 for v in v_list):
+                return literal(0.0)
+                
+            # Cosine Sim = 1 - Cosine Distance
             return 1 - type_coerce(col, Vector(self.vector_dim)).cosine_distance(v_list)
 
-        # Skill Similarity (Max of mandatory/preferred vs skills_embedding)
-        # Fallback to legacy embedding
+        # 2. Build multi-stage vector expressions
+        # Skills Vector (Mandatory + Preferred weighting)
         m_sim = case(
             (TeamMemberEmbedding.skills_embedding != None, _cos_sim(TeamMemberEmbedding.skills_embedding, embedding_result.mandatory_vector)),
             else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.mandatory_vector)
@@ -92,46 +100,50 @@ class RAGRetrievalAgent(BaseAgent):
             else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.preferred_vector)
         )
         
-        # Resume/JD Level Similarity
+        # Resume/Experience Vector (JD Level)
         r_sim = case(
             (TeamMemberEmbedding.resume_embedding != None, _cos_sim(TeamMemberEmbedding.resume_embedding, embedding_result.jd_level_vector)),
             else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.jd_level_vector)
         )
         
-        # Certification Similarity
+        # Certification Vector
         c_sim = case(
             (TeamMemberEmbedding.certifications_embedding != None, _cos_sim(TeamMemberEmbedding.certifications_embedding, embedding_result.certification_vector)),
             else_=literal(0.0)
         )
 
-        # Combine specialized vectors into a single v_sim (Simple average of present components)
-        v_sim_expr = (
+        # Aggregate Vector Score (Weighted 40/20/30/10)
+        v_sim_raw = (
             func.coalesce(m_sim, 0.0) * 0.4 + 
             func.coalesce(p_sim, 0.0) * 0.2 + 
             func.coalesce(r_sim, 0.0) * 0.3 + 
             func.coalesce(c_sim, 0.0) * 0.1
-        ).label("v_sim")
+        )
+        
+        # Prevent negative scores (from floating point or opposite vectors)
+        v_sim_final = case((v_sim_raw < 0, 0.0), else_=v_sim_raw).label("v_sim")
 
-        # 2. BM25-like Expression (Postgres FTS Rank)
+        # 3. BM25 Keyword Rank Expression
+        # Concatenate text fields with Coalesce to handle NULLs
         search_text = (
             func.coalesce(TeamMemberEmbedding.profile_text, "") + " " + 
             func.coalesce(TeamMemberEmbedding.skills_text, "") + " " + 
             func.coalesce(TeamMemberEmbedding.resume_text, "")
         )
+        # Use plainto_tsquery for natural language, or websearch_to_tsquery for query features
         ts_query = func.plainto_tsquery('english', query_text or " ")
-        bm25_expr = func.ts_rank_cd(func.to_tsvector('english', search_text), ts_query).label("b_score")
+        bm25_raw = func.ts_rank_cd(func.to_tsvector('english', search_text), ts_query).label("b_score")
 
-        # 3. Hybrid Combination & Filter
-        # Normalize BM25 score to [0, 1] using logistic/squashing: score / (1 + score)
-        # Clip negative vector similarities at 0
-        v_sim_clipped = case((v_sim_expr < 0, 0.0), else_=v_sim_expr)
-        norm_bm25 = (bm25_expr / (1.0 + bm25_expr)).label("bm25_sim")
-        hybrid_score_expr = (self.ratio_bm25 * norm_bm25 + self.ratio_vector * v_sim_clipped).label("hybrid_score")
+        # Normalize BM25 to 0-1 range using logistic squashing
+        norm_bm25 = (bm25_raw / (1.0 + bm25_raw)).label("bm25_sim")
 
-        # Building Query
+        # 4. Final Hybrid Score
+        hybrid_score_expr = (self.ratio_bm25 * norm_bm25 + self.ratio_vector * v_sim_final).label("hybrid_score")
+
+        # 5. Build Final Query
         query = self.db.query(
             TeamMember.team_member_id,
-            v_sim_clipped.label("v_sim"),
+            v_sim_final,
             norm_bm25,
             hybrid_score_expr
         ).join(
@@ -140,41 +152,52 @@ class RAGRetrievalAgent(BaseAgent):
             TeamMember.is_active == True
         )
 
-        # Filters
+        # Apply Hard Filters
         if filter_ids:
             query = query.filter(TeamMember.team_member_id.in_(filter_ids))
         if min_months is not None:
             query = query.filter(TeamMember.experience_in_months >= min_months)
 
-        # Apply Similarity Threshold (50% and above)
-        query = query.filter(hybrid_score_expr >= self.threshold)
+        # Apply Global Threshold
+        if self.threshold > 0:
+            query = query.filter(hybrid_score_expr >= self.threshold)
 
-        rows = query.order_by(hybrid_score_expr.desc()).limit(10).all()
-        self.logger.info(f"DEBUG: Found {len(rows)} rows total in query")
+        # Execute and format
+        from sqlalchemy.dialects import postgresql
+        try:
+            compiled = query.statement.compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})
+            self.logger.warning(f"DEBUG SQL QUERY: {str(compiled)}")
+        except Exception as e:
+            self.logger.warning(f"DEBUG SQL QUERY COMPILE FAILED: {str(e)}")
+
+        rows = query.order_by(hybrid_score_expr.desc()).limit(100).all()
+        self.logger.warning(f"DEBUG SQL: Found {len(rows)} rows from DB query for query='{query_text}'")
+        if len(rows) == 0:
+            # Check if any active members exist at all in this session
+            active_count = self.db.query(TeamMember).filter(TeamMember.is_active == True).count()
+            self.logger.warning(f"DEBUG SQL: Total active members in DB: {active_count}")
         
         candidates = []
         for row in rows:
-            breakdown = {
-                "bm25_component": round(float(row.bm25_sim) * self.ratio_bm25, 4),
-                "vector_component": round(float(row.v_sim) * self.ratio_vector, 4),
-                "raw_bm25_norm": round(float(row.bm25_sim), 4),
-                "raw_vector_sim": round(float(row.v_sim), 4),
-                "hybrid_score": round(float(row.hybrid_score), 4)
-            }
-            
             candidates.append(RAGCandidate(
                 team_member_id=row.team_member_id,
                 final_similarity=float(row.hybrid_score),
-                mandatory_similarity=float(row.v_sim),
+                mandatory_similarity=float(row.v_sim), # Combined vector sim
                 preferred_similarity=float(row.v_sim),
                 jd_level_similarity=float(row.v_sim),
-                phase0_score_breakdown=breakdown
+                phase0_score_breakdown={
+                    "bm25_component": round(float(row.bm25_sim) * self.ratio_bm25, 4),
+                    "vector_component": round(float(row.v_sim) * self.ratio_vector, 4),
+                    "raw_bm25_norm": round(float(row.bm25_sim), 4),
+                    "raw_vector_sim": round(float(row.v_sim), 4),
+                    "hybrid_score": round(float(row.hybrid_score), 4)
+                }
             ))
             
         if candidates:
             self.logger.info(f"Hybrid RAG fetched {len(candidates)} candidates. Top score: {candidates[0].final_similarity:.4f}")
         else:
-            self.logger.info("Hybrid RAG fetched 0 candidates.")
+            self.logger.info(f"Hybrid RAG fetched 0 candidates for query: '{query_text}'")
             
         return candidates
 

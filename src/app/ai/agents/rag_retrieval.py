@@ -27,11 +27,11 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
     try:
         # 1. Prepare EmbeddingResult
         embedding_result = EmbeddingResult(
-            jd_level_vector=np.array(embedding_data.get("jd_level_vector")),
-            mandatory_vector=np.array(embedding_data.get("mandatory_vector")),
-            preferred_vector=np.array(embedding_data.get("preferred_vector")),
-            certification_vector=np.array(embedding_data.get("certification_vector")) if embedding_data.get("certification_vector") else None,
-            model=embedding_data.get("model", "models/embedding-001")
+            jd_level_vector=np.array(embedding_data.get("jd_level_vector")) if embedding_data.get("jd_level_vector") is not None else None,
+            mandatory_vector=np.array(embedding_data.get("mandatory_vector")) if embedding_data.get("mandatory_vector") is not None else None,
+            preferred_vector=np.array(embedding_data.get("preferred_vector")) if embedding_data.get("preferred_vector") is not None else None,
+            certification_vector=np.array(embedding_data.get("certification_vector")) if embedding_data.get("certification_vector") is not None else None,
+            model=embedding_data.get("model", "google/embeddinggemma-300m")
         )
         
         # 2. Get requirements from state for Hard Filters
@@ -44,12 +44,14 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
         
         experience_req = parsed_jd.get("experience") or {}
         min_experience_months = experience_req.get("min_months")
+        print(f"DEBUG NODE: jd_text length={len(jd_text)}, min_exp={min_experience_months} ({type(min_experience_months)})")
         
         initial_filter_ids = state.get("target_member_ids")
         
         # 3. Initialize and execute RAG agent
         db = SessionLocal()
         try:
+            print(f"DEBUG NODE: Calling RAG agent with {len(mandatory_ids)} mandatory skills")
             agent = RAGRetrievalAgent(db_connection=db)
             candidates = agent.execute(
                 embedding_result, 
@@ -59,6 +61,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                 preferred_ids=preferred_ids,
                 min_experience_months=min_experience_months
             )
+            print(f"DEBUG NODE: RAG agent returned {len(candidates)} candidates")
             
             # Convert RAGCandidate objects to dicts for state
             state["retrieved_candidates"] = [

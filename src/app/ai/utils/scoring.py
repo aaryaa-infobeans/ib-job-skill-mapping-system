@@ -32,21 +32,21 @@ class ScoringAgent(BaseAgent):
     ROLE_CONFIGS = {
         "SENIOR": {
             "level": "SENIOR",
-            "weights": {"m_skill": 0.50, "p_skill": 0.20, "semantic": 0.25, "context": 0.05},
-            "gates": {"min_m_skill": 0.60, "min_semantic": 0.10},
-            "fit_threshold": 0.60
+            "weights": {"m_skill": 0.55, "p_skill": 0.15, "semantic": 0.25, "context": 0.05},
+            "gates": {"min_m_skill": 0.60, "min_semantic": 0.75, "min_skill_gate": 0.40},
+            "fit_threshold": 0.75
         },
         "MID": {
             "level": "MID",
-            "weights": {"m_skill": 0.40, "p_skill": 0.20, "semantic": 0.25, "context": 0.15},
-            "gates": {"min_m_skill": 0.40, "min_semantic": 0.0},
-            "fit_threshold": 0.50
+            "weights": {"m_skill": 0.50, "p_skill": 0.10, "semantic": 0.25, "context": 0.15},
+            "gates": {"min_m_skill": 0.50, "min_semantic": 0.70, "min_skill_gate": 0.40},
+            "fit_threshold": 0.70
         },
         "JUNIOR": {
             "level": "JUNIOR",
-            "weights": {"m_skill": 0.30, "p_skill": 0.30, "semantic": 0.25, "context": 0.15},
-            "gates": {"min_m_skill": 0.25, "min_semantic": 0.0},
-            "fit_threshold": 0.50
+            "weights": {"m_skill": 0.40, "p_skill": 0.20, "semantic": 0.25, "context": 0.15},
+            "gates": {"min_m_skill": 0.40, "min_semantic": 0.60, "min_skill_gate": 0.40},
+            "fit_threshold": 0.60
         }
     }
 
@@ -261,7 +261,7 @@ class ScoringAgent(BaseAgent):
         gates = role_cfg["gates"]
         role_type = role_cfg["level"]
         
-        # --- STAGE 1: Qualification Check ---
+        # --- STAGE 1: Preliminary Qualification Check ---
         
         # 1. Mandatory Skills Match (Group-based + Profile Text check)
         mandatory_alternatives = profile_data.get("mandatory_alternatives") or {}
@@ -271,27 +271,7 @@ class ScoringAgent(BaseAgent):
             profile_text
         )
         
-        # 2. Semantic Match (from RAG search)
-        s_score = rag_candidate.jd_level_similarity
-        
-        # Qualification Logic
-        is_qualified = True
-        qualification_reason = "Qualified"
-        
-        if m_match_ratio < gates["min_m_skill"]:
-            is_qualified = False
-            qualification_reason = f"Disqualified: Mandatory skill match ({m_match_ratio:.0%}) below {gates['min_m_skill']:.0%} threshold."
-        elif s_score < gates["min_semantic"]:
-            # AI Override Check for Seniors will happen in matching_scoring_node 
-            # where AI confidence is available. For now, we set is_qualified=False 
-            # and allow the node to override if confidence is high.
-            is_qualified = False
-            qualification_reason = f"Disqualified: Semantic similarity ({s_score:.2f}) below {gates['min_semantic']:.2f} threshold."
-            
-        # --- STAGE 2: Weighted Scoring ---
-        
-        # Calculate individual components
-        # Preferred Skills
+        # 2. Preferred Skills (Primary Skills Match)
         p_res = self._calculate_skill_score(
             profile_data.get("skill_ids", []),
             [], 
@@ -300,6 +280,50 @@ class ScoringAgent(BaseAgent):
             profile_data.get("preferred_alternatives")
         )
         p_score = p_res["preferred_score"]
+        
+        # 3. Stage 1 Skill Gate (Combined Mandatory + Preferred)
+        # User request: "send for evaluation of score if they pass more than 40% from mandatory and prefferd skills"
+        total_m_count = len(mandatory_alternatives)
+        total_p_count = len(profile_data.get("preferred_skill_ids", []))
+        
+        # Calculate raw counts of satisfied requirements
+        satisfied_m = m_match_ratio * total_m_count
+        satisfied_p = p_score * total_p_count
+        
+        # Combined ratio across all requested skills
+        total_skills = total_m_count + total_p_count
+        if total_skills > 0:
+            skill_combined_ratio = (satisfied_m + satisfied_p) / total_skills
+        else:
+            skill_combined_ratio = 1.0
+            
+        min_skill_gate = 0.40 # Hard trigger at 40% as requested
+        
+        # For legacy compatibility with breakdown, we still show the weighted version if needed, 
+        # but the gate check uses the raw ratio.
+        skill_gate_score = skill_combined_ratio
+        
+        # 4. Semantic Match (from RAG search)
+        s_score = rag_candidate.jd_level_similarity
+        
+        # Qualification Logic
+        is_qualified = True
+        qualification_reason = "Qualified"
+        
+        if skill_combined_ratio < min_skill_gate:
+            is_qualified = False
+            qualification_reason = f"Disqualified: Total skill match ratio ({skill_combined_ratio:.2f}) below {min_skill_gate:.2f} barrier. Must have >40% of mandatory+preferred skills to be evaluated."
+        elif m_match_ratio < gates["min_m_skill"]:
+            is_qualified = False
+            qualification_reason = f"Disqualified: Mandatory skill match ({m_match_ratio:.0%}) below {gates['min_m_skill']:.0%} threshold."
+        elif s_score < gates["min_semantic"]:
+            # AI Override Check for Seniors will happen in matching_scoring_node 
+            # where AI confidence is available.
+            is_qualified = False
+            qualification_reason = f"Disqualified: Semantic similarity ({s_score:.2f}) below {gates['min_semantic']:.2f} threshold."
+            
+        # --- STAGE 2: Full Scoring (Search Others) ---
+        # Only reached meaningfully if is_qualified=True
         
         # Context Factors (with 0.08 cap and normalization)
         c_raw = self._calculate_context_boost(profile_data)

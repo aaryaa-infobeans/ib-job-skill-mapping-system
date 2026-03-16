@@ -115,11 +115,14 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         state["llm_call_logs"] = []
     
     for i, candidate in enumerate(candidate_scores):
-        if i < max_llm_explanations:
+        is_qualified = candidate.get("is_qualified", False)
+        
+        # Only use LLM for the top N qualified candidates
+        if i < max_llm_explanations and is_qualified:
             llm_result, metrics = _generate_llm_explanation(
                 team_member_id=candidate["team_member_id"],
                 final_score=candidate["final_score"],
-                fit_level="HIGH" if candidate.get("is_qualified") and candidate["final_score"] >= 0.75 else "MEDIUM" if candidate.get("is_qualified") else "LOW",
+                fit_level="HIGH" if candidate["final_score"] >= 0.75 else "MEDIUM",
                 parsed_jd=parsed_jd,
                 candidate_data=candidate
             )

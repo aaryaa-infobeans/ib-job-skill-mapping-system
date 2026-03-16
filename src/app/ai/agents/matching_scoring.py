@@ -67,19 +67,22 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     
     db: Session = SessionLocal()
     try:
-        if retrieved_candidates:
+        if retrieved_candidates is not None:
             retrieved_results = {c["team_member_id"]: c for c in retrieved_candidates}
             retrieved_ids = list(retrieved_results.keys())
             
-            team_members = db.query(TeamMember).filter(
-                TeamMember.team_member_id.in_(retrieved_ids),
-                TeamMember.is_active == True
-            ).all()
-            logger.info(f"Evaluating {len(team_members)} candidates filtered by RAG")
+            if retrieved_ids:
+                team_members = db.query(TeamMember).filter(
+                    TeamMember.team_member_id.in_(retrieved_ids),
+                    TeamMember.is_active == True
+                ).all()
+            else:
+                team_members = []
+            logger.info(f"Evaluating {len(team_members)} candidates matched by RAG Search")
         else:
             retrieved_results = {}
             team_members = db.query(TeamMember).filter(TeamMember.is_active == True).all()
-            logger.info(f"Found {len(team_members)} active team members to evaluate (No RAG filter)")
+            logger.info(f"RAG search skipped. Found {len(team_members)} active team members to evaluate (Fallback)")
         
         candidate_scores = []
         scoring_agent = ScoringAgent(logger=logger)
@@ -173,30 +176,38 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 is_qualified = scoring_result.detailed_breakdown.stage1_passed
                 role_type = scoring_result.detailed_breakdown.role_type
                 
-                # AI Fit Confidence (TASK-08+)
-                ai_fit = get_ai_fit_confidence(jd_text, profile_text)
-                confidence_score = ai_fit["confidence_score"]
-                
-                # --- PHASES 3 & 4: AI Override & Refined Boost (from good code) ---
-                is_senior = (role_type == "SENIOR")
+                # --- PHASES 3 & 4: AI Override & Refined Evaluation ---
+                # User request: "send for evaluation of score if they pass more than 40% ... then further do the calculation"
+                # If they pass the skill gate, we do further AI evaluation. Otherwise, skip to save cost/time.
+                ai_fit = {"confidence_score": 0.0, "reasoning": "Skipped due to Skill Gate failure", "key_strengths": [], "major_gaps": []}
+                confidence_score = 0.0
                 ai_boost = 0.0
                 ai_override_applied = False
+                is_senior = (role_type == "SENIOR")
                 
-                # 1. AI Waiver for Seniors (Stage 1 Waiver)
-                # If Senior fails semantic gate but has very high AI confidence, we waive the gate
-                if not is_qualified and is_senior and confidence_score >= 0.75:
-                    if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
-                        is_qualified = True
-                        ai_override_applied = True
-                        logger.info(f"AI Override: Waiving semantic gate for Senior {member.team_member_id} (Conf: {confidence_score})")
-                
-                # 2. Refined AI Boost (only applied if qualified)
-                if is_qualified and confidence_score >= 0.7:
-                    # External logic: 0.08 for senior, 0.05 for others
-                    ai_boost = 0.08 if is_senior else 0.05
-                
-                final_agentic_score = scoring_result.match_score
                 if is_qualified:
+                    # AI Fit Confidence (TASK-08+) - Further Evaluation
+                    ai_fit = get_ai_fit_confidence(jd_text, profile_text)
+                    confidence_score = ai_fit["confidence_score"]
+                    
+                    # 1. AI Waiver for Seniors (Stage 1 Waiver - only if semantic gate failed but skills passed)
+                    # Note: scoring_result.detailed_breakdown.stage1_passed is True here because we matched skills.
+                    # But if semantic was low, scoring_result.is_qualified might be False.
+                    if not scoring_result.is_qualified and is_senior and confidence_score >= 0.75:
+                        if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
+                            is_qualified = True
+                            ai_override_applied = True
+                            logger.info(f"AI Override: Waiving semantic gate for Senior {member.team_member_id} (Conf: {confidence_score})")
+                    
+                    # 2. Refined AI Boost (only applied if qualified)
+                    if is_qualified and confidence_score >= 0.7:
+                        ai_boost = 0.08 if is_senior else 0.05
+                else:
+                    # Disqualified by Skill Gate - Ensure score is capped
+                    pass
+
+                final_agentic_score = scoring_result.match_score
+                if is_qualified and ai_boost > 0:
                     final_agentic_score += ai_boost
                 
                 final_agentic_score = round(max(0.0, min(1.0, final_agentic_score)), 4)
