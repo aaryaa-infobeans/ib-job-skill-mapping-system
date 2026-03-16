@@ -44,10 +44,10 @@ class NormalizedRequisition:
 @dataclass
 class EmbeddingResult:
     """Embedding vectors for JD components."""
-    jd_level_vector: np.ndarray  # 768-dim (updated for Gemma)
-    mandatory_vector: np.ndarray  # 768-dim
-    preferred_vector: np.ndarray  # 768-dim
-    certification_vector: Optional[np.ndarray] = None  # 768-dim
+    jd_level_vector: Optional[np.ndarray] = None
+    mandatory_vector: Optional[np.ndarray] = None
+    preferred_vector: Optional[np.ndarray] = None
+    certification_vector: Optional[np.ndarray] = None
     model: str = "models/embedding-001"
     
     def __post_init__(self):

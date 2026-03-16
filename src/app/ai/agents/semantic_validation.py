@@ -11,14 +11,19 @@ from app.ai.utils.llm_client import llm_client
 
 SEMANTIC_VALIDATION_PROMPT = """You are a data quality validator for job requisitions. Your task is to identify nonsensical, garbage, or invalid values in the requisition data.
 
+IMPORTANT: The data may have been pre-processed by a PII scrubber. The following patterns are VALID and should NOT be flagged as garbage:
+- `CLIENT_TOKEN_...` (e.g., `CLIENT_TOKEN_a7b9c2d1`) - Valid anonymized client/company name.
+- `PROJECT_TOKEN_...` (e.g., `PROJECT_TOKEN_e4f8a9b2`) - Valid anonymized project name.
+- `[REDACTED]`, `[NAME_REDACTED]`, `[EMAIL_REDACTED]`, `[PHONE_REDACTED]`, etc. - Valid anonymized data.
+
 Analyze the following fields and check if they contain valid, professional data:
 
 1. **Job Title**: Is it a real professional job title? (e.g., "Senior Software Engineer" is valid, "sdfdsf" is garbage)
 2. **Job Role**: Is it a valid role category? (e.g., "Software Development" is valid, "sdf" is garbage)
 3. **Skills**: Are they actual technologies, tools, or competencies? (e.g., "Python", "React" are valid, "sdfsdf" is garbage)
-4. **Client Name**: Is it a plausible company name? (e.g., "Acme Corp" is valid, "sdf" is garbage)
+4. **Client Name**: Is it a plausible company name OR a valid PII token (e.g., `CLIENT_TOKEN_...`)?
 5. **Location**: Are they real places? (e.g., "New York" is valid, "dsfdsfsd" is garbage)
-6. **Job Description**: Is it coherent and professional? (Random characters or keyboard mashing is garbage)
+6. **Job Description**: Is it coherent and professional? (Random characters or keyboard mashing is garbage). Note that it may contain PII tokens or redaction markers.
 
 Return ONLY valid JSON with this exact structure:
 {

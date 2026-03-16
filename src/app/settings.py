@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     pgvector_dimension: int
 
     # CR-EMB-002: Embedding model settings
-    embedding_model_name: str = "embedding-gemma-300m"
+    embedding_model_name: str = "google/embedding-gemma-300m"
+    embedding_model: Optional[str] = None  # Alias for EMBEDDING_MODEL in .env
     gemma_model_path: Optional[str] = None
     embedding_device: str = "cpu"
     mcp_gdrive_server_path: str = "src/mcp_servers/gdrive/server.py"

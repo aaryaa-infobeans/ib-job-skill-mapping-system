@@ -61,21 +61,25 @@ payload = {
     "request_id": f"REQ-TEST-{unique_id}",
     "schema_version": "v1",
     "source_system": "HR_SYSTEM",
-    "client_name": "LM",
+    "client_name": "Infosys Ltd",
     "job_description": {
-        "client_name": "SMBC",
-        "title": "Python Engineer",
-        "role": "Python Engineer",
+        "client_name": "Infosys Ltd",
+        "title": "Senior Python Developer",
+        "role": "Backend Engineer",
         "requisition_duration_month": 6,
         "expected_start_date": date.today().isoformat(),
         "priority": "HIGH",
         "location": ["Remote", "Pune", "Indore", "Bangalore"],
         "work_mode": ["Hybrid", "Remote", "WFO"],
         "experience": {"min_months": 12, "max_months": 240},
-        "mandatory_skills": [ "Python", "AI", "SQL"],
-        "preferred_skills": ["AWS", "ML"],
+        "mandatory_skills": ["Python", "FastAPI", "PostgreSQL"],
+        "preferred_skills": ["AWS", "LangChain"],
         "certifications": ["AWS Solutions Architect - Associate"],
-        "jd_text": "Senior Engineer - expert in Python and AI ML with SQL knowledge",
+        "jd_text": """
+We are looking for a Senior Python Developer with experience in Python,
+FastAPI, PostgreSQL, LangChain and AWS. Candidate should be able to build
+microservices and REST APIs.
+""",
     },
     "metadata": {"submitted_by": "recruiter@test.com", "department": "Engineering"},
 }

@@ -83,7 +83,7 @@ class ScoringAgent(BaseAgent):
             return 1.0
             
         member_skills = set(member_skill_ids)
-        p_text_lower = profile_text.lower()
+        p_text_lower = (profile_text or "").lower()
         satisfied_groups = 0
         total_groups = len(mandatory_alternatives)
         

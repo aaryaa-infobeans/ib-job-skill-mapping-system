@@ -132,6 +132,7 @@ class PIIAuditLogger:
                 )
             """)
             
+            import json
             self.db_session.execute(insert_sql, {
                 'operation': operation,
                 'entity_type': entity_type,
@@ -145,7 +146,7 @@ class PIIAuditLogger:
                 'confidence_score': confidence_score,
                 'user_id': user_id,
                 'session_id': session_id,
-                'metadata': metadata
+                'metadata': json.dumps(metadata) if metadata else None
             })
             
             # Commit immediately for audit trail integrity
@@ -160,6 +161,10 @@ class PIIAuditLogger:
             
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")
+            try:
+                self.db_session.rollback()
+            except Exception as rollback_error:
+                logger.error(f"Failed to rollback session: {rollback_error}")
             # Don't fail the main operation if audit logging fails
             # But log the error for investigation
             return False
