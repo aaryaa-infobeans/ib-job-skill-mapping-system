@@ -394,7 +394,7 @@ This impact summary has been reviewed and approved by:
 
 ## 11. References
 
-- **Change Request:** [CR_PII_scrubber.md](./CR_PII_scrubber.md)
+- **Change Request:** [spec.md](./spec.md)
 - **Updated Specifications:** See Section 2 (10 files modified)
 - **Compliance Frameworks:**
   - GDPR: https://gdpr-info.eu/

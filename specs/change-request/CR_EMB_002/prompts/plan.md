@@ -26,7 +26,7 @@ You must:
 INPUT SPECIFICATION:
 
 Primary Spec:
-  /specs/change-request/CR_resume_embedding_pipeline.md
+  /specs/change-request/CR_EMB_002/spec.md
 
 CR Metadata:
   CR ID: CR-EMB-002
@@ -439,5 +439,5 @@ Produce:
 5. Branch-to-spec traceability table
 6. Testing enforcement plan
 
-Output file: `/specs/change-request/CR_EMB_002_plan.md`
+Output file: `/specs/change-request/CR_EMB_002/plan.md`
 Output must be directly usable as `/speckit.tasks` generation input.

@@ -23,7 +23,7 @@ OBJECTIVE:
 Create a new Change Request specification:
 
 File path:
-  /specs/change-request//CR_PII_scrubber.md
+  /specs/change-request/CR_PII_scrubber/spec.md
 
 Purpose:
   Introduce a mandatory PII Scrubber layer in the RAG pipeline to remove or
@@ -65,7 +65,7 @@ The specification must define:
 
 SPECIFICATION CONTENT REQUIREMENTS:
 
-The new spec (/specs/change-request//CR_PII_scrubber.md) must include:
+The new spec (/specs/change-request/CR_PII_scrubber/spec.md) must include:
 
 1. Overview
    - Problem statement
@@ -164,7 +164,7 @@ DELIVERABLE FORMAT:
 
 Return:
 
-1. Full content of /specs/change-request//CR_PII_scrubber.md
+1. Full content of /specs/change-request/CR_PII_scrubber/spec.md
 2. List of impacted specs
 3. Patch-style updates for each impacted spec
 4. Updated version numbers
