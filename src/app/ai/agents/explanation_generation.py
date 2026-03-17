@@ -37,7 +37,7 @@ def _generate_llm_explanation(
             role_type=candidate_data.get("role_type", "MID"),
             mandatory_group_score=score_breakdown.get("mandatory_skills_group", 0.0),
             semantic_score=score_breakdown.get("semantic_similarity", 0.0),
-            context_boost=score_breakdown.get("context_boost", 0.0),
+            context_boost=score_breakdown.get("context_score", 0.0),
             penalties=score_breakdown.get("penalties", 0.0),
             ai_confidence=candidate_data.get("ai_confidence_score", 0.0),
             ai_boost=candidate_data.get("ai_boost", 0.0),
@@ -108,18 +108,22 @@ def explanation_generation_node(state: GraphState) -> GraphState:
     if not candidate_scores or not parsed_jd:
         return state
     
-    max_llm_explanations = int(os.getenv("MAX_LLM_EXPLANATIONS", "5"))
+    from app.settings import settings
+    max_llm_explanations = settings.max_llm_explanations
     
     # Initialize state fields for tracking
     if state.get("llm_call_logs") is None:
         state["llm_call_logs"] = []
     
     for i, candidate in enumerate(candidate_scores):
+        is_qualified = candidate.get("is_qualified", False)
+        
+        # Only use LLM for the top N candidates
         if i < max_llm_explanations:
             llm_result, metrics = _generate_llm_explanation(
                 team_member_id=candidate["team_member_id"],
                 final_score=candidate["final_score"],
-                fit_level="HIGH" if candidate.get("is_qualified") and candidate["final_score"] >= 0.75 else "MEDIUM" if candidate.get("is_qualified") else "LOW",
+                fit_level="HIGH" if candidate["final_score"] >= 0.75 else "MEDIUM",
                 parsed_jd=parsed_jd,
                 candidate_data=candidate
             )

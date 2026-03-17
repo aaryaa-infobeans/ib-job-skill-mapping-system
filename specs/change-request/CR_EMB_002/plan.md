@@ -1205,5 +1205,5 @@ Monitored conditions that automatically trigger a rollback alert (human confirma
 
 ---
 
-*Plan generated from CR-EMB-002 v2.0.0 specification. All section references (§) resolve to `specs/change-request/CR_resume_embedding_pipeline.md`.*  
+*Plan generated from CR-EMB-002 v2.0.0 specification. All section references (§) resolve to `/specs/change-request/CR_EMB_002/spec.md`.*  
 *Codebase grounding: actual file paths and class names verified against workspace at generation time.*

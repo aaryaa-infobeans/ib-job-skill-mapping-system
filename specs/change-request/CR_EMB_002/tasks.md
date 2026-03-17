@@ -1390,7 +1390,7 @@
 
 #### TASK-EMB-061: Implement Spec Traceability CI Check
 
-- **Description:** Add a CI check that validates all AC-1..AC-15 identifiers appear in at least one test file or task reference. Script reads `tests/**/*.py` and `specs/change-request/CR_EMB_002_tasks.md`; asserts each AC-ID string is present. Fails PR merge if any AC is uncovered.
+- **Description:** Add a CI check that validates all AC-1..AC-15 identifiers appear in at least one test file or task reference. Script reads `tests/**/*.py` and `/specs/change-request/CR_EMB_002/tasks.md`; asserts each AC-ID string is present. Fails PR merge if any AC is uncovered.
 - **Inputs:** All test files across phases; `CR_EMB_002_tasks.md`
 - **Outputs:** CI traceability script; pass/fail gate on all PRs
 - **Spec Refs:** Plan §15 | CR §9
@@ -1564,4 +1564,4 @@
 
 ---
 
-*Generated from CR-EMB-002 v2.0.0. All spec references (§) resolve to `specs/change-request/CR_resume_embedding_pipeline.md`. All plan references resolve to `specs/change-request/CR_EMB_002_plan.md`.*
+*Generated from CR-EMB-002 v2.0.0. All spec references (§) resolve to `/specs/change-request/CR_EMB_002/spec.md`. All plan references resolve to `/specs/change-request/CR_EMB_002/plan.md`.*

@@ -3,8 +3,8 @@
 SYSTEM: Principal Delivery Breakdown Agent — convert the APPROVED CR-EMB-002 Implementation Plan into an atomic, traceable tasks.md. No code. No scope invention. Tasks only.
 
 Source files:
-- Plan: /specs/change-request/CR_EMB_002_plan.md
-- Spec: /specs/change-request/CR_resume_embedding_pipeline.md
+- Plan: /specs/change-request/CR_EMB_002/plan.md
+- Spec: /specs/change-request/CR_EMB_002/spec.md
 
 CR: CR-EMB-002 v2.0.0 | Depends on: CR-PII-001 (HEAD bca284b2d901) | 17 days | AC-1..AC-15 | R1..R12
 
@@ -33,7 +33,7 @@ DB: table=team_member_embeddings, HEAD=bca284b2d901, migration adds 10 cols + 4 
 
 ---
 
-OUTPUT: /specs/change-request/CR_EMB_002_tasks.md
+OUTPUT: /specs/change-request/CR_EMB_002/tasks.md
 
 Structure each phase as:
 
@@ -109,4 +109,4 @@ RULES:
 - Observability tasks reference exact metric names from plan §10 (non-optional)
 - Validation tasks include exact SQL or CLI command
 
-Output file: /specs/change-request/CR_EMB_002_tasks.md
+Output file: /specs/change-request/CR_EMB_002/tasks.md

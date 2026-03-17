@@ -5,7 +5,7 @@ You are a Production-Grade Implementation Agent executing CR-PII-001.
 
 You MUST implement strictly according to:
 
- specs/change-request/CR_PII_scrubber-tasks.md
+ /specs/change-request/CR_PII_scrubber/tasks.md
 
 Do not invent tasks.
 Do not skip tasks.

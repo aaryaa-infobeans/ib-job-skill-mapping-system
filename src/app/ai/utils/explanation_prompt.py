@@ -39,7 +39,7 @@ Required Location: {job_location}
 - Work Mode Matched: {work_mode_matched_icon}
 
 **6. Context Support Boost:**
-- Context Boost Applied: {context_boost:.4f} (Max 0.08)
+- Context Boost Applied: {context_boost:.4f}
 - Candidate Experience: {candidate_experience} months
 
 **7. Penalties & Deficiencies:**
@@ -53,11 +53,16 @@ Required Location: {job_location}
 
 
 === YOUR TASK ===
-Generate a professional, concise "medium explanation" (3-4 sentences) that:
-1. Summarizes the overall fit and status (Qualified/Disqualified).
-2. Highlights key match strengths (Skills, Experience, Location, or AI Boost).
-3. Addresses critical gaps or penalties (Missing mandatory skills, Location mismatch, etc.).
-4. Provides a clear recommendation based on the ledger evidence.
+Generate a professional, structured evaluation (3-5 sentences) that:
+1. Summarizes the overall fit and qualification status.
+2. Performs a parameter-by-parameter analysis based ONLY on the provided ledger:
+   - Skills (Mandatory & Preferred): How well the candidate's skill set aligns with requirements.
+   - Experience: Whether the candidate's tenure meets expectations.
+   - Location & Work Mode: Compatibility with the requested work arrangement.
+   - Certifications: Presence or absence of REQUIRED credentials (only mention those listed in REQUISITION REQUIREMENTS).
+3. Highlights specific strengths as "Matches" and critical deficiencies as "Gaps".
+4. Provides a clear, evidence-based recommendation derived strictly from the scoring ledger.
+   - IMPORTANT: Do not assume or hallucinate requirements not explicitly listed in the REQUISITION REQUIREMENTS or PHASE 1 SCORING LEDGER sections above.
 
 === RESPONSE FORMAT ===
 Provide the explanation as a JSON object with this structure:

@@ -2657,8 +2657,8 @@ jobs:
 
 ## 16. References
 
-- **Change Request:** [CR_PII_scrubber.md](./CR_PII_scrubber.md)
-- **Impact Summary:** [CR_PII_scrubber_IMPACT_SUMMARY.md](./CR_PII_scrubber_IMPACT_SUMMARY.md)
+- **Change Request:** [spec.md](./spec.md)
+- **Impact Summary:** [impact_summary.md](./impact_summary.md)
 - **Specifications Updated:** See Section 11.1 (10 files)
 - **Compliance Frameworks:**
   - GDPR: https://gdpr-info.eu/

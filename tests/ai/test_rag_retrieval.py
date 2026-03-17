@@ -68,13 +68,9 @@ class TestRAGMultiVectorRouting(unittest.TestCase):
         agent = RAGRetrievalAgent.__new__(RAGRetrievalAgent)
         agent.db = db
         agent.vector_dim = 768
-        agent.similarity_threshold = 0.0
-        agent.max_results = 100
-        agent.weight_mandatory = 0.4
-        agent.weight_preferred = 0.3
-        agent.weight_jd_level = 0.2
-        agent.weight_certification = 0.1
-        agent.total_vector_weight = 1.0
+        agent.threshold = 0.5
+        agent.ratio_bm25 = 0.7
+        agent.ratio_vector = 0.3
         import logging
         agent.logger = logging.getLogger("test_rag")
         return agent
@@ -88,7 +84,7 @@ class TestRAGMultiVectorRouting(unittest.TestCase):
         emb = _make_embedding_result()
 
         # Should not raise; returns empty list
-        result = agent._query_vector_and_filter(emb, None, ["skill1"], ["skill2"], None)
+        result = agent._query_vector_and_filter(emb, "python developer", None, ["skill1"], ["skill2"], None)
         self.assertIsInstance(result, list)
 
     def test_cert_sim_zero_when_certs_embedding_none(self):
@@ -100,7 +96,7 @@ class TestRAGMultiVectorRouting(unittest.TestCase):
         emb = _make_embedding_result(with_cert=True)
 
         # No exception — fallback path works
-        result = agent._query_vector_and_filter(emb, None, [], [], None)
+        result = agent._query_vector_and_filter(emb, "python", None, [], [], None)
         self.assertIsInstance(result, list)
 
     def test_execute_returns_empty_list_when_no_db(self):
@@ -130,13 +126,9 @@ class TestRAGLatencyP50(unittest.TestCase):
         agent = RAGRetrievalAgent.__new__(RAGRetrievalAgent)
         agent.db = db
         agent.vector_dim = 768
-        agent.similarity_threshold = 0.0
-        agent.max_results = 100
-        agent.weight_mandatory = 0.4
-        agent.weight_preferred = 0.3
-        agent.weight_jd_level = 0.2
-        agent.weight_certification = 0.1
-        agent.total_vector_weight = 1.0
+        agent.threshold = 0.5
+        agent.ratio_bm25 = 0.7
+        agent.ratio_vector = 0.3
         import logging
         agent.logger = logging.getLogger("test_rag")
 
@@ -145,7 +137,7 @@ class TestRAGLatencyP50(unittest.TestCase):
 
         for _ in range(50):
             t0 = time.perf_counter()
-            agent._query_vector_and_filter(emb, None, [], [], None)
+            agent._query_vector_and_filter(emb, "senior python engineer", None, [], [], None)
             latencies.append((time.perf_counter() - t0) * 1000)
 
         p50 = statistics.median(latencies)

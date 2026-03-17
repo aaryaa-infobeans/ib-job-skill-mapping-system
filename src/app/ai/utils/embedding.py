@@ -9,26 +9,34 @@ from app.ai.utils.models import NormalizedRequisition, EmbeddingResult
 
 
 class EmbeddingAgent(BaseAgent):
-    """Generate embeddings for JD components using Google Generative AI (Gemma)."""
+    """Generate embeddings for JD components using Google Gemini or local Gemma."""
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__("embedding", logger)
-        # Fallback to gemini-embedding-001 as embedding-gemma-300m is not in the list
-        self.model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001") 
-        self.genai_client = None
-        self._init_genai()
-    
-    def _init_genai(self):
-        """Initialize Google Generative AI client."""
-        try:
-            from google import genai
-            api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        from app.settings import settings
+        
+        self.model_name = settings.embedding_model or settings.embedding_model_name
+        self.device = settings.embedding_device
+        
+        if "gemini" in self.model_name.lower():
+            import google.generativeai as genai
+            api_key = settings.google_api_key
             if not api_key:
-                self.logger.warning("GOOGLE_API_KEY not set, using mock embeddings")
-                return
-            self.genai_client = genai.Client(api_key=api_key)
-        except ImportError:
-            self.logger.warning("google-genai library not installed, using mock embeddings")
+                # Try env fallback if settings doesn't have it
+                api_key = os.getenv("GOOGLE_API_KEY")
+            
+            if not api_key:
+                self.logger.error("GOOGLE_API_KEY not found in settings or environment")
+                raise ValueError("GOOGLE_API_KEY is required for Gemini embeddings")
+                
+            genai.configure(api_key=api_key)
+            self.model_type = "gemini"
+            self.logger.info(f"Initializing Gemini EmbeddingAgent with model={self.model_name}")
+        else:
+            from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
+            self.model_type = "gemma"
+            self.logger.info(f"Initializing local Gemma EmbeddingAgent with model={self.model_name}, device={self.device}")
+            self.gemma_agent = GemmaEmbeddingAgent(device=self.device, model_name=self.model_name)
     
     def execute(self, normalized_requisition: NormalizedRequisition) -> EmbeddingResult:
         """
@@ -41,60 +49,77 @@ class EmbeddingAgent(BaseAgent):
             EmbeddingResult with all vectors
         """
         # Prepare texts to embed
-        jd_level_text = f"Job level: {getattr(normalized_requisition.original_requisition, 'jd_level', 'N/A')}"
-        mandatory_text = f"Required skills: {', '.join(normalized_requisition.original_mandatory_skills)}"
-        preferred_text = f"Preferred skills: {', '.join(normalized_requisition.original_preferred_skills)}"
-        
-        # Build certification text
+        m_skills = normalized_requisition.original_mandatory_skills
+        p_skills = normalized_requisition.original_preferred_skills
+        jd_level = getattr(normalized_requisition.original_requisition, 'jd_level', None)
         cert_names = normalized_requisition.normalized_certifications or normalized_requisition.original_certifications
         enriched_certs = normalized_requisition.expanded_certification_terms
-        certification_text = f"Certifications: {', '.join(cert_names)}"
-        if enriched_certs:
-            certification_text += f". Related concepts: {', '.join(enriched_certs)}"
         
+        # Build texts only if content exists
+        jd_level_text = f"Job level: {jd_level}" if jd_level else None
+        mandatory_text = f"Required skills: {', '.join(m_skills)}" if m_skills else None
+        preferred_text = f"Preferred skills: {', '.join(p_skills)}" if p_skills else None
+        
+        certification_text = None
+        if cert_names or enriched_certs:
+            certification_text = f"Certifications: {', '.join(cert_names)}"
+            if enriched_certs:
+                certification_text += f". Related concepts: {', '.join(enriched_certs)}"
+        
+        # NEW: Full JD Text for Weighted Search (Semantic Fit)
+        raw_jd = normalized_requisition.original_requisition.raw_requisition if normalized_requisition.original_requisition else {}
+        jd_text = ""
+        if isinstance(raw_jd, dict):
+            jd_text = raw_jd.get("jd_text", "")
+        elif isinstance(raw_jd, str):
+            jd_text = raw_jd
+            
+        # Gemma expects 'search_query: ' prefix for retrieval queries
+        full_jd_text_with_prefix = f"search_query: {jd_text}" if jd_text else None
+
         # Generate embeddings
-        jd_level_vec = self.embed_text(jd_level_text)
-        mandatory_vec = self.embed_text(mandatory_text)
-        preferred_vec = self.embed_text(preferred_text)
+        jd_level_vec = self.embed_text(jd_level_text) if jd_level_text else None
+        mandatory_vec = self.embed_text(mandatory_text) if mandatory_text else None
+        preferred_vec = self.embed_text(preferred_text) if preferred_text else None
         certification_vec = self.embed_text(certification_text) if certification_text else None
+        full_jd_vec = self.embed_text(full_jd_text_with_prefix) if full_jd_text_with_prefix else None
         
         result = EmbeddingResult(
             jd_level_vector=jd_level_vec,
             mandatory_vector=mandatory_vec,
             preferred_vector=preferred_vec,
             certification_vector=certification_vec,
-            model=self.model
+            full_jd_vector=full_jd_vec,
+            model=self.model_name
         )
         
         return result
     
     def embed_text(self, text_input: str) -> np.ndarray:
         """
-        Generate embedding for a text string using Google's embedding model.
+        Generate embedding for a text string.
         
         Returns:
-            768-dimensional embedding vector (default for text-embedding-004)
+            768-dimensional embedding vector
         """
-        dimension = 768
-        if not self.genai_client:
-            # Return mock embedding for testing
-            return np.random.randn(dimension).astype(np.float32)
-        
+        if not text_input or text_input.strip() == "":
+            return np.zeros(768).astype(np.float32)
+
         try:
-            # New google.genai client syntax
-            # Note: text-embedding-004 default dimension is 768
-            response = self.genai_client.models.embed_content(
-                model=self.model,
-                contents=text_input,
-                config={
-                    "task_type": "RETRIEVAL_QUERY"
-                }
-            )
-            embedding = response.embeddings[0].values
-            return np.array(embedding, dtype=np.float32)[:dimension]
+            if self.model_type == "gemini":
+                import google.generativeai as genai
+                result = genai.embed_content(
+                    model=self.model_name,
+                    content=text_input,
+                    task_type="retrieval_query"
+                )
+                return np.array(result['embedding']).astype(np.float32)
+            else:
+                return self.gemma_agent.embed_text(text_input)
         except Exception as e:
-            self.logger.error(f"Failed to embed text with Google API: {str(e)}", exc_info=True)
-            return np.random.randn(dimension).astype(np.float32)
+            self.logger.error(f"Failed to embed text with {self.model_type}: {str(e)}", exc_info=True)
+            # Fallback to random if absolutely necessary, but we want to know it failed
+            return np.random.randn(768).astype(np.float32)
     
     def validate_input(self, input_data: Any) -> bool:
         """Validate that input is NormalizedRequisition."""
@@ -131,7 +156,7 @@ def get_embedding_agent(model_name: str | None = None):
     """
     from app.settings import settings
 
-    name = model_name or settings.embedding_model_name
+    name = model_name or settings.embedding_model or settings.embedding_model_name
 
     if name == "embedding-gemma-300m":
         from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent

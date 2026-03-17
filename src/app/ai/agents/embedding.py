@@ -56,10 +56,11 @@ def embedding_node(state: GraphState) -> GraphState:
         
         # Convert EmbeddingResult to dict for state (convert np to list for JSON)
         state["embedding_result"] = {
-            "jd_level_vector": embedding_result.jd_level_vector.tolist(),
-            "mandatory_vector": embedding_result.mandatory_vector.tolist(),
-            "preferred_vector": embedding_result.preferred_vector.tolist(),
+            "jd_level_vector": embedding_result.jd_level_vector.tolist() if embedding_result.jd_level_vector is not None else None,
+            "mandatory_vector": embedding_result.mandatory_vector.tolist() if embedding_result.mandatory_vector is not None else None,
+            "preferred_vector": embedding_result.preferred_vector.tolist() if embedding_result.preferred_vector is not None else None,
             "certification_vector": embedding_result.certification_vector.tolist() if embedding_result.certification_vector is not None else None,
+            "full_jd_vector": embedding_result.full_jd_vector.tolist() if embedding_result.full_jd_vector is not None else None,
             "model": embedding_result.model
         }
         

@@ -44,10 +44,11 @@ class NormalizedRequisition:
 @dataclass
 class EmbeddingResult:
     """Embedding vectors for JD components."""
-    jd_level_vector: np.ndarray  # 768-dim (updated for Gemma)
-    mandatory_vector: np.ndarray  # 768-dim
-    preferred_vector: np.ndarray  # 768-dim
-    certification_vector: Optional[np.ndarray] = None  # 768-dim
+    jd_level_vector: Optional[np.ndarray] = None
+    mandatory_vector: Optional[np.ndarray] = None
+    preferred_vector: Optional[np.ndarray] = None
+    certification_vector: Optional[np.ndarray] = None
+    full_jd_vector: Optional[np.ndarray] = None
     model: str = "models/embedding-001"
     
     def __post_init__(self):
@@ -58,7 +59,8 @@ class EmbeddingResult:
             ("jd_level", self.jd_level_vector),
             ("mandatory", self.mandatory_vector),
             ("preferred", self.preferred_vector),
-            ("certification", self.certification_vector)
+            ("certification", self.certification_vector),
+            ("full_jd", self.full_jd_vector)
         ]:
             if vec is not None and len(vec) not in [3072, 768]:
                 raise ValueError(f"{name}_vector must be 768 or 3072-dimensional, got {len(vec)}")
@@ -82,7 +84,9 @@ class ScoringBreakdown:
     """Detailed breakdown of scoring components."""
     skills_matched: List[str] = field(default_factory=list)
     mandatory_matched: List[str] = field(default_factory=list)
+    mandatory_missing: List[str] = field(default_factory=list)
     preferred_matched: List[str] = field(default_factory=list)
+    preferred_missing: List[str] = field(default_factory=list)
     mandatory_score: float = 0.0
     preferred_score: float = 0.0
     certification_matched: List[str] = field(default_factory=list)

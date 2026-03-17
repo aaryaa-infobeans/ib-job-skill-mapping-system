@@ -22,13 +22,15 @@ Given:
 - Basic job metadata (title, role, client)
 - Job description text (jd_text)
 - Initial mandatory and preferred skill lists
+- Initial required certifications (certifications)
 
 Your responsibilities:
 1. Extract additional technical skills, tools, and technologies from the `jd_text` that are not already in the provided lists.
 2. Normalize all skills (extracted and provided) to a standard format (e.g., "python" -> "Python", "k8s" -> "Kubernetes").
-3. Normalize the job title and role category to standard professional formats.
-4. Extract or verify experience requirements (in months).
-5. Identify expected start date and duration if explicitly mentioned in the text.
+3. Normalize certificates if mentioned in text or provided in list.
+4. Normalize the job title and role category to standard professional formats.
+5. Extract or verify experience requirements (in months).
+6. Identify expected start date and duration if explicitly mentioned in the text.
 
 Return ONLY a valid JSON object with this exact structure:
 {
@@ -47,6 +49,7 @@ Return ONLY a valid JSON object with this exact structure:
 
 Important:
 - Combine payload skills with newly extracted ones.
+- Combine and normalize payload certifications with newly extracted ones.
 - Ensure the JSON is valid and only contains the requested fields.
 - Use null for missing information.
 """
@@ -65,6 +68,7 @@ def parse_requisition_with_llm(
             "client_name": job_description.get("client_name", "Unknown"),
             "mandatory_skills": job_description.get("mandatory_skills", []),
             "preferred_skills": job_description.get("preferred_skills", []),
+            "certifications": job_description.get("certifications", []) or job_description.get("certifications_required", []),
             "jd_text": job_description.get("jd_text", ""),
             "experience": job_description.get("experience", {}),
             "expected_start_date": job_description.get("expected_start_date"),
@@ -100,7 +104,11 @@ def parse_requisition_with_llm(
             "experience": llm_output.get("experience", job_description.get("experience")),
             "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
             "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
-            "certifications_required": list(set(llm_output.get("certifications_required", []) + (job_description.get("certifications_required") or job_description.get("certifications") or []))),
+            "certifications_required": list(set(
+                (llm_output.get("certifications_required") or []) + 
+                (job_description.get("certifications") or []) + 
+                (job_description.get("certifications_required") or [])
+            )),
 
             
             # Original Payload fields preserved

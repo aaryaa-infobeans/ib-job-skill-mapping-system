@@ -24,10 +24,10 @@ You must:
 INPUT SPECIFICATIONS:
 
 Primary Spec:
-  /specs/CR_PII_scrubber.md
+  /specs/change-request/CR_PII_scrubber/spec.md
 
 Impact Summary:
-  /specs/CR_PII_scrubber_IMPACT_SUMMARY.md
+  /specs/change-request/CR_PII_scrubber/impact_summary.md
 
 These specs define:
 - PII detection rules (regex + NER)

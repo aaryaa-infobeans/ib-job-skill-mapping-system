@@ -20,117 +20,118 @@ class ScoringAgent(BaseAgent):
     def format_output(self, result: Any) -> Any:
         return result
     
-    SKILL_GROUPS = {
-        "python": ["python", "django", "flask", "fastapi", "pandas", "numpy", "scikit-learn", "pytorch", "tensorflow"],
-        "javascript": ["javascript", "js", "typescript", "ts", "react", "node", "next.js", "angular", "vue"],
-        "sql": ["sql", "postgresql", "mysql", "sql server", "snowflake", "oracle", "db2"],
-        "big_data": ["spark", "pyspark", "hadoop", "kafka", "databricks"],
-        "ai_ml": ["machine learning", "ai", "ml", "nlp", "llm", "genai", "deep learning", "computer vision"],
-        "cloud": ["aws", "azure", "gcp", "docker", "kubernetes", "terrafom"]
-    }
-
-    ROLE_CONFIGS = {
-        "SENIOR": {
-            "level": "SENIOR",
-            "weights": {"m_skill": 0.50, "p_skill": 0.20, "semantic": 0.25, "context": 0.05},
-            "gates": {"min_m_skill": 0.60, "min_semantic": 0.10},
-            "fit_threshold": 0.60
-        },
-        "MID": {
-            "level": "MID",
-            "weights": {"m_skill": 0.40, "p_skill": 0.20, "semantic": 0.25, "context": 0.15},
-            "gates": {"min_m_skill": 0.40, "min_semantic": 0.0},
-            "fit_threshold": 0.50
-        },
-        "JUNIOR": {
-            "level": "JUNIOR",
-            "weights": {"m_skill": 0.30, "p_skill": 0.30, "semantic": 0.25, "context": 0.15},
-            "gates": {"min_m_skill": 0.25, "min_semantic": 0.0},
-            "fit_threshold": 0.50
+    @property
+    def skill_groups(self) -> Dict[str, List[str]]:
+        """Fetch skill groups dynamically from settings."""
+        return {
+            "python": [k.strip() for k in settings.skill_group_python.split(",")],
+            "javascript": [k.strip() for k in settings.skill_group_javascript.split(",")],
+            "sql": [k.strip() for k in settings.skill_group_sql.split(",")],
+            "big_data": [k.strip() for k in settings.skill_group_big_data.split(",")],
+            "ai_ml": [k.strip() for k in settings.skill_group_ai_ml.split(",")],
+            "cloud": [k.strip() for k in settings.skill_group_cloud.split(",")]
         }
-    }
 
-
+    def _get_role_configs(self) -> Dict[str, Any]:
+        """Expose ROLE_CONFIGS dynamically based on settings."""
+        return {
+            "SENIOR": {
+                "level": "SENIOR",
+                "weights": {
+                    "mandatory": settings.weight_mandatory_senior,
+                    "preferred": settings.weight_preferred_senior,
+                    "semantic": settings.weight_semantic_senior,
+                    "context": settings.weight_context_senior
+                },
+                "gates": {
+                    "min_skill_weighted": settings.min_skill_weighted_senior, 
+                    "min_semantic": settings.min_semantic_senior
+                },
+                "fit_threshold": settings.fit_threshold_senior
+            },
+            "MID": {
+                "level": "MID",
+                "weights": {
+                    "mandatory": settings.weight_mandatory_mid,
+                    "preferred": settings.weight_preferred_mid,
+                    "semantic": settings.weight_semantic_mid,
+                    "context": settings.weight_context_mid
+                },
+                "gates": {
+                    "min_skill_weighted": settings.min_skill_weighted_mid, 
+                    "min_semantic": settings.min_semantic_mid
+                },
+                "fit_threshold": settings.fit_threshold_mid
+            },
+            "JUNIOR": {
+                "level": "JUNIOR",
+                "weights": {
+                    "mandatory": settings.weight_mandatory_junior,
+                    "preferred": settings.weight_preferred_junior,
+                    "semantic": settings.weight_semantic_junior,
+                    "context": settings.weight_context_junior
+                },
+                "gates": {
+                    "min_skill_weighted": settings.min_skill_weighted_junior, 
+                    "min_semantic": settings.min_semantic_junior
+                },
+                "fit_threshold": settings.fit_threshold_junior
+            }
+        }
 
     def _get_role_config(self, experience_months: int, jd_level: str = "") -> Dict[str, Any]:
         """Determine role config based on experience or JD level."""
         level = (jd_level or "").upper()
-        if "SENIOR" in level or "SR" in level or experience_months >= 96: # 8 years
-            role = "SENIOR"
-        elif "JUNIOR" in level or "JR" in level or experience_months < 24: # 2 years
-            role = "JUNIOR"
-        else:
-            role = "MID"
-            
-        return self.ROLE_CONFIGS[role]
+        configs = self._get_role_configs()
+        
+        if "SENIOR" in level or "SR" in level or experience_months >= settings.senior_exp_threshold:
+            return configs["SENIOR"]
+        elif "JUNIOR" in level or "JR" in level or experience_months < settings.junior_exp_threshold:
+            return configs["JUNIOR"]
+        return configs["MID"]
 
     def _get_skill_group(self, skill: str) -> str:
         s_lower = skill.lower()
-        for group, members in self.SKILL_GROUPS.items():
+        for group, members in self.skill_groups.items():
             if any(mem in s_lower for mem in members) or group in s_lower:
                 return group
         return s_lower
-
 
     def _calculate_mandatory_group_score(
         self,
         member_skill_ids: List[str],
         mandatory_alternatives: Dict[str, List[str]],
         profile_text: str = ""
-    ) -> float:
+    ) -> Dict[str, Any]:
         """TASK-04+: Mandatory Skill Grouping Logic with Profile Text Check."""
         if not mandatory_alternatives:
-            return 1.0
+            return {"score": 1.0, "matched": [], "missing": []}
             
         member_skills = set(member_skill_ids)
-        p_text_lower = profile_text.lower()
-        satisfied_groups = 0
-        total_groups = len(mandatory_alternatives)
+        p_text_lower = (profile_text or "").lower()
+        matched = []
+        missing = []
         
         for canonical, alt_ids in mandatory_alternatives.items():
             # 1. Check in normalized skill IDs
             if any(sid in member_skills for sid in alt_ids):
-                satisfied_groups += 1
+                matched.append(canonical)
                 continue
             
             # 2. Check in profile text for group members or canonical name
-            # This handles cases where normalization might have missed a mention
             group_name = self._get_skill_group(canonical)
-            members = self.SKILL_GROUPS.get(group_name, [canonical])
+            members = self.skill_groups.get(group_name, [canonical])
             if any(mem.lower() in p_text_lower for mem in members):
-                satisfied_groups += 1
+                matched.append(canonical)
+            else:
+                missing.append(canonical)
                 
-        return satisfied_groups / total_groups if total_groups > 0 else 1.0
-
-    def _get_skill_family_penalty(self, member_skill_ids: List[str], jd_text: str) -> float:
-        """
-        Calculates penalty for family mismatch (e.g. Frontend for Backend/AI role).
-        """
-        jd_lower = jd_text.lower()
-        is_backend_ai = any(kw in jd_lower for kw in ["backend", "ai", "ml", "data", "python", "spark", "sql", "snowflake"])
-        if not is_backend_ai:
-            return 0.0
-
-        # Simple keyword check for member skills (using group logic)
-        frontend_count = 0
-        backend_count = 0
-        
-        frontend_groups = ["javascript"]
-        backend_groups = ["python", "sql", "big_data", "ai_ml"]
-        
-        for sid in member_skill_ids:
-            # We don't have the skill name here, only ID. 
-            # In the external project they had the name.
-            # I might need to fetch names or rely on a different heuristic if names aren't available.
-            # For now, I'll keep the skeleton and check if I can get names in matching_scoring_node.
-            pass
-            
-        # If frontend > backend, apply -0.1 penalty
-        return 0.0 # Placeholder until names are available
-
+        total_groups = len(mandatory_alternatives)
+        score = len(matched) / total_groups if total_groups > 0 else 1.0
+        return {"score": score, "matched": matched, "missing": missing}
 
     def _calculate_context_boost(self, profile_data: Dict[str, Any]) -> float:
-        """TASK-06+: Context Support Boost with Capping (Production Rule 8%)."""
+        """Normalized 0-1 score for context factors (Exp, Cert, Loc, Mode, Title)."""
         
         exp_score = self._calculate_experience_score(
             profile_data.get("experience_months", 0),
@@ -150,59 +151,78 @@ class ScoringAgent(BaseAgent):
             profile_data.get("required_work_modes", [])
         )
         
-        # Raw contributions using component weights
-        c_exp = exp_score * settings.weight_experience
-        c_cert = cert_res["score"] * settings.weight_certification
-        c_loc = loc_score * settings.weight_location
-        c_mode = mode_score * settings.weight_work_mode
+        # Title Match (Production Rule: 0.05 weight)
+        jd_text = profile_data.get("jd_text") or ""
+        lines = jd_text.splitlines()
+        jd_title = lines[0].lower() if lines else ""
         
-        raw_total = c_exp + c_cert + c_loc + c_mode
+        if "title" in profile_data:
+            jd_title = profile_data.get("title", "").lower()
         
-        # Hard Cap at 8% (0.08)
-        # If total exceeds 0.08, normalize down while keeping relative contribution
-        if raw_total > 0.08:
-            ratio = 0.08 / raw_total
-            return 0.08 
+        member_desig = (profile_data.get("designation") or "").lower()
+        title_score = 0.0
+        if jd_title and member_desig:
+            if jd_title in member_desig or member_desig in jd_title:
+                title_score = 1.0
         
-        return raw_total
+        # Context Factors (Using individual weights from settings)
+        raw_context_sum = (
+            exp_score * settings.weight_experience + 
+            cert_res["score"] * settings.weight_certification + 
+            loc_score * settings.weight_location + 
+            mode_score * settings.weight_work_mode + 
+            title_score * settings.weight_jd_text
+        )
+        
+        # Normalize to 0-1 for the context group (total weight of context components)
+        total_context_weight = (
+            settings.weight_experience + 
+            settings.weight_certification + 
+            settings.weight_location + 
+            settings.weight_work_mode + 
+            settings.weight_jd_text
+        )
+        return raw_context_sum / total_context_weight if total_context_weight > 0 else 0.0
 
     def _get_skill_family_penalty(self, member_skill_names: List[str], jd_text: str) -> float:
         """
         Calculates penalty for family mismatch (e.g. Frontend for Backend/AI role).
         """
         jd_lower = jd_text.lower()
-        is_backend_ai = any(kw in jd_lower for kw in ["backend", "ai", "ml", "data", "python", "spark", "sql", "snowflake"])
+        backend_ai_indicators = [k.strip() for k in settings.backend_ai_indicators.split(",")]
+        is_backend_ai = any(kw in jd_lower for kw in backend_ai_indicators)
         if not is_backend_ai:
             return 0.0
 
         all_matched = [s.lower() for s in member_skill_names]
         
-        frontend_kws = ["react", "angular", "vue", "html", "css", "javascript", "js", "frontend", "ui", "ux"]
-        backend_kws = ["python", "java", "scala", "sql", "node", "backend", "api", "spark", "snowflake", "kafka", "ai", "ml"]
+        frontend_kws = [k.strip() for k in settings.frontend_keywords.split(",")]
+        backend_kws = [k.strip() for k in settings.backend_keywords.split(",")]
         
         f_count = sum(1 for s in all_matched if any(kw in s for kw in frontend_kws))
         b_count = sum(1 for s in all_matched if any(kw in s for kw in backend_kws))
         
         if f_count > b_count and f_count > 1:
-            return -0.1
+            return settings.skill_family_penalty
         return 0.0
-
-
 
     def _calculate_skill_score(self, member_skill_ids, mandatory_ids, preferred_ids, alternatives=None, preferred_alternatives=None):
         """Simplified skill score for preferred skills (mandatory handled by grouping)."""
         member_skills = set(member_skill_ids)
         matched_preferred = []
+        missing_preferred = []
         if not preferred_ids:
-            return {"preferred_score": 1.0, "matched_preferred": []}
+            return {"preferred_score": 0.0, "matched_preferred": [], "missing_preferred": []}
             
         for pid in preferred_ids:
             alts = (preferred_alternatives or {}).get(pid, [pid])
             if any(aid in member_skills for aid in alts):
                 matched_preferred.append(pid)
+            else:
+                missing_preferred.append(pid)
         
-        score = len(matched_preferred) / len(preferred_ids) if preferred_ids else 1.0
-        return {"preferred_score": score, "matched_preferred": matched_preferred}
+        score = len(matched_preferred) / len(preferred_ids) if preferred_ids else 0.0
+        return {"preferred_score": score, "matched_preferred": matched_preferred, "missing_preferred": missing_preferred}
 
     def _calculate_experience_score(self, member_exp, min_exp, max_exp):
         if not min_exp: return 1.0
@@ -217,36 +237,37 @@ class ScoringAgent(BaseAgent):
         return {"score": score, "matched": matched, "missing": missing}
 
     def _calculate_location_score(self, member_loc, required_locs):
-        if not required_locs: return 1.0
+        if not required_locs: return 1.0 # Default to 1.0 if no requirement
         if not member_loc: return 0.0
         member_loc_lower = member_loc.lower()
         required_locs_lower = [l.lower() for l in required_locs]
-        return 1.0 if member_loc_lower in required_locs_lower else 0.0
+        # Include 'remote' logic
+        if "remote" in required_locs_lower or "any" in required_locs_lower:
+            return 1.0
+        return 1.0 if any(loc in member_loc_lower for loc in required_locs_lower) else 0.0
 
     def _calculate_work_mode_score(self, member_mode, required_modes):
-        if not required_modes: return 1.0
-        if not member_mode: return 0.5
-        member_mode_lower = member_mode.lower()
-        required_modes_lower = [m.lower() for m in required_modes]
-        return 1.0 if member_mode_lower in required_modes_lower else 0.5 # Partial credit for mismatch
+        if not required_modes: return 1.0 # Default to 1.0 if no requirement
+        if not member_mode: return 0.0
+        
+        # Handle wfh/remote mapping
+        m_mode = member_mode.lower()
+        if m_mode == "wfh": m_mode = "remote"
+        
+        req_modes_lower = [m.lower() for m in required_modes]
+        # Map required modes too
+        req_modes_normalized = []
+        for rm in req_modes_lower:
+            if rm == "wfh": req_modes_normalized.append("remote")
+            else: req_modes_normalized.append(rm)
 
-    @property
-    def weights(self) -> Dict[str, float]:
-        """Dynamic weights from settings."""
-        return {
-            "MANDATORY": settings.weight_mandatory_skills,
-            "PREFERRED": settings.weight_preferred_skills,
-            "SEMANTIC": settings.weight_semantic_fit,
-            "CONTEXT": settings.weight_context_boost
-        }
-
-
+        return 1.0 if m_mode in req_modes_normalized else 0.0
 
     def execute(self, rag_candidate: RAGCandidate, profile_data: Optional[Dict] = None) -> ScoringResult:
         """
-        Refined Multi-Stage Scoring Logic from External Project:
+        Refined Multi-Stage Scoring Logic:
         1. Role-specific configuration (Weights/Gates)
-        2. Stage 1: Qualification Check (Hard Gates with AI Overrides for Seniors)
+        2. Stage 1: Qualification Check (Hard Gates)
         3. Stage 2: Weighted Scoring with context capping and skill family penalties
         """
         profile_data = profile_data or {}
@@ -257,41 +278,22 @@ class ScoringAgent(BaseAgent):
         
         # --- PHASE 0: Configuration ---
         role_cfg = self._get_role_config(experience_months, jd_level)
-        weights = role_cfg["weights"]
         gates = role_cfg["gates"]
+        role_weights = role_cfg["weights"]
         role_type = role_cfg["level"]
         
-        # --- STAGE 1: Qualification Check ---
+        # --- STAGE 1: Preliminary Qualification Check ---
         
         # 1. Mandatory Skills Match (Group-based + Profile Text check)
         mandatory_alternatives = profile_data.get("mandatory_alternatives") or {}
-        m_match_ratio = self._calculate_mandatory_group_score(
+        m_res = self._calculate_mandatory_group_score(
             profile_data.get("skill_ids", []),
             mandatory_alternatives,
             profile_text
         )
+        m_match_ratio = m_res["score"]
         
-        # 2. Semantic Match (from RAG search)
-        s_score = rag_candidate.jd_level_similarity
-        
-        # Qualification Logic
-        is_qualified = True
-        qualification_reason = "Qualified"
-        
-        if m_match_ratio < gates["min_m_skill"]:
-            is_qualified = False
-            qualification_reason = f"Disqualified: Mandatory skill match ({m_match_ratio:.0%}) below {gates['min_m_skill']:.0%} threshold."
-        elif s_score < gates["min_semantic"]:
-            # AI Override Check for Seniors will happen in matching_scoring_node 
-            # where AI confidence is available. For now, we set is_qualified=False 
-            # and allow the node to override if confidence is high.
-            is_qualified = False
-            qualification_reason = f"Disqualified: Semantic similarity ({s_score:.2f}) below {gates['min_semantic']:.2f} threshold."
-            
-        # --- STAGE 2: Weighted Scoring ---
-        
-        # Calculate individual components
-        # Preferred Skills
+        # 2. Preferred Skills (Primary Skills Match)
         p_res = self._calculate_skill_score(
             profile_data.get("skill_ids", []),
             [], 
@@ -301,32 +303,44 @@ class ScoringAgent(BaseAgent):
         )
         p_score = p_res["preferred_score"]
         
-        # Context Factors (with 0.08 cap and normalization)
+        # 3. Weighted Skill Score for Gate (Use role-specific Weights)
+        weighted_skill_sum = (m_match_ratio * role_weights["mandatory"]) + (p_score * role_weights["preferred"])
+        
+        # 4. Semantic Match (from RAG search)
+        s_score = rag_candidate.jd_level_similarity
+        
+        # Qualification Logic
+        is_qualified = True
+        qualification_reason = "Qualified"
+        
+        if weighted_skill_sum < gates.get("min_skill_weighted", 0.20):
+            is_qualified = False
+            qualification_reason = f"Disqualified: Weighted skill score ({weighted_skill_sum:.2f}) below {gates.get('min_skill_weighted'):.2f} barrier."
+        elif s_score < gates.get("min_semantic", 0.0):
+            is_qualified = False
+            qualification_reason = f"Disqualified: Semantic similarity ({s_score:.2f}) below {gates.get('min_semantic'):.2f} threshold."
+            
+        # --- STAGE 2: Full Scoring ---
+        
+        # Context Factors (Normalized 0-1)
         c_raw = self._calculate_context_boost(profile_data)
         
+        # Apply Role-Specific Context Weight and CAP at 8%
+        context_contribution = c_raw * role_weights["context"]
+        context_contribution = min(context_contribution, settings.context_boost_cap)
+        
         # Skill Family Penalty
-        # Note: profile_data should contain 'skill_names' for best results
         penalty = self._get_skill_family_penalty(profile_data.get("skill_names", []), jd_text)
         
         # Final Score Calculation
-        if is_qualified:
-            # Full weighted contribution
-            match_score = (
-                (m_match_ratio * weights["m_skill"]) +
-                (p_score * weights["p_skill"]) +
-                (s_score * weights["semantic"]) +
-                (c_raw * weights["context"]) +
-                penalty
-            )
-        else:
-            # Disqualified: Cap at 15% 
-            raw_score = (
-                (m_match_ratio * weights["m_skill"]) +
-                (p_score * weights["p_skill"]) +
-                (s_score * weights["semantic"])
-            )
-            match_score = min(0.15, raw_score)
-            
+        match_score = (
+            (m_match_ratio * role_weights["mandatory"]) +
+            (p_score * role_weights["preferred"]) +
+            (s_score * role_weights["semantic"]) +
+            context_contribution +
+            penalty
+        )
+        
         match_score = round(max(0.0, min(1.0, match_score)), 4)
         
         # Prepare breakdown
@@ -335,16 +349,16 @@ class ScoringAgent(BaseAgent):
             "preferred_skills": p_score,
             "semantic_similarity": s_score,
             "context_score": c_raw,
-            "weight_m": weights["m_skill"],
-            "weight_p": weights["p_skill"],
-            "weight_s": weights["semantic"],
-            "weight_c": weights["context"],
-            "penalty": penalty,
+            "context_contribution": context_contribution,
+            "weight_m": role_weights["mandatory"],
+            "weight_p": role_weights["preferred"],
+            "weight_s": role_weights["semantic"],
+            "weight_c": role_weights["context"],
+            "penalties": penalty,
             "is_qualified": is_qualified,
             "role_type": role_type
         }
 
-        
         # Fetch individual context scores for breakdown
         exp_score = self._calculate_experience_score(
             experience_months,
@@ -365,9 +379,11 @@ class ScoringAgent(BaseAgent):
         )
 
         detailed = ScoringBreakdown(
-            skills_matched=p_res["matched_preferred"],
-            mandatory_matched=[], # Handled by grouping
+            skills_matched=p_res["matched_preferred"] + m_res["matched"],
+            mandatory_matched=m_res["matched"],
+            mandatory_missing=m_res["missing"],
             preferred_matched=p_res["matched_preferred"],
+            preferred_missing=p_res["missing_preferred"],
             mandatory_score=round(m_match_ratio, 2),
             preferred_score=round(p_score, 2),
             certification_score=round(cert_res["score"], 2),

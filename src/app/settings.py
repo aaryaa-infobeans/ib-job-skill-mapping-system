@@ -54,46 +54,110 @@ class Settings(BaseSettings):
 
 
     
-    # Agent Weights
-    weight_mandatory_skills: float
-    weight_preferred_skills: float
-    weight_experience: float
-    weight_semantic_fit: float = 0.15
+    # --- GLOBAL WEIGHTS (Fallback) ---
+    weight_mandatory_skills: float = 0.30
+    weight_preferred_skills: float = 0.20
+    weight_semantic_fit: float = 0.25
+    weight_experience: float = 0.10
     weight_certification: float = 0.10
-    weight_context_boost: float = 0.05
-    weight_jd_text: float = 0.10
-    weight_location: float
-    weight_work_mode: float
+    weight_location: float = 0.10
+    weight_work_mode: float = 0.10
+    weight_jd_text: float = 0.05  # Title match
+    
+    # --- ROLE-SPECIFIC WEIGHTS (Phase 1) ---
+    # SENIOR
+    weight_mandatory_senior: float = 0.50
+    weight_preferred_senior: float = 0.20
+    weight_semantic_senior: float = 0.25
+    weight_context_senior: float = 0.05
+    
+    # MID
+    weight_mandatory_mid: float = 0.40
+    weight_preferred_mid: float = 0.20
+    weight_semantic_mid: float = 0.25
+    weight_context_mid: float = 0.15
+    
+    # JUNIOR
+    weight_mandatory_junior: float = 0.30
+    weight_preferred_junior: float = 0.30
+    weight_semantic_junior: float = 0.25
+    weight_context_junior: float = 0.15
+    
+    # Seniority Experience Thresholds (Months)
+    senior_exp_threshold: int = 96  # 8 years
+    junior_exp_threshold: int = 24  # 2 years
+    
+    # Gate Barrier Thresholds (Qualified/Disqualified)
+    min_skill_weighted_senior: float = 0.20  # 40% of (M+P) weight
+    min_semantic_senior: float = 0.30
+    fit_threshold_senior: float = 0.75
+    
+    min_skill_weighted_mid: float = 0.20
+    min_semantic_mid: float = 0.20
+    fit_threshold_mid: float = 0.70
+    
+    min_skill_weighted_junior: float = 0.15
+    min_semantic_junior: float = 0.15
+    fit_threshold_junior: float = 0.60
+    
+    # AI Factor Configs
+    ai_boost_senior: float = 0.08
+    ai_boost_mid: float = 0.05
+    ai_override_threshold_senior: float = 0.75
+    ai_confidence_threshold_boost: float = 0.70
+    
+    # Context Boost Cap (Optional safety)
+    context_boost_cap: float = 0.08
 
-
+    # Skill Family Mappings
+    frontend_keywords: str = "react,angular,vue,html,css,javascript,js,frontend,ui,ux"
+    backend_keywords: str = "python,java,scala,sql,node,backend,api,spark,snowflake,kafka,ai,ml"
+    backend_ai_indicators: str = "backend,ai,ml,data,python,spark,sql,snowflake"
+    
+    # Skill Groupings (as comma-separated groups)
+    skill_group_python: str = "python,django,flask,fastapi,pandas,numpy,scikit-learn,pytorch,tensorflow"
+    skill_group_javascript: str = "javascript,js,typescript,ts,react,node,next.js,angular,vue,html,css"
+    skill_group_sql: str = "sql,postgresql,postgres,mysql,sql server,snowflake,oracle,db2"
+    skill_group_big_data: str = "spark,pyspark,hadoop,kafka,databricks"
+    skill_group_ai_ml: str = "machine learning,ai,ml,nlp,llm,genai,deep learning,computer vision"
+    skill_group_cloud: str = "aws,azure,gcp,docker,kubernetes,terraform"
+    
+    # Hybrid Search Ratios
+    hybrid_ratio_bm25: float = 0.7
+    hybrid_ratio_vector: float = 0.3
+    
+    # Penalties
+    skill_family_penalty: float = -0.10
+    max_llm_explanations: int = 2
     
     # Thresholds
-    fit_score_threshold: float
-    rag_similarity_threshold: float
+    fit_score_threshold: float = 0.5
+    rag_similarity_threshold: float = 0.5
     
     # Retry Configuration
-    max_retry_attempts: int
-    retry_backoff_factor: float
+    max_retry_attempts: int = 3
+    retry_backoff_factor: float = 2.0
     
     # pgvector Configuration
-    pgvector_dimension: int
+    pgvector_dimension: int = 768
 
     # CR-EMB-002: Embedding model settings
-    embedding_model_name: str = "embedding-gemma-300m"
+    embedding_model_name: str = "google/embeddinggemma-300m"
+    embedding_model: Optional[str] = None  # Alias for EMBEDDING_MODEL in .env
     gemma_model_path: Optional[str] = None
     embedding_device: str = "cpu"
     mcp_gdrive_server_path: str = "src/mcp_servers/gdrive/server.py"
     google_service_account_file: Optional[str] = None
     
     # Application Configuration
-    app_env: str
-    host: str
-    port: int
-    reload: bool
+    app_env: str = "development"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    reload: bool = True
     
     # Security Configuration
     secret_key: Optional[str] = None
-    access_token_expire_minutes: int
+    access_token_expire_minutes: int = 1440
     
     model_config = ConfigDict(
         extra="ignore",

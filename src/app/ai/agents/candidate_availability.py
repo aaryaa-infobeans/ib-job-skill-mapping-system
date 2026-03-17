@@ -1,5 +1,5 @@
 from typing import List, Optional, Any
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, model_validator, field_validator, ConfigDict
 from datetime import date
 
 class CandidateAvailabilityRequest(BaseModel):
@@ -8,38 +8,46 @@ class CandidateAvailabilityRequest(BaseModel):
     team_member_id: Optional[str] = Field(None, min_length=1, max_length=50)
     team_member_ids: Optional[List[str]] = None
 
-    class Config:
-        extra = 'forbid'  # Strict: reject unknown fields
+    model_config = ConfigDict(extra='forbid')
 
-    @root_validator(pre=True)
-    def normalize_team_member_ids(cls, values):
-        # Merge team_member_id and team_member_ids, trim, dedupe, preserve order
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_team_member_ids(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+            
         member_id = values.get('team_member_id')
         member_ids = values.get('team_member_ids')
         result = []
         if member_id:
-            result.append(member_id.strip())
-        if member_ids:
+            result.append(str(member_id).strip())
+        if member_ids and isinstance(member_ids, list):
             for mid in member_ids:
-                mid = mid.strip()
                 if mid:
-                    result.append(mid)
-        # Remove empty strings and dedupe while preserving order
+                    result.append(str(mid).strip())
+        
         seen = set()
         normalized = []
         for mid in result:
             if mid and mid not in seen:
                 seen.add(mid)
                 normalized.append(mid)
+        
         if not normalized:
-            raise ValueError('At least one team_member_id must be provided')
+            # We check this in a refined way or allow it if it's being populated
+            pass
+            
         values['team_member_ids'] = normalized
         return values
 
-    @validator('team_member_ids', each_item=True)
-    def validate_member_id(cls, v):
-        if not v or not isinstance(v, str) or len(v) > 50:
-            raise ValueError('Each team_member_id must be a non-empty string of max length 50')
+    @field_validator('team_member_ids')
+    @classmethod
+    def validate_member_ids_list(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('At least one team_member_id must be provided')
+        for mid in v:
+            if not isinstance(mid, str) or len(mid) > 50:
+                raise ValueError(f'Invalid team_member_id: {mid}. Must be string and max length 50.')
         return v
 
 class AllocationConflict(BaseModel):
@@ -72,8 +80,7 @@ class CandidateAvailabilityResponse(BaseModel):
     summary: CandidateAvailabilitySummary
     errors: List[Any]
 
-    class Config:
-        extra = 'forbid'
+    model_config = ConfigDict(extra='forbid')
 
 # --- DB Access and Availability Engine ---
 from sqlalchemy.orm import Session

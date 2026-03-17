@@ -121,12 +121,15 @@ def _parse_json_robustly(text: str) -> Dict[str, Any]:
     return {}
 
 def calculate_ai_boost(confidence: float) -> float:
-    """Boosts final match score: >= 0.70 confidence -> +0.05 to +0.08 boost (scaled)."""
-    if confidence < 0.70:
+    """Boosts final match score based on AI confidence scaling."""
+    if confidence < settings.ai_confidence_threshold_boost:
         return 0.0
     
-    # Scale from 0.70 to 1.0 -> 0.05 to 0.08
-    # (confidence - 0.70) / (1.0 - 0.70) is [0,1]
-    # 0.05 + 0.03 * [0,1]
-    scaled_boost = 0.05 + (0.03 * (confidence - 0.70) / 0.30)
-    return round(min(0.08, scaled_boost), 4)
+    # Scale from threshold to 1.0 -> boost_mid to boost_senior
+    threshold = settings.ai_confidence_threshold_boost
+    min_boost = settings.ai_boost_mid
+    max_boost = settings.ai_boost_senior
+    
+    # (confidence - threshold) / (1.0 - threshold) is [0,1]
+    scaled_boost = min_boost + ((max_boost - min_boost) * (confidence - threshold) / (1.0 - threshold))
+    return round(min(max_boost, scaled_boost), 4)
