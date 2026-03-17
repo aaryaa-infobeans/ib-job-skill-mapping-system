@@ -31,6 +31,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
             mandatory_vector=np.array(embedding_data.get("mandatory_vector")) if embedding_data.get("mandatory_vector") is not None else None,
             preferred_vector=np.array(embedding_data.get("preferred_vector")) if embedding_data.get("preferred_vector") is not None else None,
             certification_vector=np.array(embedding_data.get("certification_vector")) if embedding_data.get("certification_vector") is not None else None,
+            full_jd_vector=np.array(embedding_data.get("full_jd_vector")) if embedding_data.get("full_jd_vector") is not None else None,
             model=embedding_data.get("model", "google/embeddinggemma-300m")
         )
         
@@ -44,24 +45,36 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
         
         experience_req = parsed_jd.get("experience") or {}
         min_experience_months = experience_req.get("min_months")
-        print(f"DEBUG NODE: jd_text length={len(jd_text)}, min_exp={min_experience_months} ({type(min_experience_months)})")
-        
         initial_filter_ids = state.get("target_member_ids")
         
         # 3. Initialize and execute RAG agent
         db = SessionLocal()
         try:
-            print(f"DEBUG NODE: Calling RAG agent with {len(mandatory_ids)} mandatory skills")
+            # Map state to expected keyword lists
+            # IMPORTANT: Use original payload skills to avoid noise from LLM-extracted PII tokens
+            job_desc_payload = state.get("requisition_input", {}).get("job_description", {})
+            m_skills = job_desc_payload.get("mandatory_skills", [])
+            p_skills = job_desc_payload.get("preferred_skills", [])
+            
+            # Others from parsed_jd are fine as they are normalized
+            locs = parsed_jd.get("location", [])
+            modes = parsed_jd.get("work_mode", [])
+            certs = parsed_jd.get("certifications_required", [])
+            title = job_desc_payload.get("title", "N/A")
+            
             agent = RAGRetrievalAgent(db_connection=db)
             candidates = agent.execute(
                 embedding_result, 
                 query_text=jd_text, 
                 filter_ids=initial_filter_ids,
-                mandatory_ids=mandatory_ids,
-                preferred_ids=preferred_ids,
-                min_experience_months=min_experience_months
+                mandatory_skills=m_skills,
+                preferred_skills=p_skills,
+                locations=locs,
+                work_modes=modes,
+                experience_req=experience_req,
+                certifications=certs,
+                job_title=title
             )
-            print(f"DEBUG NODE: RAG agent returned {len(candidates)} candidates")
             
             # Convert RAGCandidate objects to dicts for state
             state["retrieved_candidates"] = [

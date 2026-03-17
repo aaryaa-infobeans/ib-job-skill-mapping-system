@@ -139,6 +139,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 profile_data = {
                     "skill_ids": member_skill_ids,
                     "skill_names": member_skill_names,
+                    "designation": member.designation,
                     "mandatory_skill_ids": mandatory_skill_ids,
                     "preferred_skill_ids": preferred_skill_ids,
                     "mandatory_alternatives": mandatory_alternatives,
@@ -191,17 +192,15 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     confidence_score = ai_fit["confidence_score"]
                     
                     # 1. AI Waiver for Seniors (Stage 1 Waiver - only if semantic gate failed but skills passed)
-                    # Note: scoring_result.detailed_breakdown.stage1_passed is True here because we matched skills.
-                    # But if semantic was low, scoring_result.is_qualified might be False.
-                    if not scoring_result.is_qualified and is_senior and confidence_score >= 0.75:
+                    if not scoring_result.is_qualified and is_senior and confidence_score >= settings.ai_override_threshold_senior:
                         if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
                             is_qualified = True
                             ai_override_applied = True
                             logger.info(f"AI Override: Waiving semantic gate for Senior {member.team_member_id} (Conf: {confidence_score})")
                     
                     # 2. Refined AI Boost (only applied if qualified)
-                    if is_qualified and confidence_score >= 0.7:
-                        ai_boost = 0.08 if is_senior else 0.05
+                    if is_qualified:
+                        ai_boost = calculate_ai_boost(confidence_score)
                 else:
                     # Disqualified by Skill Gate - Ensure score is capped
                     pass
@@ -236,7 +235,11 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "strengths": ai_fit.get("key_strengths", []),
                         "gaps": ai_fit.get("major_gaps", []),
                         "mandatory_score": scoring_result.detailed_breakdown.mandatory_score,
+                        "mandatory_matched": scoring_result.detailed_breakdown.mandatory_matched,
+                        "mandatory_missing": scoring_result.detailed_breakdown.mandatory_missing,
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
+                        "preferred_matched": scoring_result.detailed_breakdown.preferred_matched,
+                        "preferred_missing": scoring_result.detailed_breakdown.preferred_missing,
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
                         "certification_matched": scoring_result.detailed_breakdown.certification_matched,

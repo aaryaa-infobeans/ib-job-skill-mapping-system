@@ -66,17 +66,30 @@ class EmbeddingAgent(BaseAgent):
             if enriched_certs:
                 certification_text += f". Related concepts: {', '.join(enriched_certs)}"
         
+        # NEW: Full JD Text for Weighted Search (Semantic Fit)
+        raw_jd = normalized_requisition.original_requisition.raw_requisition if normalized_requisition.original_requisition else {}
+        jd_text = ""
+        if isinstance(raw_jd, dict):
+            jd_text = raw_jd.get("jd_text", "")
+        elif isinstance(raw_jd, str):
+            jd_text = raw_jd
+            
+        # Gemma expects 'search_query: ' prefix for retrieval queries
+        full_jd_text_with_prefix = f"search_query: {jd_text}" if jd_text else None
+
         # Generate embeddings
         jd_level_vec = self.embed_text(jd_level_text) if jd_level_text else None
         mandatory_vec = self.embed_text(mandatory_text) if mandatory_text else None
         preferred_vec = self.embed_text(preferred_text) if preferred_text else None
         certification_vec = self.embed_text(certification_text) if certification_text else None
+        full_jd_vec = self.embed_text(full_jd_text_with_prefix) if full_jd_text_with_prefix else None
         
         result = EmbeddingResult(
             jd_level_vector=jd_level_vec,
             mandatory_vector=mandatory_vec,
             preferred_vector=preferred_vec,
             certification_vector=certification_vec,
+            full_jd_vector=full_jd_vec,
             model=self.model_name
         )
         

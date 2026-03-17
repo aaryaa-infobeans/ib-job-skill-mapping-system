@@ -16,7 +16,7 @@ import numpy as np
 from typing import List
 
 from app.db.session import SessionLocal
-from app.db.models.models import TeamMember, TeamMemberSkill, TeamMemberEmbedding, SkillCertification
+from app.db.models.models import TeamMember, TeamMemberSkill, TeamMemberEmbedding, TeamMemberSkillCertification
 from app.ai.utils.rag_retrieval import RAGRetrievalAgent
 from app.ai.utils.scoring import ScoringAgent
 from app.ai.utils.models import EmbeddingResult, RAGCandidate

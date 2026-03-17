@@ -11,6 +11,7 @@ from pgvector.sqlalchemy import Vector
 from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import EmbeddingResult, RAGCandidate
 from app.settings import settings
+from app.db.models.models import TeamMember, TeamMemberEmbedding
 
 class RAGRetrievalAgent(BaseAgent):
     """Retrieve candidates using 70/30 Hybrid Search (BM25 + Multi-Vector)."""
@@ -32,172 +33,200 @@ class RAGRetrievalAgent(BaseAgent):
         embedding_result: EmbeddingResult, 
         query_text: Optional[str] = None, 
         filter_ids: Optional[List[str]] = None,
-        mandatory_ids: List[str] = [],
-        preferred_ids: List[str] = [],
-        min_experience_months: Optional[int] = None
+        mandatory_skills: List[str] = [],
+        preferred_skills: List[str] = [],
+        locations: List[str] = [],
+        work_modes: List[str] = [],
+        experience_req: Dict[str, Any] = {},
+        certifications: List[str] = [],
+        job_title: str = "N/A"
     ) -> List[RAGCandidate]:
         """
-        Execute Hybrid Search with 70% BM25 and 30% Multi-Vector.
-        Retains top 40 candidates.
+        Execute Advanced Weighted Search as provided in USER_REQUEST.
         """
         if not self.db:
             self.logger.warning("No DB connection provided to RAGRetrievalAgent")
             return []
         
         try:
-            candidates = self._query_vector_and_filter(
+            candidates = self._advanced_weighted_search(
                 embedding_result, 
+                mandatory_skills,
+                preferred_skills,
+                locations,
+                work_modes,
+                experience_req,
+                certifications,
+                job_title,
                 query_text,
-                filter_ids, 
-                mandatory_ids, 
-                preferred_ids, 
-                min_experience_months
+                filter_ids
             )
             
-            # Additional sorting by hybrid score and return top 40 (As requested: out of ~39)
+            # Sort by total score
             candidates.sort(key=lambda c: c.final_similarity, reverse=True)
             return candidates[:40]
             
         except Exception as e:
-            self.logger.error(f"Hybrid retrieval execution failed: {str(e)}", exc_info=True)
+            self.logger.error(f"Advanced weighted search failed: {str(e)}", exc_info=True)
             return []
 
-    def _query_vector_and_filter(
+    def _advanced_weighted_search(
         self, 
         embedding_result: EmbeddingResult, 
-        query_text: str,
-        filter_ids: Optional[List[str]],
-        mandatory_ids: List[str],
-        preferred_ids: List[str],
-        min_months: Optional[int]
+        mandatory_skills: List[str],
+        preferred_skills: List[str],
+        locations: List[str],
+        work_modes: List[str],
+        experience_req: Dict[str, Any],
+        certifications: List[str],
+        job_title: str,
+        query_text: Optional[str], # Added query_text parameter
+        filter_ids: Optional[List[str]]
     ) -> List[RAGCandidate]:
-        """Core SQL Logic for Hybrid (BM25 + 3-Vector) search."""
-        from app.db.models.models import TeamMember, TeamMemberEmbedding
+        """Implementation of the specific weighted SQL search."""
         
-        # 1. Prepare Vector Similarity Utility
+        # 1. Load Weights from Settings
+        w_mandatory = settings.weight_mandatory_skills
+        w_preferred = settings.weight_preferred_skills
+        w_experience = settings.weight_experience
+        w_semantic = settings.weight_semantic_fit
+        w_cert = settings.weight_certification
+        w_jd_text = settings.weight_jd_text
+        w_location = settings.weight_location
+        w_work_mode = settings.weight_work_mode
+        w_title = settings.weight_jd_text
+
+        # 2. Extract JD criteria
+        jd_text = query_text or ""
+        
+        # Experience Score (0.1 weight)
+        min_exp = experience_req.get("min_months", 0)
+        max_exp = experience_req.get("max_months", 999)
+        exp_score_expr = case(
+            (TeamMember.experience_in_months.between(min_exp, max_exp), w_experience),
+            else_=0.0
+        ).label("exp_score")
+
+        # Location Boost (0.1 weight)
+        loc_cases = [
+            case((TeamMember.base_location.ilike(f"%{loc}%"), w_location), else_=0.0) 
+            for loc in locations
+        ]
+        location_sum = sum(loc_cases) if loc_cases else literal(0.0)
+        location_boost_expr = func.least(w_location, location_sum).label("location_score")
+
+        # Work Mode Boost (0.1 weight)
+        mode_map = {"Remote": "wfh", "WFO": "wfo", "Hybrid": "hybrid"}
+        mapped_modes = [mode_map.get(m, m.lower()) for m in work_modes]
+        mode_cases = [
+            case((sa.cast(TeamMember.work_type, sa.Text) == m, w_work_mode), else_=0.0)
+            for m in mapped_modes
+        ]
+        mode_sum = sum(mode_cases) if mode_cases else literal(0.0)
+        mode_boost_expr = func.least(w_work_mode, mode_sum).label("mode_score")
+
+        # Mandatory Skills Score (0.3 weight)
+        m_count = len(mandatory_skills) or 1
+        m_skill_cases = [
+            case((TeamMemberEmbedding.skills_text.ilike(f"%{skill}%"), w_mandatory/m_count), else_=0.0)
+            for skill in mandatory_skills
+        ]
+        mandatory_boost_expr = (sum(m_skill_cases) if m_skill_cases else literal(0.0)).label("mandatory_score")
+        
+        # Preferred Skills Score (0.2 weight)
+        p_count = len(preferred_skills) or 1
+        p_skill_cases = [
+            case((TeamMemberEmbedding.skills_text.ilike(f"%{skill}%"), w_preferred/p_count), else_=0.0)
+            for skill in preferred_skills
+        ]
+        preferred_boost_expr = (sum(p_skill_cases) if p_skill_cases else literal(0.0)).label("preferred_score")
+
+        # Certifications Boost (0.1 weight)
+        c_count = len(certifications) or 1
+        cert_cases = [
+            case((TeamMemberEmbedding.profile_text.ilike(f"%{cert}%"), w_cert/c_count), else_=0.0)
+            for cert in certifications
+        ]
+        cert_boost_expr = (sum(cert_cases) if cert_cases else literal(0.0)).label("cert_score")
+
+        # Title match boost (0.05 weight)
+        title_boost_expr = case(
+            (TeamMember.designation.ilike(f"%{job_title}%"), w_title),
+            else_=0.0
+        ).label("title_score")
+
+        # Semantic Fit (0.05 weight)
         def _cos_sim(col, vec):
-            if vec is None:
-                return literal(0.0)
-            
-            # Handle both numpy arrays and lists
+            if vec is None: return literal(0.0)
             v_list = vec.tolist() if isinstance(vec, np.ndarray) else vec
-            
-            # Check for zero vector which results in NaN cosine distance
-            if all(v == 0 for v in v_list):
-                return literal(0.0)
-                
-            # Cosine Sim = 1 - Cosine Distance
+            if all(v == 0 for v in v_list): return literal(0.0)
             return 1 - type_coerce(col, Vector(self.vector_dim)).cosine_distance(v_list)
 
-        # 2. Build multi-stage vector expressions
-        # Skills Vector (Mandatory + Preferred weighting)
-        m_sim = case(
-            (TeamMemberEmbedding.skills_embedding != None, _cos_sim(TeamMemberEmbedding.skills_embedding, embedding_result.mandatory_vector)),
-            else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.mandatory_vector)
-        )
-        p_sim = case(
-            (TeamMemberEmbedding.skills_embedding != None, _cos_sim(TeamMemberEmbedding.skills_embedding, embedding_result.preferred_vector)),
-            else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.preferred_vector)
-        )
-        
-        # Resume/Experience Vector (JD Level)
-        r_sim = case(
-            (TeamMemberEmbedding.resume_embedding != None, _cos_sim(TeamMemberEmbedding.resume_embedding, embedding_result.jd_level_vector)),
-            else_=_cos_sim(TeamMemberEmbedding.embedding, embedding_result.jd_level_vector)
-        )
-        
-        # Certification Vector
-        c_sim = case(
-            (TeamMemberEmbedding.certifications_embedding != None, _cos_sim(TeamMemberEmbedding.certifications_embedding, embedding_result.certification_vector)),
-            else_=literal(0.0)
-        )
+        semantic_sim = _cos_sim(TeamMemberEmbedding.embedding, embedding_result.full_jd_vector)
+        semantic_score_expr = (func.greatest(0.0, func.coalesce(semantic_sim, 0.0)) * w_semantic).label("semantic_score")
 
-        # Aggregate Vector Score (Weighted 40/20/30/10)
-        v_sim_raw = (
-            func.coalesce(m_sim, 0.0) * 0.4 + 
-            func.coalesce(p_sim, 0.0) * 0.2 + 
-            func.coalesce(r_sim, 0.0) * 0.3 + 
-            func.coalesce(c_sim, 0.0) * 0.1
-        )
-        
-        # Prevent negative scores (from floating point or opposite vectors)
-        v_sim_final = case((v_sim_raw < 0, 0.0), else_=v_sim_raw).label("v_sim")
+        # Final Total Score
+        total_score_expr = (
+            mandatory_boost_expr + 
+            preferred_boost_expr + 
+            location_boost_expr + 
+            mode_boost_expr + 
+            cert_boost_expr + 
+            title_boost_expr + 
+            exp_score_expr + 
+            semantic_score_expr
+        ).label("total_score")
 
-        # 3. BM25 Keyword Rank Expression
-        # Concatenate text fields with Coalesce to handle NULLs
-        search_text = (
-            func.coalesce(TeamMemberEmbedding.profile_text, "") + " " + 
-            func.coalesce(TeamMemberEmbedding.skills_text, "") + " " + 
-            func.coalesce(TeamMemberEmbedding.resume_text, "")
-        )
-        # Use plainto_tsquery for natural language, or websearch_to_tsquery for query features
-        ts_query = func.plainto_tsquery('english', query_text or " ")
-        bm25_raw = func.ts_rank_cd(func.to_tsvector('english', search_text), ts_query).label("b_score")
-
-        # Normalize BM25 to 0-1 range using logistic squashing
-        norm_bm25 = (bm25_raw / (1.0 + bm25_raw)).label("bm25_sim")
-
-        # 4. Final Hybrid Score
-        hybrid_score_expr = (self.ratio_bm25 * norm_bm25 + self.ratio_vector * v_sim_final).label("hybrid_score")
-
-        # 5. Build Final Query
+        # 3. Build Final Query
         query = self.db.query(
             TeamMember.team_member_id,
-            v_sim_final,
-            norm_bm25,
-            hybrid_score_expr
+            total_score_expr,
+            mandatory_boost_expr,
+            preferred_boost_expr,
+            exp_score_expr,
+            semantic_score_expr,
+            location_boost_expr,
+            mode_boost_expr,
+            cert_boost_expr,
+            title_boost_expr
         ).join(
             TeamMemberEmbedding, TeamMember.team_member_id == TeamMemberEmbedding.team_member_id
         ).filter(
             TeamMember.is_active == True
         )
 
-        # Apply Hard Filters
+        # Apply ID Filter
         if filter_ids:
             query = query.filter(TeamMember.team_member_id.in_(filter_ids))
-        if min_months is not None:
-            query = query.filter(TeamMember.experience_in_months >= min_months)
 
-        # Apply Global Threshold
-        if self.threshold > 0:
-            query = query.filter(hybrid_score_expr >= self.threshold)
+        # Skill Gate Filter: (mandatory_score + preferred_score) >= 0.2
+        query = query.filter((mandatory_boost_expr + preferred_boost_expr) >= 0.2)
 
-        # Execute and format
-        from sqlalchemy.dialects import postgresql
-        try:
-            compiled = query.statement.compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})
-            self.logger.warning(f"DEBUG SQL QUERY: {str(compiled)}")
-        except Exception as e:
-            self.logger.warning(f"DEBUG SQL QUERY COMPILE FAILED: {str(e)}")
-
-        rows = query.order_by(hybrid_score_expr.desc()).limit(100).all()
-        self.logger.warning(f"DEBUG SQL: Found {len(rows)} rows from DB query for query='{query_text}'")
-        if len(rows) == 0:
-            # Check if any active members exist at all in this session
-            active_count = self.db.query(TeamMember).filter(TeamMember.is_active == True).count()
-            self.logger.warning(f"DEBUG SQL: Total active members in DB: {active_count}")
+        # Execute
+        # 5. Execute & Build Results
+        rows = query.order_by(total_score_expr.desc()).limit(100).all()
+        self.logger.info(f"RAG Retrieval matched {len(rows)} candidates for testing.")
         
         candidates = []
         for row in rows:
             candidates.append(RAGCandidate(
                 team_member_id=row.team_member_id,
-                final_similarity=float(row.hybrid_score),
-                mandatory_similarity=float(row.v_sim), # Combined vector sim
-                preferred_similarity=float(row.v_sim),
-                jd_level_similarity=float(row.v_sim),
+                final_similarity=float(row.total_score),
+                mandatory_similarity=float(row.mandatory_score),
+                preferred_similarity=float(row.preferred_score),
+                jd_level_similarity=float(row.semantic_score),
                 phase0_score_breakdown={
-                    "bm25_component": round(float(row.bm25_sim) * self.ratio_bm25, 4),
-                    "vector_component": round(float(row.v_sim) * self.ratio_vector, 4),
-                    "raw_bm25_norm": round(float(row.bm25_sim), 4),
-                    "raw_vector_sim": round(float(row.v_sim), 4),
-                    "hybrid_score": round(float(row.hybrid_score), 4)
+                    "total_score": round(float(row.total_score), 4),
+                    "mandatory_score": round(float(row.mandatory_score), 4),
+                    "preferred_score": round(float(row.preferred_score), 4),
+                    "exp_score": round(float(row.exp_score), 4),
+                    "semantic_score": round(float(row.semantic_score), 4),
+                    "location_score": round(float(row.location_score), 4),
+                    "mode_score": round(float(row.mode_score), 4),
+                    "cert_score": round(float(row.cert_score), 4),
+                    "title_score": round(float(row.title_score), 4)
                 }
             ))
-            
-        if candidates:
-            self.logger.info(f"Hybrid RAG fetched {len(candidates)} candidates. Top score: {candidates[0].final_similarity:.4f}")
-        else:
-            self.logger.info(f"Hybrid RAG fetched 0 candidates for query: '{query_text}'")
             
         return candidates
 
