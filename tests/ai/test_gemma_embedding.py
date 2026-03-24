@@ -90,9 +90,9 @@ class TestGemmaEmbeddingAgent(unittest.TestCase):
             self.assertAlmostEqual(float(np.linalg.norm(vec)), 1.0, places=5)
 
     def test_gemma_agent_model_name_constant(self):
-        """MODEL_NAME must be google/embedding-gemma-300m."""
+        """MODEL_NAME must be google/embeddinggemma-300m."""
         from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
-        self.assertEqual(GemmaEmbeddingAgent.MODEL_NAME, "google/embedding-gemma-300m")
+        self.assertEqual(GemmaEmbeddingAgent.MODEL_NAME, "google/embeddinggemma-300m")
 
     def test_gemma_agent_fp16_on_non_cpu_device(self):
         """FP16 dtype selected when device != 'cpu' (R6 mitigation)."""
