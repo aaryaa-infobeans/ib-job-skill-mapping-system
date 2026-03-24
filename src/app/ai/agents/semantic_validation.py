@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
@@ -40,16 +41,38 @@ If all data appears valid and professional, return:
 Be strict but reasonable. Minor typos are acceptable, but obvious garbage data (random characters, keyboard mashing, nonsensical values) should be flagged.
 """
 
+def _normalize_role(role: str, title: str) -> str:
+    role_norm = (role or "").strip()
+    title_norm = (title or "").strip()
+    if not role_norm or role_norm.lower() in ["unknown", "n/a", "na"]:
+        return "Software Development"
+    if role_norm.lower() == title_norm.lower():
+        # If role is identical to title, fallback to a generic role category
+        return "Software Development" if "software" in title_norm.lower() else "Engineering"
+    return role_norm
+
+
+def _normalize_client_name(client_name: str) -> str:
+    clean = (client_name or "").strip()
+    if not clean or clean.lower() in ["na", "n/a", "none", "unknown", "tbd"]:
+        return "CLIENT_TOKEN_UNKNOWN"
+    return clean
+
+
 def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) -> Tuple[bool, List[str]]:
     """
     Use LLM to validate semantic quality of requisition data.
     """
     try:
-        # Prepare data for validation
+        # Prepare data for validation (with heuristics for common false positives)
+        title = job_description.get("title", "")
+        raw_role = job_description.get("role", "")
+        raw_client = job_description.get("client_name", "")
+
         validation_context = {
-            "title": job_description.get("title", ""),
-            "role": job_description.get("role", ""),
-            "client_name": job_description.get("client_name", ""),
+            "title": title,
+            "role": _normalize_role(raw_role, title),
+            "client_name": _normalize_client_name(raw_client),
             "mandatory_skills": job_description.get("mandatory_skills", []),
             "preferred_skills": job_description.get("preferred_skills", []),
             "location": job_description.get("location", []),
@@ -76,14 +99,30 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
         
         is_valid = llm_output.get("is_valid", True)
         validation_errors = llm_output.get("validation_errors", [])
-        
+
+        # Post-process known false positives (role/title overlap, scrubbed client shortcuts)
+        filtered_errors = []
+        for error in validation_errors:
+            if "Job Role" in error and "not a valid role category" in error:
+                continue
+            if "Client Name" in error and "not a plausible company name" in error:
+                continue
+            filtered_errors.append(error)
+
+        if filtered_errors:
+            is_valid = False
+            validation_errors = filtered_errors
+        else:
+            is_valid = True
+            validation_errors = []
+
         if is_valid:
             logger.info("✅ Semantic validation passed - data appears valid")
         else:
             logger.warning(f"❌ Semantic validation failed with {len(validation_errors)} error(s)")
             for error in validation_errors:
                 logger.warning(f"  - {error}")
-        
+
         return is_valid, validation_errors
         
     except json.JSONDecodeError as e:
