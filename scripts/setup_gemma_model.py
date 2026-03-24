@@ -212,7 +212,11 @@ def smoke_test(model_id_or_path: str) -> None:
     _info(f"Loading tokenizer from '{model_id_or_path}' …")
     tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
     _info("Loading model …")
-    model = AutoModel.from_pretrained(model_id_or_path, torch_dtype=torch.float32)
+    # Suppress torch_dtype deprecation warning
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*torch_dtype.*deprecated.*", category=FutureWarning)
+        model = AutoModel.from_pretrained(model_id_or_path, torch_dtype=torch.float32)
     model.eval()
 
     sample = "Software engineer with 5 years of Python and cloud experience."

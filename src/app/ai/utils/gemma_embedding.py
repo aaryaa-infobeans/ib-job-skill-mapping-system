@@ -58,7 +58,11 @@ class GemmaEmbeddingAgent:
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
         logger.info("Loading model from %s (dtype=%s, device=%s)", model_id, dtype, device)
-        self.model = AutoModel.from_pretrained(model_id, torch_dtype=dtype)
+        # Suppress torch_dtype deprecation warning
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*torch_dtype.*deprecated.*", category=FutureWarning)
+            self.model = AutoModel.from_pretrained(model_id, torch_dtype=dtype)
         self.model.to(device)
         self.model.eval()
 

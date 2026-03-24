@@ -43,7 +43,8 @@ def test_hybrid_search(query_text, skills):
             preferred_skills=[],
             experience_requirements="5 years",
             jd_level="Senior",
-            location="Remote"
+            location="Remote",
+            raw_requisition={"jd_text": query_text}  # Add the raw JD text
         )
         
         norm_req = NormalizedRequisition(
@@ -66,8 +67,13 @@ def test_hybrid_search(query_text, skills):
         candidates = rag_agent.execute(
             embedding_result=emb_result,
             query_text=query_text,
-            mandatory_ids=[], 
-            preferred_ids=[]
+            mandatory_skills=skills,  # Use the skills list from function parameter
+            preferred_skills=[],      # Empty preferred skills for test
+            locations=[],             # Empty locations for test
+            work_modes=[],            # Empty work modes for test
+            experience_req={},        # Empty experience req for test
+            certifications=[],        # Empty certifications for test
+            job_title=""             # Empty job title for test
         )
         
         # 3. Display Results
