@@ -1,6 +1,7 @@
 """Matching and scoring agent."""
 
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,33 @@ from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertificat
 from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_skill_list(skill_list: list) -> list:
+    """
+    Remove or clean up tokenized/PII values from skill lists.
+    Removes CLIENT_TOKEN_*, PROJECT_TOKEN_* and other sensitive artifacts.
+    """
+    if not skill_list:
+        return []
+    
+    sanitized = []
+    for skill in skill_list:
+        if isinstance(skill, str):
+            # Skip CLIENT_TOKEN_*, PROJECT_TOKEN_*, and other suspicious patterns
+            if re.match(r'(CLIENT|PROJECT)_TOKEN_[a-f0-9]{8}', skill, re.IGNORECASE):
+                logger.warning(f"Filtered out tokenized value from skill list: {skill}")
+                continue
+            
+            # Skip any string that's purely hex/alphanumeric without readable characters
+            if re.match(r'^[a-f0-9]+$', skill, re.IGNORECASE):
+                logger.warning(f"Filtered out hex-only value from skill list: {skill}")
+                continue
+                
+            # Include legitimate skills
+            sanitized.append(skill.strip())
+    
+    return sanitized
 
 
 def matching_scoring_node(state: GraphState) -> GraphState:
@@ -235,15 +263,15 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "strengths": ai_fit.get("key_strengths", []),
                         "gaps": ai_fit.get("major_gaps", []),
                         "mandatory_score": scoring_result.detailed_breakdown.mandatory_score,
-                        "mandatory_matched": scoring_result.detailed_breakdown.mandatory_matched,
-                        "mandatory_missing": scoring_result.detailed_breakdown.mandatory_missing,
+                        "mandatory_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_matched),
+                        "mandatory_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_missing),
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
-                        "preferred_matched": scoring_result.detailed_breakdown.preferred_matched,
-                        "preferred_missing": scoring_result.detailed_breakdown.preferred_missing,
+                        "preferred_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_matched),
+                        "preferred_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_missing),
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
-                        "certification_matched": scoring_result.detailed_breakdown.certification_matched,
-                        "certification_missing": scoring_result.detailed_breakdown.certification_missing,
+                        "certification_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_matched),
+                        "certification_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_missing),
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched": scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,

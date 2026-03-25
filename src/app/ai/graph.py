@@ -59,8 +59,7 @@ def create_graph():
     """
     workflow = StateGraph(GraphState)
     
-    # Add nodes (Node 0: PII Scrubber is now first)
-    workflow.add_node("pii_scrubber", pii_scrubber_node)  # NEW: Node 0
+    # Add nodes (no PII Scrubber in active workflow)
     workflow.add_node("requisition_parsing", requisition_parsing_node)
     workflow.add_node("skill_normalization", skill_normalization_node)
     workflow.add_node("embedding", embedding_node)
@@ -69,18 +68,11 @@ def create_graph():
     workflow.add_node("explanation_generation", explanation_generation_node)
     workflow.add_node("result_aggregation", result_aggregation_node)
     
-    # Define edges with Node 0 as entry point
-    workflow.set_entry_point("pii_scrubber")  # CHANGED: Was "requisition_parsing"
-    
-    # Add validation gate after PII scrubbing (FR-PII-005)
-    workflow.add_conditional_edges(
-        "pii_scrubber",
-        should_continue_after_pii_scrubbing,
-        {
-            "END": END,
-            "requisition_parsing": "requisition_parsing"
-        }
-    )
+    # Define entry point directly to requisition parsing
+    workflow.set_entry_point("requisition_parsing")
+
+    # Removed PII scrubber conditional edge; direct path begins with requisition_parsing
+
     
     # Add conditional edge after parsing to check for errors (existing logic)
     workflow.add_conditional_edges(

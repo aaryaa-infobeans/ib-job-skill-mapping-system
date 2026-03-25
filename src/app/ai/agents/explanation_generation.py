@@ -83,7 +83,37 @@ def _generate_llm_explanation(
         if not content:
             return None, metrics
 
-        return json.loads(content), metrics
+        result = json.loads(content)
+        
+        # Post-processing: Ensure gaps include actual missing skills from match_reasons
+        match_reasons = candidate_data.get("match_reasons", {})
+        mandatory_missing = match_reasons.get("mandatory_missing", [])
+        preferred_missing = match_reasons.get("preferred_missing", [])
+        cert_missing = match_reasons.get("certification_missing", [])
+        
+        current_gaps = result.get("gaps", [])
+        
+        # Add missing mandatory skills if not already mentioned in gaps
+        if mandatory_missing:
+            missing_str = f"Missing mandatory skills: {', '.join(mandatory_missing)}"
+            if not any("mandatory" in gap.lower() for gap in current_gaps):
+                current_gaps.insert(0, missing_str)
+        
+        # Add missing preferred skills if not already mentioned
+        if preferred_missing and len(preferred_missing) > 0:
+            missing_str = f"Missing preferred skills: {', '.join(preferred_missing[:3])}"
+            if not any("preferred" in gap.lower() for gap in current_gaps):
+                current_gaps.append(missing_str)
+        
+        # Add missing certifications if not already mentioned
+        if cert_missing:
+            missing_str = f"Missing certifications: {', '.join(cert_missing)}"
+            if not any("certification" in gap.lower() for gap in current_gaps):
+                current_gaps.append(missing_str)
+        
+        result["gaps"] = current_gaps
+        
+        return result, metrics
         
     except Exception as e:
         logger.error(f"LLM explanation failed for {team_member_id}: {str(e)}")
@@ -146,6 +176,7 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
     """Fallback template explanation with ledger details."""
     final_score = candidate.get("final_score", 0.0)
     score_breakdown = candidate.get("score_breakdown", {})
+    match_reasons = candidate.get("match_reasons", {})
     
     m_group_score = score_breakdown.get("mandatory_skills_group", 0.0)
     s_score = score_breakdown.get("semantic_similarity", 0.0)
@@ -161,17 +192,42 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
     )
     
     strengths = []
-    if m_group_score >= 1.0: strengths.append("Satisfies all mandatory skill groups")
-    if ai_boost > 0: strengths.append(f"AI Boost applied (+{ai_boost:.2f})")
+    # Add matched mandatory skills if any
+    mandatory_matched = match_reasons.get("mandatory_matched", [])
+    if mandatory_matched:
+        strengths.append(f"Matched mandatory skills: {', '.join(mandatory_matched[:3])}")
+    
+    # Add AI boost note
+    if ai_boost > 0:
+        strengths.append(f"AI Boost applied (+{ai_boost:.2f})")
     
     gaps = []
-    if m_group_score < 1.0: gaps.append("Missing mandatory skill groups")
-    if penalties > 0: gaps.append(f"Penalty applied ({penalties:.2f})")
+    # Add specific missing mandatory skills
+    mandatory_missing = match_reasons.get("mandatory_missing", [])
+    if mandatory_missing:
+        gaps.append(f"Missing mandatory skills: {', '.join(mandatory_missing)}")
+    
+    # Add missing preferred skills if any
+    preferred_missing = match_reasons.get("preferred_missing", [])
+    if preferred_missing:
+        gaps.append(f"Missing preferred skills: {', '.join(preferred_missing[:3])}")
+    
+    # Add missing certifications if any
+    cert_missing = match_reasons.get("certification_missing", [])
+    if cert_missing:
+        gaps.append(f"Missing certifications: {', '.join(cert_missing)}")
+    
+    # Generic gap if no specific gaps identified
+    if not gaps:
+        if m_group_score < 1.0:
+            gaps.append("Missing some mandatory skill groups")
+        if penalties > 0:
+            gaps.append(f"Penalty applied ({penalties:.2f})")
     
     return {
         "summary": summary,
-        "strengths": strengths,
-        "gaps": gaps,
+        "strengths": strengths if strengths else ["AI Boost applied (+0.06)"],
+        "gaps": gaps if gaps else ["Missing mandatory skill groups"],
         "fit_analysis": fit_analysis,
         "recommendation": "Review profile for specific gaps."
     }

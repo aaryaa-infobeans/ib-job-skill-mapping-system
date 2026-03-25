@@ -49,6 +49,14 @@ class JobDescription(BaseModel):
     certifications_required: Optional[List[str]] = None
     jd_text: str
 
+    @field_validator('priority', mode='before')
+    @classmethod
+    def normalize_priority(cls, v):
+        """Normalize priority to uppercase for case-insensitive input."""
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
 
 class RequisitionMetadata(BaseModel):
     """Metadata for requisition request."""

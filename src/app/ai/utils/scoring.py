@@ -119,9 +119,20 @@ class ScoringAgent(BaseAgent):
                 continue
             
             # 2. Check in profile text for group members or canonical name
+            import re
             group_name = self._get_skill_group(canonical)
             members = self.skill_groups.get(group_name, [canonical])
-            if any(mem.lower() in p_text_lower for mem in members):
+            
+            found_in_text = False
+            for mem in members:
+                escaped_mem = re.escape(mem.lower())
+                # prevent substring matches (e.g. 'git' in 'digital', 'scala' in 'scalable')
+                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
+                if re.search(pattern, p_text_lower):
+                    found_in_text = True
+                    break
+                    
+            if found_in_text:
                 matched.append(canonical)
             else:
                 missing.append(canonical)

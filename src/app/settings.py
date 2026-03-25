@@ -92,7 +92,8 @@ class Settings(BaseSettings):
     min_semantic_senior: float = 0.30
     fit_threshold_senior: float = 0.75
     
-    min_skill_weighted_mid: float = 0.20
+    # Lowered mid-level skill gate to avoid excluding near-fit candidates
+    min_skill_weighted_mid: float = 0.08
     min_semantic_mid: float = 0.20
     fit_threshold_mid: float = 0.70
     
