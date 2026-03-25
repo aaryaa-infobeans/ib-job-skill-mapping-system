@@ -51,10 +51,10 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
         db = SessionLocal()
         try:
             # Map state to expected keyword lists
-            # IMPORTANT: Use original payload skills to avoid noise from LLM-extracted PII tokens
+            # Use cleanly extracted skills to ensure BM25 matching handles clustered skill text properly
             job_desc_payload = state.get("requisition_input", {}).get("job_description", {})
-            m_skills = job_desc_payload.get("mandatory_skills", [])
-            p_skills = job_desc_payload.get("preferred_skills", [])
+            m_skills = parsed_jd.get("extracted_mandatory_skills") or job_desc_payload.get("mandatory_skills", [])
+            p_skills = parsed_jd.get("extracted_preferred_skills") or job_desc_payload.get("preferred_skills", [])
             
             # Others from parsed_jd are fine as they are normalized
             locs = parsed_jd.get("location", [])

@@ -139,10 +139,14 @@ class RAGRetrievalAgent(BaseAgent):
         if filter_ids:
             query = query.filter(TeamMember.team_member_id.in_(filter_ids))
 
+        # Experience, location, and work mode are handled via boost scores, not hard filters.
+        # This prevents 0 match scenarios where candidates are slightly outside the range.
+
         # Apply Skill Gate Filter: minimum combined skill matching
         skill_gate_threshold = self._get_skill_gate_threshold(seniority)
         mandatory_boost = self._build_skill_boost(mandatory_skills, weights['mandatory'])
         preferred_boost = self._build_skill_boost(preferred_skills, weights['preferred'])
+        # Use full gate; with updated settings, this is lenient enough but still avoids full scan
         query = query.filter((mandatory_boost + preferred_boost) >= skill_gate_threshold)
 
         # Execute query and get top candidates
@@ -347,10 +351,41 @@ class RAGRetrievalAgent(BaseAgent):
         if not skills:
             return literal(0.0)
         
-        skill_cases = [
-            case((TeamMemberEmbedding.skills_text.ilike(f"%{skill}%"), weight/len(skills)), else_=0.0)
-            for skill in skills
-        ]
+        # Map skill variations to common names for better matching
+        skill_variations = {
+            "Apache Spark": ["spark", "apache spark"],
+            "Spark": ["spark", "apache spark"],
+            "ETL Pipeline": ["etl", "pipeline", "data pipeline"],
+            "ETL": ["etl", "pipeline", "data pipeline"],
+            "Apache Airflow": ["airflow", "apache airflow"],
+            "Airflow": ["airflow", "apache airflow"],
+            "Hadoop": ["hadoop", "hdfs"],
+            "Scala": ["scala"],
+            "AWS": ["aws", "amazon web services"],
+            "GCP": ["gcp", "google cloud"],
+            "Azure": ["azure", "microsoft azure"]
+        }
+        
+        skill_cases = []
+        per_skill_weight = weight / len(skills)
+        
+        for skill in skills:
+            # Get variations for this skill
+            variations = skill_variations.get(skill, [skill.lower()])
+            
+            # Build OR condition for all variations of this skill
+            skill_condition = None
+            for variation in variations:
+                match_expr = TeamMemberEmbedding.skills_text.ilike(f"%{variation}%")
+                if skill_condition is None:
+                    skill_condition = match_expr
+                else:
+                    skill_condition = skill_condition | match_expr
+            
+            # Add case for this skill
+            skill_cases.append(
+                case((skill_condition, per_skill_weight), else_=0.0)
+            )
         
         return func.least(weight, sum(skill_cases))
 

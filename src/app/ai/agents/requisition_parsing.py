@@ -36,8 +36,8 @@ Return ONLY a valid JSON object with this exact structure:
 {
   "normalized_title": "string - standardized job title",
   "normalized_role": "string - standardized role category",
-  "extracted_mandatory_skills": ["skill1", "skill2"],
-  "extracted_preferred_skills": ["skill3", "skill4"],
+  "normalized_mandatory_skills": ["skill1", "skill2"],
+  "normalized_preferred_skills": ["skill3", "skill4"],
   "experience": {
     "min_months": number or null,
     "max_months": number or null
@@ -48,7 +48,7 @@ Return ONLY a valid JSON object with this exact structure:
 }
 
 Important:
-- Combine payload skills with newly extracted ones.
+- Combine payload skills with newly extracted ones, predict, normalize and output them as individual distinct skills.
 - Combine and normalize payload certifications with newly extracted ones.
 - Ensure the JSON is valid and only contains the requested fields.
 - Use null for missing information.
@@ -99,8 +99,8 @@ def parse_requisition_with_llm(
         enriched_jd = {
             "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
             "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
-            "extracted_mandatory_skills": list(set(llm_output.get("extracted_mandatory_skills", []) + (job_description.get("mandatory_skills") or []))),
-            "extracted_preferred_skills": list(set(llm_output.get("extracted_preferred_skills", []) + (job_description.get("preferred_skills") or []))),
+            "extracted_mandatory_skills": llm_output.get("normalized_mandatory_skills", []) or llm_output.get("extracted_mandatory_skills", []),
+            "extracted_preferred_skills": llm_output.get("normalized_preferred_skills", []) or llm_output.get("extracted_preferred_skills", []),
             "experience": llm_output.get("experience", job_description.get("experience")),
             "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
             "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
@@ -255,6 +255,19 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
         parsed_jd, metrics = parse_requisition_with_llm(job_description)
         
         if parsed_jd:
+            # Enforce that we predicted at least some skills if they were provided
+            m_skills = parsed_jd.get("extracted_mandatory_skills", [])
+            p_skills = parsed_jd.get("extracted_preferred_skills", [])
+            
+            had_skills = bool(job_description.get("mandatory_skills") or job_description.get("preferred_skills"))
+            
+            if had_skills and not m_skills and not p_skills:
+                # We couldn't predict anything valid from what they gave us
+                error_msg = "SEMANTIC_VALIDATION_FAILED: Could not predict any valid skills from the provided text."
+                state["error_message"] = error_msg
+                logger.error(f"❌ {error_msg}")
+                return state
+
             state["parsed_jd"] = parsed_jd
             if metrics:
                 if state.get("llm_call_logs") is None:

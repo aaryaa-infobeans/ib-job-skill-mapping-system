@@ -119,9 +119,20 @@ class ScoringAgent(BaseAgent):
                 continue
             
             # 2. Check in profile text for group members or canonical name
+            import re
             group_name = self._get_skill_group(canonical)
             members = self.skill_groups.get(group_name, [canonical])
-            if any(mem.lower() in p_text_lower for mem in members):
+            
+            found_in_text = False
+            for mem in members:
+                escaped_mem = re.escape(mem.lower())
+                # prevent substring matches (e.g. 'git' in 'digital', 'scala' in 'scalable')
+                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
+                if re.search(pattern, p_text_lower):
+                    found_in_text = True
+                    break
+                    
+            if found_in_text:
                 matched.append(canonical)
             else:
                 missing.append(canonical)
@@ -206,17 +217,40 @@ class ScoringAgent(BaseAgent):
             return settings.skill_family_penalty
         return 0.0
 
-    def _calculate_skill_score(self, member_skill_ids, mandatory_ids, preferred_ids, alternatives=None, preferred_alternatives=None):
-        """Simplified skill score for preferred skills (mandatory handled by grouping)."""
+    def _calculate_skill_score(self, member_skill_ids, mandatory_ids, preferred_ids, alternatives=None, preferred_alternatives=None, profile_text=""):
+        """Skill score for preferred skills with profile text fallback."""
         member_skills = set(member_skill_ids)
         matched_preferred = []
         missing_preferred = []
         if not preferred_ids:
             return {"preferred_score": 0.0, "matched_preferred": [], "missing_preferred": []}
             
+        p_text_lower = (profile_text or "").lower()
+        import re
+        
         for pid in preferred_ids:
             alts = (preferred_alternatives or {}).get(pid, [pid])
+            # 1. Check direct skill IDs
             if any(aid in member_skills for aid in alts):
+                matched_preferred.append(pid)
+                continue
+                
+            # 2. Fallback to profile text using the canonical name and its skill group
+            group_name = self._get_skill_group(pid)
+            members = self.skill_groups.get(group_name, [pid])
+            
+            found_in_text = False
+            for mem in members:
+                # Protect against very short strings being matched broadly
+                if len(mem) <= 2 and mem.lower() not in ["s3", "c#", "f#", "r", "go", "ui", "ux"]:
+                    continue
+                escaped_mem = re.escape(mem.lower())
+                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
+                if re.search(pattern, p_text_lower):
+                    found_in_text = True
+                    break
+            
+            if found_in_text:
                 matched_preferred.append(pid)
             else:
                 missing_preferred.append(pid)
@@ -299,7 +333,8 @@ class ScoringAgent(BaseAgent):
             [], 
             profile_data.get("preferred_skill_ids", []),
             None,
-            profile_data.get("preferred_alternatives")
+            profile_data.get("preferred_alternatives"),
+            profile_text=profile_text
         )
         p_score = p_res["preferred_score"]
         
