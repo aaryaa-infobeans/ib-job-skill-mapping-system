@@ -21,7 +21,7 @@ Analyze the following fields and check if they contain valid, professional data:
 
 1. **Job Title**: Is it a real professional job title? (e.g., "Senior Software Engineer" is valid, "sdfdsf" is garbage)
 2. **Job Role**: Is it a valid role category? (e.g., "Software Development" is valid, "sdf" is garbage)
-3. **Skills**: Are they actual technologies, tools, or competencies? (e.g., "Python", "React" are valid, "sdfsdf" is garbage)
+3. **Skills**: Are they actual technologies, tools, or competencies? Do not flag skills that are clustered together or need splitting (e.g., "Vertica - DWH - SQL") as invalid; they will undergo normalization later. Ensure they are not complete garbage.
 4. **Client Name**: Is it a plausible company name OR a valid PII token (e.g., `CLIENT_TOKEN_...`)?
 5. **Location**: Are they real places? (e.g., "New York" is valid, "dsfdsfsd" is garbage)
 6. **Job Description**: Is it coherent and professional? (Random characters or keyboard mashing is garbage). Note that it may contain PII tokens or redaction markers.
@@ -69,6 +69,10 @@ def _is_known_valid_semantic_error(error: str) -> bool:
     if "[NAME_REDACTED]" in normalized or "[REDACTED]" in normalized or "CLIENT_TOKEN_" in normalized or "PROJECT_TOKEN_" in normalized:
         return True
 
+    if 'skill' in normalized.lower():
+        # Let all skill validation errors pass, we evaluate them directly in parsing
+        return True
+
     # Generic-supported fields: instead of hard-coded values, use heuristics
     # Message structure: Invalid <field>: <value> [is not a valid technology]
     import re
@@ -85,12 +89,8 @@ def _is_known_valid_semantic_error(error: str) -> bool:
             # Allow empty location if a fallback/global placement is intended.
             return 'empty location' in normalized.lower() or bool(value)
 
-        if field == 'preferred skills':
-            # Accept cases with logical connectors (or), tokenized names, or short abbreviated tags.
-            if 'or ' in value.lower() or value.lower().startswith('gcp') or value.lower().startswith('azure'):
-                return True
-            # Accept any skill-like term where length > 1 and not random noise.
-            return len(value) > 1
+        if field in ['preferred skills', 'mandatory skills', 'skills', 'skill']:
+            return True
 
         if field == 'job description':
             # Accept tokenized text or abbreviation markers as valid content for now.

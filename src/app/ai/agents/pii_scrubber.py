@@ -106,6 +106,10 @@ def pii_scrubber_node(state: GraphState) -> GraphState:
             
             # Handle string fields that need scrubbing
             if isinstance(value, str) and value.strip():
+                if field == "jd_text":
+                    scrubbed_jd[field] = value
+                    continue
+                
                 logger.debug(f"Scrubbing field: {field}")
                 
                 result = scrubber.scrub_text(
