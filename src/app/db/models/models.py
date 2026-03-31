@@ -318,6 +318,8 @@ class TeamMemberEmbedding(Base):
     content_hash = Column(CHAR(64), nullable=True)
     resume_fetched_at = Column(DateTime, nullable=True)
     embedding_updated_at = Column(DateTime, nullable=True)
+    pii_scrubbed = Column(Boolean, nullable=False, server_default="false")
+    scrubbed_at = Column(DateTime, nullable=True)
 
 
 class RequisitionMatchTeamMemberFeedback(Base):

@@ -207,6 +207,7 @@ class EmbeddingProcessor:
 
         # 3. Fetch resume via MCP
         resume_text: Optional[str] = None
+        pii_scrub_ok: bool = False
         profile_url = getattr(member, "profile_url", None)
         if profile_url:
             t0 = time.monotonic()
@@ -215,7 +216,7 @@ class EmbeddingProcessor:
 
             if raw_resume:
                 # 4. PII scrub
-                resume_text = self._scrub_pii(raw_resume, mid)
+                resume_text, pii_scrub_ok = self._scrub_pii(raw_resume, mid)
                 logger.info(
                     "resume_fetch_success_total",
                     metric="resume_fetch_success_total",
@@ -263,6 +264,7 @@ class EmbeddingProcessor:
         legacy_emb = self._weighted_average(resume_emb, skills_emb, certs_emb)
 
         # 8. Upsert + commit per-member
+        now = datetime.utcnow()
         payload = EmbeddingPayload(
             member_id=mid,
             resume_embedding=resume_emb,
@@ -274,8 +276,10 @@ class EmbeddingProcessor:
             certifications_text=certs_text,
             embedding_model="embedding-gemma-300m",
             content_hash=new_hash,
-            resume_fetched_at=datetime.utcnow() if profile_url and resume_text else None,
-            embedding_updated_at=datetime.utcnow(),
+            resume_fetched_at=now if profile_url and resume_text else None,
+            embedding_updated_at=now,
+            pii_scrubbed=pii_scrub_ok,
+            scrubbed_at=now if pii_scrub_ok else None,
         )
         repo.upsert_team_member_embeddings(payload)
         self.db.commit()
@@ -286,23 +290,28 @@ class EmbeddingProcessor:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _scrub_pii(self, text: str, member_id: str) -> str:
-        """Run PII scrubber on resume text before embedding or DB write."""
+    def _scrub_pii(self, text: str, member_id: str) -> tuple[str, bool]:
+        """Run PII scrubber on resume text before embedding or DB write.
+
+        Returns:
+            (scrubbed_text, success) — success=False means scrubber failed and
+            original text was returned unchanged.
+        """
         try:
             from app.pii.scrubber import PIIScrubber
             from app.pii.config import PIIConfig
 
-            scrubber = PIIScrubber(PIIConfig())
-            scrubbed = scrubber.scrub(text)
+            scrubber = PIIScrubber(PIIConfig.from_env())
+            result = scrubber.scrub_text(text)
             logger.info("pii_scrub_called", member_id=member_id)
-            return scrubbed
+            return result.scrubbed_text, True
         except Exception as exc:
             logger.warning(
                 "pii_scrub_failed; returning original text",
                 member_id=member_id,
                 error=str(exc),
             )
-            return text
+            return text, False
 
     def _embed(self, text: str, embed_type: str) -> Optional[np.ndarray]:
         """Embed a single text, emit timing metric."""

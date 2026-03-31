@@ -10,6 +10,8 @@ import sys
 import uuid
 from typing import Optional
 import structlog
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv()  # populate os.environ from .env so PII config and other os.getenv() callers work
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
 
