@@ -26,6 +26,8 @@ ACCEPTABLE_REVISIONS = {
     "7efd9d68d9b8",  # PII scrub audit table
     "bca284b2d901",  # Add pii_scrubbed flag to embeddings
     "emb002_multi_vec",  # CR-EMB-002: Multi-vector embedding columns
+    "0c7293f99a72",  # Fix pii_scrub_audit entity_id type to VARCHAR(100)
+    "20260403_01",   # Widen team_member.profile_type to VARCHAR(255)
 }
 
 
@@ -85,6 +87,8 @@ def get_migration_info(engine: Engine) -> Tuple[str, str]:
                 "7efd9d68d9b8": "0009",
                 "bca284b2d901": "0010",
                 "emb002_multi_vec": "0011",
+                "0c7293f99a72": "0012",
+                "20260403_01": "0013",
             }
             short_version = revision_map.get(version_num, "unknown")
 

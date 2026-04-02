@@ -138,7 +138,7 @@ class TeamMemberRepository:
             skill_name=skill_name,
             category_id=category_id
         ).on_conflict_do_update(
-            index_elements=['skill_name'],
+            index_elements=['skill_id'],
             set_={'category_id': category_id}
         ).returning(skill_master.c.skill_id)
         
@@ -649,6 +649,8 @@ class EmbeddingPayload:
     content_hash: _Opt[str] = None
     resume_fetched_at: _Opt[object] = None        # datetime
     embedding_updated_at: _Opt[object] = None     # datetime
+    pii_scrubbed: bool = False
+    scrubbed_at: _Opt[object] = None              # datetime
 
 
 class EmbeddingRepository:
@@ -666,8 +668,9 @@ class EmbeddingRepository:
         """
         Insert or update embedding columns for a team member.
 
-        Columns intentionally NOT touched: profile_text, metadata,
-        pii_scrubbed, scrubbed_at (owned by the ingestion phase).
+        Columns intentionally NOT touched: profile_text, metadata.
+        pii_scrubbed and scrubbed_at are set by the embedding phase when the
+        PII scrubber runs successfully on the resume text.
         """
         from sqlalchemy.dialects.postgresql import insert as pg_insert
         from sqlalchemy import insert as sa_insert, text as sa_text
@@ -705,6 +708,8 @@ class EmbeddingRepository:
             "content_hash": payload.content_hash,
             "resume_fetched_at": payload.resume_fetched_at,
             "embedding_updated_at": payload.embedding_updated_at or now,
+            "pii_scrubbed": payload.pii_scrubbed,
+            "scrubbed_at": payload.scrubbed_at,
         }
 
         if dialect == "postgresql":

@@ -158,7 +158,7 @@ class TeamMember(Base):
 
     team_member_id = Column(String(50), primary_key=True)
     designation = Column(String(100), nullable=True)
-    profile_type = Column(String(50), nullable=True)
+    profile_type = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     experience_in_months = Column(Integer, nullable=True)
     base_location = Column(String(100), nullable=True)
@@ -318,6 +318,8 @@ class TeamMemberEmbedding(Base):
     content_hash = Column(CHAR(64), nullable=True)
     resume_fetched_at = Column(DateTime, nullable=True)
     embedding_updated_at = Column(DateTime, nullable=True)
+    pii_scrubbed = Column(Boolean, nullable=False, server_default="false")
+    scrubbed_at = Column(DateTime, nullable=True)
 
 
 class RequisitionMatchTeamMemberFeedback(Base):

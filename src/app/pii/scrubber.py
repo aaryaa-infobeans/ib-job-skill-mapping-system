@@ -173,14 +173,18 @@ class PIIScrubber:
             ScrubRule(
                 pii_type=PIIType.CLIENT_NAME,
                 detection_method='ner',
-                action='tokenize',  # Tokenize for business context preservation
+                action='redact',
+                replacement='[CLIENT_REDACTED]'
+                # action='tokenize',  # Tokenize for business context preservation
             ),
             
             # Organizations (NER)
             ScrubRule(
                 pii_type=PIIType.ORGANIZATION,
                 detection_method='ner',
-                action='tokenize',
+                # action='tokenize',
+                action='redact',
+                replacement='[ORG_REDACTED]'
             ),
         ]
     
@@ -209,13 +213,63 @@ class PIIScrubber:
             
             # Databases
             'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch',
-            'oracle', 'sqlserver',
+            'oracle', 'sqlserver','mssql', 'cassandra', 'dynamodb', 'bigquery', 'snowflake',
             
             # Cloud
             'aws', 'azure', 'gcp', 'heroku', 'vercel', 'netlify',
             
             # Common false positives
-            'agile', 'scrum', 'kanban', 'devops', 'cicd',
+            'agile', 'scrum', 'kanban', 'devops', 'cicd', 'ci/cd',
+
+            # Add more as needed based on false positive analysis
+            'athena', 'cloudwatch', 'emr', 'glue', 'jwt', 'lambda', 'redshift', 'activemq',
+            'agile', 'ai', 'aiflow', 'alteryx', 'android', 'androidx', 'angular', 'angularjs', 
+            'ant design', 'artificial intelligence', 'asana', 'asp.net', 'attention mechanism', 
+            'autoencoders', 'aws', 'aws cloudformation', 'aws cloudfront', 'aws cloudwatch', 
+            'aws dynamodb', 'aws ec2', 'aws lambda', 'aws rds', 'aws redshift', 'aws s3', 'azure', 
+            'azure app service', 'azure blob storage', 'azure cosmos', 'azure devops', 
+            'azure functions', 'azure ml', 'azure sql database', 'azure virtual machines', 
+            'backbone', 'backlog', 'behat', 'big data', 'bigcommerce', 'bigquery', 'birst', 
+            'blazor', 'blob','bootstrap', 'bulma', 'burndown chart', 'burnup chart', 'c#', 'c++', 
+            'capybara', 'cassandra', 'cd', 'centos', 'chartio', 'ci', 'ci/cd', 'ci/cd pipelines', 
+            'cicd', 'classification', 'clickhouse', 'clickup', 'clustering', 'cloud','coda', 'codeception', 
+            'codeigniter', 'computer vision', 'confluence', 'convolutional neural networks', 
+            'cordova', 'css3', 'cypress', 'data', 'data modeling', 'data science', 'databricks', 
+            'dataops', 'db', 'debian', 'deep learning', 'devops', 'dimensionality reduction', 
+            'discord', 'django', 'docker', 'domo', 'dropbox paper', 'druid', 'drupal', 'dynamodb', 
+            'e2e testing', 'elasticsearch', 'electron', 'ember', 'epic', 'evernote', 'express', 
+            'fastapi', 'fedora', 'few-shot learning', 'flask', 'fleep', 'flutter', 'foundation', 
+            'freshdesk', 'gcp', 'gcp ai platform', 'gcp app engine', 'gcp bigquery', 
+            'gcp cloud functions', 'gcp cloud pub/sub', 'gcp cloud run', 'gcp cloud storage', 
+            'gcp compute engine', 'gcp sql', 'generative adversarial networks', 'git', 'glip', 
+            'go', 'gooddata', 'google docs', 'google meet', 'graphql', 'grpc', 'h2o.ai', 
+            'hadoop', 'heroku', 'hive', 'html5', 'hubbspot', 'hubspot', 'impala', 'insightly', 
+            'integration testing', 'intercom', 'ionic', 'ios', 'iosx', 'java', 'javascript', 
+            'jenkins', 'jest', 'jira', 'joomla', 'julia', 'junit', 'kafka', 'kanban', 'kotlin', 
+            'kubeflow', 'kubernetes', 'laravel', 'lightgbm', 'linux', 'looker', 'machine learning', 
+            'macos', 'magento', 'mailchimp', 'marketo', 'material-ui', 'matlab', 'mattermost', 
+            'metabase', 'meteor', 'microsoft onenote', 'microsoft teams', 'microsoft word', 'ml', 
+            'mlflow', 'mlops', 'mlops & ci/cd', 'mocha', 'mode analytics', 'monday.com', 'mongodb', 
+            'mssql', 'mstest', 'mysql', 'natural language processing', 'nest', 'netlify', 
+            'neural networks', 'next', 'nlp', 'notion', 'nuclino', 'nunit', 'oauth2', 'onlyoffice', 
+            'oracle', 'pardot', 'periscope data', 'phpunit', 'pig', 'pipedrive', 'playwright', 
+            'postgresql', 'power bi', 'prestashop', 'presto', 'project', 'prompt', 
+            'prompt engineering', 'pytest', 'python', 'pytorch', 'qlik', 'quip', 'r', 'rbac','rabbitmq', 
+            'rag pipelines', 'rails', 'rapidminer', 'react', 'react native', 
+            'recurrent neural networks', 'red hat', 'redash', 'redis', 'redis streams', 
+            'regression', 'reinforcement learning', 'rest', 'retrospective', 'rocket.chat', 
+            'rspec', 'ruby', 'rust', 'ryver', 'sagemaker', 'salesforce', 'scala', 'scikit-learn', 
+            'scrum', 'selenium', 'self-supervised learning', 'semantic ui', 
+            'semi-supervised learning', 'shopify', 'sisense', 'skype', 'slack', 'slack notes', 
+            'slack wiki', 'slite', 'snowflake', 'socket.io', 'spark', 'spring', 'sprint', 
+            'sprint planning', 'sprint retrospective', 'sprint review', 'sqlserver', 
+            'squarespace', 'standup', 'story points', 'superset', 'supervised learning', 'svelte', 
+            'swift', 'symfony', 'tableau', 'tailwind', 'tensorflow', 'testcafe', 'testing', 
+            'testng', 'transfer learning', 'transformers', 'trello', 'twist', 'typescript', 
+            'ubuntu', 'uikit', 'unit', 'unittest', 'unsupervised learning', 'user story', 
+            'velocity', 'vercel', 'vue', 'vue.js', 'webex', 'websocket', 'windows', 'wix', 
+            'woocommerce', 'wordpress', 'xgboost', 'xunit', 'yammer', 'yellowfin', 'zendesk', 
+            'zero-shot learning', 'zoho', 'zoho docs', 'zoom'            
         }
     
     def scrub_text(
@@ -268,8 +322,11 @@ class PIIScrubber:
         ner_entities = self.ner_detector.detect_entities(text)
         
         for entity in ner_entities:
-            # Filter whitelist
-            if entity.text.lower() in self.tech_whitelist:
+            # Filter whitelist: exact phrase match OR any individual word is a known tech term
+            entity_lower = entity.text.lower()
+            if entity_lower in self.tech_whitelist or any(
+                word in self.tech_whitelist for word in entity_lower.split()
+            ):
                 logger.debug("Whitelisted: %s (tech term)", entity.text)
                 continue
             
