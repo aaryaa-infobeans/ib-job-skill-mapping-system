@@ -138,7 +138,7 @@ class TeamMemberRepository:
             skill_name=skill_name,
             category_id=category_id
         ).on_conflict_do_update(
-            index_elements=['skill_name'],
+            index_elements=['skill_id'],
             set_={'category_id': category_id}
         ).returning(skill_master.c.skill_id)
         

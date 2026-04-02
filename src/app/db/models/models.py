@@ -158,7 +158,7 @@ class TeamMember(Base):
 
     team_member_id = Column(String(50), primary_key=True)
     designation = Column(String(100), nullable=True)
-    profile_type = Column(String(50), nullable=True)
+    profile_type = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     experience_in_months = Column(Integer, nullable=True)
     base_location = Column(String(100), nullable=True)

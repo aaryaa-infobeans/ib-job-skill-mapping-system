@@ -97,7 +97,7 @@ team_member = Table(
     metadata,
     Column("team_member_id", String(50), primary_key=True),
     Column("designation", String(100), nullable=True),
-    Column("profile_type", String(50), nullable=True),
+    Column("profile_type", String(255), nullable=True),
     Column("is_active", Boolean, default=True),
     Column("experience_in_months", Integer, nullable=True),
     Column("base_location", String(100), nullable=True),
