@@ -1,0 +1,296 @@
+# =============================================================================
+# IB Job Skill Mapping — Agent System Configuration
+# =============================================================================
+# This is the SINGLE source of truth for the multi-agent runtime.
+# The orchestrator validates this file at startup (before any agent
+# initialises) and fails fast with human-readable errors on misconfiguration.
+#
+# Environment variable substitution: any value prefixed with $ is replaced
+# at load time from the process environment.  Missing required vars raise
+# a ConfigError at startup.
+#
+# Copy this file to config/agents.local.yaml for local overrides.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# System-wide settings
+# ---------------------------------------------------------------------------
+system:
+  name: ib-job-skill-mapping-agent-system
+  log_level: INFO            # debug | info | warn | error
+  tracing: true              # propagate trace_id across all agents
+  plugins_dir: plugins/      # relative to project root; scanned at startup
+
+# ---------------------------------------------------------------------------
+# Infrastructure shared by agents (injected by orchestrator, not settings.py)
+# ---------------------------------------------------------------------------
+infrastructure:
+  database:
+    url: $DATABASE_URL       # required — postgresql+asyncpg://...
+    pool_size: 10
+    max_overflow: 5
+    pool_timeout_s: 30
+
+  redis:
+    url: $REDIS_URL          # required — redis://host:6379/0
+    socket_timeout_s: 5
+    max_connections: 20
+
+  llm:
+    provider: $LLM_PROVIDER  # openai | groq | google
+    openai_api_key: $OPENAI_API_KEY
+    openai_model: gpt-4o-mini
+    openai_input_rate: 0.15   # USD per 1M tokens
+    openai_output_rate: 0.60
+    groq_api_key: $GROQ_API_KEY
+    groq_model: llama3-70b-8192
+    google_api_key: $GOOGLE_API_KEY
+    google_model: gemini-2.0-flash
+    temperature: 0.1
+    max_tokens: 4096
+
+  embedding:
+    provider: google         # google | gemma (local)
+    model: models/text-embedding-004
+    gemma_model_path: $GEMMA_MODEL_PATH   # required if provider=gemma
+    device: cpu              # cpu | cuda
+
+# ---------------------------------------------------------------------------
+# Agent definitions
+# ---------------------------------------------------------------------------
+agents:
+
+  # ── 1. PII Scrubber ───────────────────────────────────────────────────────
+  - id: pii_scrubber
+    type: pii_scrubber          # maps to AgentRegistry key
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      enabled_types: []         # empty = detect all PII types
+      action: redact            # redact | tokenize
+      audit_log_db: true        # write audit records to DB
+      nfr_p95_ms: 50            # latency SLA budget (ms)
+    retry:
+      max_attempts: 3
+      backoff: fixed
+      backoff_ms: 200
+    timeout_ms: 500
+
+  # ── 2. Requisition Parsing ────────────────────────────────────────────────
+  - id: requisition_parsing
+    type: requisition_parsing
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      llm_model: null           # null → use infrastructure.llm default model
+      temperature: 0.1
+      max_tokens: 2048
+      prompt_version: v1        # selects prompt template variant
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      backoff_ms: 500
+    timeout_ms: 30000
+
+  # ── 3. Skill Normalization ────────────────────────────────────────────────
+  - id: skill_normalization
+    type: skill_normalization
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      llm_model: null           # null → use infrastructure.llm default model
+      temperature: 0.0          # deterministic for normalization
+      max_tokens: 1024
+      db_lookup: true           # verify against skill_master table
+      ontology_expansion: true  # expand via skill_ontology table
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      backoff_ms: 500
+    timeout_ms: 20000
+
+  # ── 4. Candidate Search (embed + RAG) ─────────────────────────────────────
+  - id: candidate_search
+    type: candidate_search
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      top_k: 20                 # candidates to retrieve from vector DB
+      # Per-component weights for the composite similarity score
+      similarity_weights:
+        mandatory: 0.45
+        preferred: 0.25
+        jd_level: 0.15
+        certification: 0.15
+      min_similarity: 0.30      # gate: discard below this threshold
+    retry:
+      max_attempts: 2
+      backoff: fixed
+      backoff_ms: 1000
+    timeout_ms: 15000
+
+  # ── 5. Matching & Scoring ─────────────────────────────────────────────────
+  - id: matching_scoring
+    type: matching_scoring
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      # Role-level weight profiles (mandatory / preferred / semantic / context)
+      role_weights:
+        SENIOR:
+          mandatory: 0.50
+          preferred: 0.20
+          semantic:  0.25
+          context:   0.05
+          fit_threshold: 0.65
+          min_skill_weighted: 0.50
+          min_semantic: 0.40
+        MID:
+          mandatory: 0.40
+          preferred: 0.20
+          semantic:  0.25
+          context:   0.15
+          fit_threshold: 0.55
+          min_skill_weighted: 0.40
+          min_semantic: 0.35
+        JUNIOR:
+          mandatory: 0.35
+          preferred: 0.20
+          semantic:  0.25
+          context:   0.20
+          fit_threshold: 0.45
+          min_skill_weighted: 0.30
+          min_semantic: 0.30
+      # Global weight fallback (used when role is unknown)
+      global_weights:
+        mandatory_skills: 0.30
+        preferred_skills: 0.20
+        semantic_fit:     0.25
+        experience:       0.10
+        certification:    0.10
+        availability:     0.05
+    retry:
+      max_attempts: 2
+      backoff: fixed
+      backoff_ms: 500
+    timeout_ms: 20000
+
+  # ── 6. Explanation Generation ─────────────────────────────────────────────
+  - id: explanation_generation
+    type: explanation_generation
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      llm_model: null           # null → use infrastructure.llm default model
+      temperature: 0.3          # slightly creative for readable prose
+      max_tokens: 512
+      max_explanations: 2       # only top-N candidates get LLM explanations
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      backoff_ms: 1000
+    timeout_ms: 30000
+
+  # ── 7. Result Aggregation ─────────────────────────────────────────────────
+  - id: result_aggregation
+    type: result_aggregation
+    enabled: true
+    version: ">=1.0.0"
+    replicas: 1
+    config:
+      qualification_threshold: 0.30   # minimum final_score to be QUALIFIED
+      fit_levels:
+        STRONG_FIT:  0.75
+        GOOD_FIT:    0.55
+        PARTIAL_FIT: 0.30
+      results_backend: redis    # redis | memory  (memory = in-process dict)
+      results_ttl_s: 3600       # how long to keep results in cache
+    retry:
+      max_attempts: 1           # pure transformation — no benefit retrying
+      backoff: fixed
+      backoff_ms: 0
+    timeout_ms: 5000
+
+# ---------------------------------------------------------------------------
+# Routing — data-driven; adding a new route = config change only, no code
+# ---------------------------------------------------------------------------
+routing:
+
+  # Entry point: external HTTP request → pipeline start
+  - from: "__entry__"
+    to: pii_scrubber
+    condition: null
+
+  # PII gate: blocked → dead-letter; scrubbed → parsing
+  - from: pii_scrubber
+    to: requisition_parsing
+    condition: "$.metadata.message_type == 'requisition.scrubbed'"
+
+  - from: pii_scrubber
+    to: "__dead_letter__"
+    condition: "$.metadata.message_type == 'requisition.pii_blocked'"
+
+  # Main linear pipeline
+  - from: requisition_parsing
+    to: skill_normalization
+    condition: null
+
+  - from: skill_normalization
+    to: candidate_search
+    condition: null
+
+  - from: candidate_search
+    to: matching_scoring
+    condition: null
+
+  - from: matching_scoring
+    to: explanation_generation
+    condition: null
+
+  - from: explanation_generation
+    to: result_aggregation
+    condition: null
+
+  - from: result_aggregation
+    to: "__sink__"
+    condition: null
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+observability:
+  metrics_port: 9090            # Prometheus scrape endpoint
+  trace_exporter: otlp          # otlp | stdout | none
+  otlp_endpoint: $OTLP_ENDPOINT # e.g. http://otel-collector:4317
+  log_format: json              # json | text
+  # Per-agent log level overrides (no redeploy needed — hot-reloaded)
+  agent_log_levels:
+    pii_scrubber: INFO
+    requisition_parsing: INFO
+    skill_normalization: DEBUG
+    candidate_search: INFO
+    matching_scoring: INFO
+    explanation_generation: INFO
+    result_aggregation: INFO
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+error_handling:
+  dead_letter:
+    backend: redis              # redis | log_only
+    key_prefix: "dlq:agent:"
+    ttl_s: 86400                # keep failed messages for 24 h
+  alerting:
+    enabled: false              # set true in production
+    webhook_url: $ALERT_WEBHOOK_URL
+    on_events:
+      - agent_unavailable
+      - dead_letter_received
+      - pipeline_timeout

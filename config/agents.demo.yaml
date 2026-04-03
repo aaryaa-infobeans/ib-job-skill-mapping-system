@@ -1,0 +1,179 @@
+# =============================================================================
+# Agent Framework — DEMO Configuration
+# =============================================================================
+# Self-contained config for trial users. No external services required.
+# All infrastructure uses in-memory/local-only backends.
+#
+# Usage:
+#   python scripts/demo_agent_pipeline.py
+#   python scripts/demo_agent_pipeline.py --config config/agents.demo.yaml
+# =============================================================================
+
+system:
+  name: agent-framework-demo
+  log_level: INFO
+  tracing: false
+  plugins_dir: plugins/
+
+infrastructure:
+  database:
+    url: "sqlite:///:memory:"
+    pool_size: 1
+    max_overflow: 0
+
+  redis:
+    url: "redis://localhost:6379/0"    # Not actually used in demo mode
+
+  llm:
+    provider: openai
+    openai_api_key: "demo-key-not-used"
+    openai_model: gpt-4o-mini
+    temperature: 0.1
+    max_tokens: 4096
+
+  embedding:
+    provider: gemma
+    model: gemma-2b
+    gemma_model_path: "/tmp/demo-gemma-stub"
+    device: cpu
+
+agents:
+  - id: pii_scrubber
+    type: pii_scrubber
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      action: redact
+      audit_log_db: false
+    retry:
+      max_attempts: 2
+      backoff: fixed
+      backoff_ms: 100
+    timeout_ms: 5000
+
+  - id: requisition_parsing
+    type: requisition_parsing
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      temperature: 0.1
+      max_tokens: 2048
+    retry:
+      max_attempts: 2
+      backoff: exponential
+      backoff_ms: 200
+    timeout_ms: 10000
+
+  - id: skill_normalization
+    type: skill_normalization
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      temperature: 0.0
+      db_lookup: false
+      ontology_expansion: false
+    retry:
+      max_attempts: 2
+      backoff: exponential
+      backoff_ms: 200
+    timeout_ms: 10000
+
+  - id: candidate_search
+    type: candidate_search
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      top_k: 10
+      min_similarity: 0.30
+    retry:
+      max_attempts: 2
+      backoff: fixed
+      backoff_ms: 500
+    timeout_ms: 10000
+
+  - id: matching_scoring
+    type: matching_scoring
+    enabled: true
+    version: ">=1.0.0"
+    config: {}
+    retry:
+      max_attempts: 2
+      backoff: fixed
+      backoff_ms: 500
+    timeout_ms: 10000
+
+  - id: explanation_generation
+    type: explanation_generation
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      max_explanations: 3
+    retry:
+      max_attempts: 2
+      backoff: exponential
+      backoff_ms: 500
+    timeout_ms: 15000
+
+  - id: result_aggregation
+    type: result_aggregation
+    enabled: true
+    version: ">=1.0.0"
+    config:
+      qualification_threshold: 0.30
+      results_backend: memory
+    retry:
+      max_attempts: 1
+      backoff: fixed
+      backoff_ms: 0
+    timeout_ms: 5000
+
+routing:
+  - from: "__entry__"
+    to: pii_scrubber
+
+  - from: pii_scrubber
+    to: requisition_parsing
+    condition: "$.metadata.message_type == 'requisition.scrubbed'"
+
+  - from: pii_scrubber
+    to: "__dead_letter__"
+    condition: "$.metadata.message_type == 'requisition.pii_blocked'"
+
+  - from: requisition_parsing
+    to: skill_normalization
+
+  - from: skill_normalization
+    to: candidate_search
+
+  - from: candidate_search
+    to: matching_scoring
+
+  - from: matching_scoring
+    to: explanation_generation
+
+  - from: explanation_generation
+    to: result_aggregation
+
+  - from: result_aggregation
+    to: "__sink__"
+
+observability:
+  metrics_port: 9090
+  trace_exporter: none
+  log_format: json
+  agent_log_levels:
+    pii_scrubber: INFO
+    requisition_parsing: INFO
+    skill_normalization: INFO
+    candidate_search: INFO
+    matching_scoring: INFO
+    explanation_generation: INFO
+    result_aggregation: INFO
+
+error_handling:
+  dead_letter:
+    backend: memory
+    key_prefix: "dlq:demo:"
+    ttl_s: 3600
+  alerting:
+    enabled: false
