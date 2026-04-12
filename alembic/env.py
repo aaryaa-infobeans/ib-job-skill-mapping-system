@@ -12,6 +12,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import JSON as _JSON
 
 from alembic import context
 
@@ -68,6 +69,20 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type):
+    """Custom type comparator for autogenerate.
+
+    Suppresses the JSON(astext_type=Text()) vs JSON() false positive that arises
+    because SQLAlchemy's reflection always includes astext_type=Text() in the repr
+    even though both forms map to the same PostgreSQL JSON DDL type.
+    Returns False (no change) when both sides are JSON variants; delegates all
+    other comparisons to alembic's default logic.
+    """
+    if isinstance(inspected_type, _JSON) and isinstance(metadata_type, _JSON):
+        return False
+    return None
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -76,6 +91,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=_compare_type,
     )
 
     with context.begin_transaction():
@@ -91,7 +107,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=_compare_type,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

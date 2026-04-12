@@ -252,13 +252,54 @@ def _read_via_drive_export(file_id: str) -> dict:
 
 
 def _extract_text_from_docx(raw_bytes: bytes) -> str:
-    """Extract plain text from a DOCX file's bytes using python-docx."""
+    """Extract plain text from a DOCX file's bytes using python-docx.
+
+    Reads both top-level paragraphs and all table cell content so that
+    resumes using table-based layouts are fully extracted. Table cells are
+    appended after their containing table so document order is approximated.
+    """
     import io
     try:
         from docx import Document
+
         doc = Document(io.BytesIO(raw_bytes))
-        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-        return "\n".join(paragraphs)
+        parts: list[str] = []
+
+        def _cell_text(cell) -> str:
+            """Recursively extract text from a cell, including nested tables."""
+            cell_parts: list[str] = []
+            for para in cell.paragraphs:
+                if para.text.strip():
+                    cell_parts.append(para.text)
+            for nested_table in cell.tables:
+                for row in nested_table.rows:
+                    for nested_cell in row.cells:
+                        t = _cell_text(nested_cell)
+                        if t:
+                            cell_parts.append(t)
+            return "\n".join(cell_parts)
+
+        # Iterate body children in document order so paragraphs and tables
+        # appear in the correct sequence (python-docx doc.paragraphs and
+        # doc.tables are separate flat lists that lose interleaving).
+        body = doc.element.body
+        for child in body:
+            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            if tag == "p":
+                from docx.text.paragraph import Paragraph
+                para = Paragraph(child, doc)
+                if para.text.strip():
+                    parts.append(para.text)
+            elif tag == "tbl":
+                from docx.table import Table
+                table = Table(child, doc)
+                for row in table.rows:
+                    for cell in row.cells:
+                        t = _cell_text(cell)
+                        if t:
+                            parts.append(t)
+
+        return "\n".join(parts)
     except Exception as exc:
         logger.warning("DOCX parse failed, returning empty text: %s", exc)
         return ""

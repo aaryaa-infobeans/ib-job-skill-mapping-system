@@ -210,7 +210,7 @@ class MCPResumeClient:
     # Sync wrapper (cron entry point)
     # ------------------------------------------------------------------
 
-    def fetch_resume_sync(self, profile_url: str) -> Optional[str]:
+    def fetch_resume_sync(self, profile_url: str) -> tuple[Optional[str], Optional[str]]:
         """
         Sync wrapper around fetch_resume().
 
@@ -219,7 +219,9 @@ class MCPResumeClient:
         is cleared after every call to ensure a fresh session is opened.
 
         Returns:
-            Plain text string from resume, or None on error/empty doc.
+            (text, error_code) where text is the resume content (or None) and
+            error_code is the reason string on failure (e.g. "permission_denied",
+            "not_found", "invalid_url") or None on success.
         """
         try:
             result = asyncio.run(self.fetch_resume(profile_url))
@@ -230,9 +232,12 @@ class MCPResumeClient:
             self._session = None
             self._stdio_cm = None
         if result is None:
-            return None
+            return None, "mcp_call_failed"
         text = result.get("text", "")
-        return text if text else None
+        if text:
+            return text, None
+        error_code = result.get("error", "empty_text")
+        return None, error_code
 
     # ------------------------------------------------------------------
     # Batch session context manager

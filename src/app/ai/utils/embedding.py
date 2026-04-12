@@ -15,7 +15,11 @@ class EmbeddingAgent(BaseAgent):
         super().__init__("embedding", logger)
         from app.settings import settings
         
-        self.model_name = settings.embedding_model or settings.embedding_model_name
+        self.model_name = (
+            settings.embedding_model          # EMBEDDING_MODEL env var (explicit override)
+            or settings.gemma_model_path       # GEMMA_MODEL_PATH — same local model the cron uses
+            or settings.embedding_model_name   # last-resort default ("google/embeddinggemma-300m")
+        )
         self.device = settings.embedding_device
         
         if "gemini" in self.model_name.lower():
