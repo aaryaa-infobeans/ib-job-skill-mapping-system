@@ -110,6 +110,34 @@ Examples:
         help="Re-embed all members after ingestion",
     )
 
+    ingest_parser = subparsers.add_parser(
+        "ingest",
+        help="Run ingest phase only — fetch and persist team member data, skip embedding",
+    )
+    ingest_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-ingest all members regardless of existing batch state",
+    )
+
+    embed_member_parser = subparsers.add_parser(
+        "embed-member",
+        help="Re-run embedding for a single team member (by team_member_id)",
+    )
+    embed_member_parser.add_argument(
+        "--member-id",
+        required=True,
+        metavar="TEAM_MEMBER_ID",
+        help="team_member_id of the record to re-embed",
+    )
+    embed_member_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-embed even if content hash unchanged",
+    )
+
     return parser.parse_args()
 
 
@@ -231,18 +259,23 @@ async def run_ingestion(
         # Extract pagination metadata
         metadata = first_payload.get("metadata", {})
         total_batches = metadata.get("total_batches", 1)
-        
+        first_batch_number = metadata.get("batch_number", 1)
+
         logger.info(
             "Discovered batch pagination",
             correlation_id=correlation_id,
             total_batches=total_batches
         )
-        
+
         # Process first batch
         successful, failed = await batch_processor.process_all_batches(first_payload)
         all_successful = list(successful)
         all_failed = list(failed)
-        
+
+        # Track seen batch_numbers to detect API cycling (source API bug where
+        # total_batches > actual unique batches and batch_number resets mid-run).
+        seen_batch_numbers = {first_batch_number}
+
         # Fetch and process remaining batches
         for page in range(2, total_batches + 1):
             logger.info(
@@ -251,11 +284,23 @@ async def run_ingestion(
                 page=page,
                 total_batches=total_batches
             )
-            
+
             try:
                 payload = await api_client.fetch_team_members(page=page)
-                
+
                 if payload:
+                    page_batch_number = payload.get("metadata", {}).get("batch_number")
+                    if page_batch_number in seen_batch_numbers:
+                        logger.warning(
+                            "API cycling detected: batch_number already seen, stopping early",
+                            correlation_id=correlation_id,
+                            page=page,
+                            batch_number=page_batch_number,
+                            unique_batches_fetched=len(seen_batch_numbers),
+                        )
+                        break
+                    seen_batch_numbers.add(page_batch_number)
+
                     successful, failed = await batch_processor.process_all_batches(payload)
                     all_successful.extend(successful)
                     all_failed.extend(failed)
@@ -265,7 +310,7 @@ async def run_ingestion(
                         correlation_id=correlation_id,
                         page=page
                     )
-            
+
             except Exception as error:
                 logger.error(
                     "Failed to fetch/process batch",
@@ -456,12 +501,16 @@ def main() -> int:
         subcommand=getattr(args, "subcommand", None),
     )
 
-    # CR-EMB-002: embed / ingest-embed subcommands
+    # CR-EMB-002: embed / ingest-embed / ingest subcommands
     if getattr(args, "subcommand", None) == "embed":
         return _run_embed_phase(args, correlation_id)
     if getattr(args, "subcommand", None) == "ingest-embed":
         return _run_ingest_embed(args, correlation_id)
-    
+    if getattr(args, "subcommand", None) == "ingest":
+        return _run_ingest_phase(args, correlation_id)
+    if getattr(args, "subcommand", None) == "embed-member":
+        return _run_embed_member(args, correlation_id)
+
     # Run async main
     import asyncio
     try:
@@ -574,6 +623,100 @@ def _run_ingest_embed(args, correlation_id: str) -> int:
     if embed_code == EXIT_FATAL_ERROR:
         return EXIT_PARTIAL_SUCCESS  # ingest succeeded; embed failed partially
     return EXIT_PARTIAL_SUCCESS
+
+def _run_ingest_phase(args, correlation_id: str) -> int:
+    """
+    Run the ingest phase only — fetches team member data and persists it.
+    Embedding is skipped entirely.
+
+    Supports --force to re-ingest all members regardless of existing batch state.
+    """
+    import asyncio
+
+    force = getattr(args, "force", False)
+    logger.info("Starting ingest-only phase", correlation_id=correlation_id, force=force)
+
+    try:
+        exit_code = asyncio.run(main_async(args, correlation_id))
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user", correlation_id=correlation_id)
+        exit_code = EXIT_FATAL_ERROR
+    except Exception as exc:
+        logger.error(
+            "Ingest phase fatal error",
+            correlation_id=correlation_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        exit_code = EXIT_FATAL_ERROR
+
+    logger.info(
+        "Ingest-only phase complete",
+        correlation_id=correlation_id,
+        exit_code=exit_code,
+    )
+    return exit_code
+
+
+def _run_embed_member(args, correlation_id: str) -> int:
+    """
+    Re-run the embedding pipeline for a single team member.
+    Uses the same sync session path as _run_embed_phase.
+    """
+    from sqlalchemy.orm import Session
+    from app.cron.db.engine import create_ingestion_engine
+    from app.cron.embedding.mcp_client import MCPResumeClient
+    from app.cron.embedding.embedding_processor import EmbeddingProcessor
+    from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
+    from app.settings import settings
+
+    member_id = args.member_id
+    force = getattr(args, "force", False)
+    logger.info(
+        "Starting single-member embed",
+        correlation_id=correlation_id,
+        member_id=member_id,
+        force=force,
+    )
+
+    engine = create_ingestion_engine()
+    try:
+        with Session(engine) as db:
+            mcp_client = MCPResumeClient(
+                server_script=settings.mcp_gdrive_server_path,
+                sa_key_path=settings.google_service_account_file,
+            )
+            embedding_agent = GemmaEmbeddingAgent(
+                device=settings.embedding_device,
+                model_name=settings.gemma_model_path or None,
+            )
+            processor = EmbeddingProcessor(
+                db=db, mcp_client=mcp_client, embedding_agent=embedding_agent
+            )
+            result = processor.run_single(member_id=member_id, force=force)
+            logger.info(
+                "Single-member embed complete",
+                correlation_id=correlation_id,
+                member_id=member_id,
+                success=result.success_count,
+                skipped=result.skip_count,
+                errors=result.error_count,
+            )
+        if result.error_count > 0:
+            return EXIT_FATAL_ERROR
+        return EXIT_SUCCESS
+    except Exception as exc:
+        logger.error(
+            "Single-member embed fatal error",
+            correlation_id=correlation_id,
+            member_id=member_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return EXIT_FATAL_ERROR
+    finally:
+        engine.dispose()
+
 
 if __name__ == "__main__":
     sys.exit(main())

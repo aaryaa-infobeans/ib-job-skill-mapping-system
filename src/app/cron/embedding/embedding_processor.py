@@ -174,6 +174,58 @@ class EmbeddingProcessor:
 
         return result
 
+    def run_single(self, member_id: str, force: bool = False) -> ProcessingResult:
+        """
+        Run embedding pipeline for one team member by ID.
+
+        Args:
+            member_id: team_member_id to process.
+            force: If True, re-embed even if content_hash unchanged.
+
+        Returns:
+            ProcessingResult with counts. error_count=1 if member not found.
+        """
+        from app.db.models.models import TeamMember
+        from app.cron.embedding.text_assembler import (
+            assemble_skills_text,
+            assemble_certifications_text,
+            assemble_resume_text,
+        )
+        from app.cron.db.repositories import EmbeddingRepository
+
+        result = ProcessingResult()
+
+        member = self.db.query(TeamMember).filter_by(team_member_id=member_id).first()
+        if member is None:
+            logger.error("team_member_id not found", member_id=member_id)
+            result.error_count += 1
+            result.error_members.append(member_id)
+            return result
+
+        repo = EmbeddingRepository(self.db)
+        try:
+            self._process_member(
+                member=member,
+                repo=repo,
+                result=result,
+                force=force,
+                assemble_skills_text=assemble_skills_text,
+                assemble_certifications_text=assemble_certifications_text,
+                assemble_resume_text=assemble_resume_text,
+            )
+        except Exception as exc:
+            logger.error(
+                "Unhandled error embedding member %s: %s", member_id, exc, exc_info=True
+            )
+            result.error_count += 1
+            result.error_members.append(member_id)
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
+
+        return result
+
     # ------------------------------------------------------------------
     # Per-member processing (step 2..8)
     # ------------------------------------------------------------------
@@ -211,7 +263,7 @@ class EmbeddingProcessor:
         profile_url = getattr(member, "profile_url", None)
         if profile_url:
             t0 = time.monotonic()
-            raw_resume = self.mcp_client.fetch_resume_sync(profile_url)
+            raw_resume, fetch_error = self.mcp_client.fetch_resume_sync(profile_url)
             fetch_elapsed = time.monotonic() - t0
 
             if raw_resume:
@@ -228,6 +280,7 @@ class EmbeddingProcessor:
                     "resume_fetch_success_total",
                     metric="resume_fetch_success_total",
                     status="error",
+                    error=fetch_error,
                     member_id=mid,
                 )
 

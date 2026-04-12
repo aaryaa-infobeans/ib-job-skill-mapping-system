@@ -8,7 +8,7 @@ and natural key conflict handling.
 import re
 from typing import Dict, List, Optional, Any
 from datetime import datetime, date
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select, update, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -395,16 +395,19 @@ class TeamMemberRepository:
                 'valid_till': _parse_date(cert_data.get('valid_till')),
             }
             
-            if certification_id:
-                # Update existing certification by certification_id
-                stmt = update(team_member_skill_certification).where(
-                    team_member_skill_certification.c.certification_id == certification_id
-                ).values(**values)
-            else:
-                # Insert new certification (no natural key, so simple insert)
-                stmt = insert(team_member_skill_certification).values(**values)
-            
-            await self.session.execute(stmt)
+            # Delete existing certs for this (team_member_id, skill_id) pair before
+            # re-inserting. The table has no unique constraint on (team_member_id,
+            # skill_id, certificate), so plain INSERT would accumulate duplicates
+            # on every ingest run.
+            await self.session.execute(
+                delete(team_member_skill_certification).where(
+                    team_member_skill_certification.c.team_member_id == team_member_id,
+                    team_member_skill_certification.c.skill_id == skill_id,
+                )
+            )
+            await self.session.execute(
+                insert(team_member_skill_certification).values(**values)
+            )
 
 
 class BatchStateRepository:

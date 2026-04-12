@@ -221,6 +221,25 @@ class PIIScrubber:
             # Common false positives
             'agile', 'scrum', 'kanban', 'devops', 'cicd', 'ci/cd',
 
+            # Microsoft / Windows stack — confirmed false positives from profile data
+            'sql server', 'microsoft visual studio', 'visual studio',
+            'html', 'css', 'html and css', 'ms sql server',
+
+            # Common resume words SpaCy en_core_web_sm incorrectly tags as ORG
+            # (confirmed false positives: "PROUD MEMBER OF", "Engineering and Delivery", "Hard-working",
+            #  "Bachelor of Computer Applications", "Networking", "API testing")
+            'proud', 'hard', 'engineering', 'delivery',
+            'bachelor', 'bachelor of computer applications', 'bca', 'btech', 'b.tech', 'mtech', 'm.tech',
+            'networking', 'api', 'web',
+
+            # QA / testing tools confirmed as false positives
+            'qtest', 'q-test', 'swagger', 'postman', 'testrail', 'xtas', 'nice',
+            'soapui', 'katalon', 'appium', 'browserstack', 'lambdatest',
+
+            # Certification bodies / educational institutions should not map to [CLIENT_REDACTED]
+            # SpaCy tags them as ORG — whitelisting prevents misclassification
+            'coep', 'coep pune', 'iit', 'nit', 'bits', 'rgpv', 'kbpimsr',
+
             # Add more as needed based on false positive analysis
             'athena', 'cloudwatch', 'emr', 'glue', 'jwt', 'lambda', 'redshift', 'activemq',
             'agile', 'ai', 'aiflow', 'alteryx', 'android', 'androidx', 'angular', 'angularjs', 
@@ -319,13 +338,24 @@ class PIIScrubber:
         detections = []
         
         # Step 1: NER detection
-        ner_entities = self.ner_detector.detect_entities(text)
-        
+        # Pre-process: normalize hyphenated compound adjectives to prevent SpaCy from
+        # tagging the first token as a standalone entity (e.g. "Hard-working" → "Hardworking")
+        normalized_text = re.sub(r'\b(\w+)-(\w+ing)\b', r'\1\2', text)
+        ner_entities = self.ner_detector.detect_entities(normalized_text)
+
         for entity in ner_entities:
-            # Filter whitelist: exact phrase match OR any individual word is a known tech term
+            # Never redact SpaCy product/language/event labels — these are software tools,
+            # programming languages, etc. and should never be treated as PII.
+            if entity.label in ('PRODUCT', 'WORK_OF_ART', 'EVENT', 'LAW', 'LANGUAGE'):
+                logger.debug("Skipping non-PII entity type %s: %s", entity.label, entity.text)
+                continue
+
+            # Filter whitelist: exact phrase match OR any individual token (split on
+            # whitespace and slashes, punctuation stripped) is a known tech/safe term.
             entity_lower = entity.text.lower()
+            entity_words = re.split(r'[\s/]+', re.sub(r'[^\w\s/]', ' ', entity_lower))
             if entity_lower in self.tech_whitelist or any(
-                word in self.tech_whitelist for word in entity_lower.split()
+                word in self.tech_whitelist for word in entity_words if word
             ):
                 logger.debug("Whitelisted: %s (tech term)", entity.text)
                 continue

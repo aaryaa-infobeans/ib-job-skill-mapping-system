@@ -3,12 +3,11 @@ GemmaEmbeddingAgent — local transformer-based 768-dim embeddings.
 
 Model: google/embeddinggemma-300m
 Dimension: 768
-Max tokens: 2048
+Max tokens: 2048 (Gemma context window)
 
-Usage:
-    agent = GemmaEmbeddingAgent(device="cpu")
-    vec = agent.embed_text("Software Engineer with Python experience")
-    # vec.shape == (768,), np.linalg.norm(vec) ≈ 1.0
+The model uses the sentence-transformers pipeline (1_Pooling → 2_Dense → 3_Dense).
+Inference delegates to SentenceTransformer.encode() so all projection layers
+are applied correctly. Requires HF_TOKEN env var (model is gated).
 
 TASK-EMB-014 | Plan §5.1-5.3 | CR §3.3 | AC-4 | R6
 """
@@ -25,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 class GemmaEmbeddingAgent:
     """
-    Wraps google/embeddinggemma-300m for mean-pooling + L2-normalized embeddings.
+    Wraps google/embeddinggemma-300m via SentenceTransformer for correct
+    end-to-end embeddings including the Dense projection layers.
 
     Model loading is deliberately separated from inference so memory profiling
     (RG-R6) can measure RSS before/after __init__().
@@ -37,34 +37,21 @@ class GemmaEmbeddingAgent:
 
     def __init__(self, device: str = "cpu", model_name: str = None) -> None:
         """
-        Load tokenizer and model.
+        Load the SentenceTransformer pipeline.
 
         Args:
-            device: "cpu", "cuda", or "mps". FP16 used for non-CPU devices to
-                    reduce memory footprint (R6 mitigation).
+            device: "cpu", "cuda", or "mps".
             model_name: Override model ID or local path. Defaults to MODEL_NAME.
         """
-        import torch
-        from transformers import AutoModel, AutoTokenizer
+        from sentence_transformers import SentenceTransformer
 
         self.device = device
-
-        # Choose dtype: FP32 on CPU, FP16 elsewhere (R6)
-        dtype = torch.float32 if device == "cpu" else torch.float16
-
         model_id = model_name or self.MODEL_NAME
 
-        logger.info("Loading tokenizer from %s", model_id)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-
-        logger.info("Loading model from %s (dtype=%s, device=%s)", model_id, dtype, device)
-        # Suppress torch_dtype deprecation warning
-        import warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*torch_dtype.*deprecated.*", category=FutureWarning)
-            self.model = AutoModel.from_pretrained(model_id, torch_dtype=dtype)
-        self.model.to(device)
-        self.model.eval()
+        logger.info("Loading SentenceTransformer from %s (device=%s)", model_id, device)
+        self._st_model = SentenceTransformer(model_id, device=device)
+        # Expose tokenizer for safe_max_length checks (TD-001 guard kept for safety)
+        self.tokenizer = self._st_model.tokenizer
 
     # ------------------------------------------------------------------
     # Inference
@@ -81,44 +68,26 @@ class GemmaEmbeddingAgent:
 
     def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
         """
-        Embed a list of strings.
+        Embed a list of strings via the full sentence-transformers pipeline
+        (pooling + Dense projection layers).
 
         Returns:
             List of np.ndarray, each shape (768,), L2-normalized.
         """
-        import torch
-
         if not texts:
             return []
 
-        encoded = self.tokenizer(
+        # TD-001 guard: clamp to model's actual token limit regardless of checkpoint.
+        # sentence-transformers v3+ requires max_seq_length on the model object,
+        # not as an encode() argument.
+        safe_max_length = min(self.MAX_TOKENS, self.tokenizer.model_max_length)
+        self._st_model.max_seq_length = safe_max_length
+
+        embeddings = self._st_model.encode(
             texts,
-            padding=True,
-            truncation=True,
-            max_length=self.MAX_TOKENS,
-            return_tensors="pt",
-        )
-        encoded = {k: v.to(self.device) for k, v in encoded.items()}
+            batch_size=len(texts),
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )  # shape (batch, 768), already L2-normalized
 
-        with torch.no_grad():
-            outputs = self.model(**encoded)
-
-        # Mean pooling over non-padding token positions
-        last_hidden = outputs.last_hidden_state  # (batch, seq, hidden)
-        attention_mask = encoded["attention_mask"]  # (batch, seq)
-
-        # Expand mask to hidden dim
-        mask_expanded = (
-            attention_mask.unsqueeze(-1).expand(last_hidden.size()).float()
-        )
-        sum_hidden = (last_hidden.float() * mask_expanded).sum(dim=1)
-        sum_mask = mask_expanded.sum(dim=1).clamp(min=1e-9)
-        pooled = sum_hidden / sum_mask  # (batch, hidden)
-
-        pooled_np = pooled.cpu().numpy()  # (batch, 768)
-
-        # L2-normalize each vector
-        norms = np.linalg.norm(pooled_np, axis=1, keepdims=True).clip(min=1e-9)
-        normalized = pooled_np / norms
-
-        return [normalized[i] for i in range(len(texts))]
+        return [embeddings[i] for i in range(len(texts))]
