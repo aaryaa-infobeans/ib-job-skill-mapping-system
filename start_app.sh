@@ -2,7 +2,7 @@
 
 # Configuration
 APP_PORT=9000
-DB_PORT=5432
+DB_PORT=5433
 PROJECT_DIR="/var/www/html/ib-job-skill-mapping-system"
 VENV_DIR="$PROJECT_DIR/venv"
 
@@ -24,14 +24,32 @@ fi
 
 # 2. Start Database via Docker Compose
 cd "$PROJECT_DIR"
-echo "🐘 Starting PostgreSQL database..."
+echo "🐘 Starting PostgreSQL 17 with pgvector..."
+
+# Check if old volume exists with incompatible data
+if docker volume inspect postgres_data &> /dev/null; then
+    echo "🔍 Checking PostgreSQL version compatibility..."
+    
+    # Try to get the version from the old data directory
+    OLD_VERSION=$(docker run --rm -v postgres_data:/data busybox cat /data/PG_VERSION 2>/dev/null || echo "unknown")
+    
+    if [ "$OLD_VERSION" != "unknown" ] && [ "$OLD_VERSION" != "17" ]; then
+        echo "⚠️  Old PostgreSQL volume (v$OLD_VERSION) detected but upgrading to v17"
+        echo "🔄 Removing old volume and creating fresh database..."
+        docker compose down
+        docker volume rm postgres_data
+        echo "✅ Old volume removed. Fresh v17 database will be created."
+    fi
+fi
+
+docker compose pull postgres
 docker compose up -d postgres
 
 # 3. Wait for Database to be ready
 echo "⏳ Waiting for database to be ready..."
 MAX_RETRIES=30
 COUNT=0
-until docker compose exec postgres pg_isready -U user > /dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+until docker compose exec -e PGPASSWORD=password postgres pg_isready -U user -h localhost > /dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
     sleep 1
     COUNT=$((COUNT + 1))
     echo -n "."
@@ -40,9 +58,11 @@ echo ""
 
 if [ $COUNT -eq $MAX_RETRIES ]; then
     echo "❌ Database failed to start in time."
+    echo "🔧 Checking Docker container status..."
+    docker compose logs postgres | tail -20
     exit 1
 fi
-echo "✅ Database is ready!"
+echo "✅ Database is ready! (PostgreSQL 17 with pgvector)"
 
 # 4. Activate Virtual Environment and Run Migrations
 if [ -f "$VENV_DIR/bin/activate" ]; then
@@ -78,14 +98,23 @@ else
     echo "✅ SpaCy NER model already installed."
 fi
 
-echo "🔄 Running database migrations..."
-alembic upgrade head
+echo "🔄 Running database migrations with Alembic..."
+PYTHONPATH=src alembic upgrade head
+
+if [ $? -ne 0 ]; then
+    echo "❌ Database migration failed."
+    echo "🔧 Checking database logs..."
+    docker compose logs postgres | tail -20
+    exit 1
+fi
+echo "✅ Database migrations completed!"
 
 # 5. Start Backend Application
 echo "🌐 Starting FastAPI backend on port $APP_PORT..."
 echo "---------------------------------------------------"
+echo "PostgreSQL: localhost:$DB_PORT (v17 + pgvector)"
 echo "App URL: http://127.0.0.1:$APP_PORT"
 echo "API Docs: http://127.0.0.1:$APP_PORT/docs"
 echo "---------------------------------------------------"
 
-python -m uvicorn src.app.main:app --reload --host 127.0.0.1 --port $APP_PORT
+PYTHONPATH=src python -m uvicorn src.app.main:app --reload --host 127.0.0.1 --port $APP_PORT
