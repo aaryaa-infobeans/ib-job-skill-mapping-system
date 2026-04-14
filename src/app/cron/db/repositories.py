@@ -645,6 +645,7 @@ class EmbeddingPayload:
     skills_embedding: _Opt[list] = None
     certifications_embedding: _Opt[list] = None
     embedding: _Opt[list] = None                  # legacy weighted average
+    profile_text: _Opt[str] = None
     resume_text: _Opt[str] = None
     skills_text: _Opt[str] = None
     certifications_text: _Opt[str] = None
@@ -704,6 +705,7 @@ class EmbeddingRepository:
             "skills_embedding": _to_list(payload.skills_embedding),
             "certifications_embedding": _to_list(payload.certifications_embedding),
             "embedding": _to_list(payload.embedding),
+            "profile_text": payload.profile_text,
             "resume_text": payload.resume_text,
             "skills_text": payload.skills_text,
             "certifications_text": payload.certifications_text,

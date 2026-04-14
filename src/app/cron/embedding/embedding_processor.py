@@ -315,6 +315,7 @@ class EmbeddingProcessor:
 
         # Weighted average legacy embedding (TASK-EMB-032)
         legacy_emb = self._weighted_average(resume_emb, skills_emb, certs_emb)
+        profile_text = f"Skills: {skills_text}\nCertifications: {certs_text}\nResume: {resume_text}"
 
         # 8. Upsert + commit per-member
         now = datetime.utcnow()
@@ -324,6 +325,7 @@ class EmbeddingProcessor:
             skills_embedding=skills_emb,
             certifications_embedding=certs_emb,
             embedding=legacy_emb,
+            profile_text=profile_text,
             resume_text=resume_text,
             skills_text=skills_text,
             certifications_text=certs_text,
@@ -353,7 +355,10 @@ class EmbeddingProcessor:
         try:
             from app.pii.scrubber import PIIScrubber
             from app.pii.config import PIIConfig
-
+            pii_enabled = PIIConfig.from_env().pii_enabled
+            if not pii_enabled:
+                logger.info("PII scrubbing disabled by config", member_id=member_id)
+                return text, False
             scrubber = PIIScrubber(PIIConfig.from_env())
             result = scrubber.scrub_text(text)
             logger.info("pii_scrub_called", member_id=member_id)
