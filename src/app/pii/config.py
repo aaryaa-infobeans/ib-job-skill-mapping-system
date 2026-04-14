@@ -47,6 +47,7 @@ class PIIConfig:
     # Audit Logging
     audit_table_name: str = "pii_scrub_audit"
     enable_audit: bool = True
+    pii_enabled: bool = True  # New flag to enable/disable PII scrubbing
     
     def __post_init__(self):
         """Validate GPU availability and configuration."""
@@ -148,6 +149,7 @@ class PIIConfig:
         - PII_GPU_BATCH_SIZE: Batch size for GPU processing (default: 32)
         - PII_TOKENIZATION_SALT: Secret salt for tokenization (required)
         - PII_ENABLE_AUDIT: Enable audit logging (default: true)
+        - PII_ENABLE: Enable PII scrubbing (default: true)
         
         Returns:
             PIIConfig: Validated configuration
@@ -157,6 +159,7 @@ class PIIConfig:
             cuda_device=int(os.getenv("PII_CUDA_DEVICE", "0")),
             gpu_batch_size=int(os.getenv("PII_GPU_BATCH_SIZE", "32")),
             enable_audit=os.getenv("PII_ENABLE_AUDIT", "true").lower() == "true",
+            pii_enabled=os.getenv("PII_ENABLE", "true").lower() == "true"
         )
-        logger.info(f"PIIConfig.from_env() created with spacy_model={config.spacy_model}")
+        logger.info(f"PIIConfig.from_env() created with pii_enabled={config.pii_enabled}")
         return config
