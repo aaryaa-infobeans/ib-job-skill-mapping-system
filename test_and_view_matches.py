@@ -58,66 +58,34 @@ print("STEP 1: Creating a new requisition (Authenticated)")
 print("="*60)
 
 payload = {
-    "request_id": f"REQ-TEST-{unique_id}",
-    "schema_version": "v1",
-    "source_system": "HR_SYSTEM",
-    "client_name": "NA",
-    
-    "job_description": {
-        "client_name": "NA",  # REQUIRED
-        "title": "Scala Developer",
-        "role": "Senior Software Engineer",    # REQUIRED (you can adjust)
-        "requisition_duration_month": 6,  # optional but expected
-        "expected_start_date": "2026-03-25",
-        "priority": "Medium",  # Test case-insensitive input
-        
-        "location": ["Mumbai", "Pune"],
-        "work_mode": ["Remote", "Hybrid", "WFO"],
-        "experience": {
-            "min_months": 36,
-            "max_months": 72
+        "request_id": f"REQ-TEST-{unique_id}",
+        "schema_version": "v1",
+        "source_system": "HR_SYSTEM",
+        "client_name": "DNC",
+        "job_description": {
+            "client_name": "DNC",  # REQUIRED
+            "role": "Senior Software Engineer",    # REQUIRED (you can adjust)
+            "requisition_duration_month": 6,  # optional but expected
+            "expected_start_date": "2026-03-25",
+            "priority": "Medium",  # Test case-insensitive input
+            "title": "Senior backend Developer",
+            "location": ["Remote", "Pune"],
+            "work_mode": ["Hybrid", "Remote", "WFO", "WFH"],
+            "experience": {"min_months": 36, "max_months": 60},
+            "mandatory_skills": ["PHP", "Laravel", "MySQL"],
+            "preferred_skills": ["AWS", "LangChain", "cloud"],
+            "certifications": ["AWS Solutions Architect - Associate"],
+            "jd_text": """
+    We are looking for a Senior PHP Developer with experience in PHP,
+    Laravel, MySQL, LangChain and AWS. Candidate should be able to build
+    microservices and REST APIs.
+    """,
         },
-        
-        "mandatory_skills": [
-            "Scala", "ETL Pipeline", "Apache Spark", "Airflow", "Hadoop"
-        ],
-        "preferred_skills": ["AWS", "Azure", "GCP"],  # cleaned
-        
-        # ⚠️ rename key (important!)
-        "certifications": ["AWS Certified", "Oracle Certified Java Programmer"],  # instead of certifications_required
-        
-        "jd_text": """Hands-on experience on Scala.
-
-Good experience in technologies (Hadoop, Spark and Big Data platforms, RBDMS, NoSQL)
-
-Experience in software development using  Scala. Java will be a plus.
-
-Translate conceptual system requirements into technical data and integration requirements.
-
-Provides input to continuously improve ETL process discipline and resulting output quality.
-
-Exposure to Streaming or Batch ETL pipelines on Spark using Scala or Spark SQL on a Cloud platform - AWS, GCP or Azure.
-
-Good experience in physical/logical data modelling
-
-Hands on experience with RDMS like MSSQL
-
-Hands on experience with AWS services like AWS Lambda, EMR, Athena, Glue, Redshift, Cloudwatch.
-
-Exposure to Apache AirFlow will be a plus.
-
-Understanding of version control tools like Git.
-
-Experience with Continuous Integration, Continuous Deployment
-
-Should be able to code and guide other developers within the team."""
-    },
-
-    "metadata": {
-        "submitted_by": "recruiter@test.com",
-        "department": "Engineering"
+        "metadata": {
+            "submitted_by": "recruiter@test.com",
+            "department": "Engineering"
+        }
     }
-}
 
 response = client.post("/api/v1/jd-skill-mapping", json=payload, headers=headers)
 print(f"\nStatus Code: {response.status_code}")
