@@ -121,7 +121,7 @@ class RAGRetrievalAgent(BaseAgent):
                 LEFT JOIN team_member tm ON tm.team_member_id = e.team_member_id
                 WHERE {" AND ".join(filters)}
                 ORDER BY similarity_score ASC
-                LIMIT 100
+                LIMIT 10
             """)
 
             result_set = self.db.execute(sql, params).fetchall()
