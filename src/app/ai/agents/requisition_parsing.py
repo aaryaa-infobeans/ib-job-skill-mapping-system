@@ -14,9 +14,9 @@ from app.settings import settings
 from app.ai.utils.llm_client import llm_client
 
 # System prompt for requisition parsing
-REQUISITION_PARSING_PROMPT = """You are an expert HR assistant specialized in analyzing job requisitions.
+REQUISITION_PARSING_PROMPT = """You are an expert talent matcher and HR analyst specialized in analyzing job requisitions.
 
-Your task is to enrich requisition information by analyzing the job description text and normalizing existing data.
+Your task is to analyze the job description text and normalize existing data to identify the best candidates.
 
 Given:
 - Basic job metadata (title, role, client)
@@ -25,41 +25,49 @@ Given:
 - Initial required certifications (certifications)
 
 Your responsibilities:
-1. Extract additional technical skills, tools, and technologies from the `jd_text` that are not already in the provided lists.
-2. Normalize all skills (extracted and provided) to a standard format (e.g., "python" -> "Python", "k8s" -> "Kubernetes").
-3. Normalize certificates if mentioned in text or provided in list.
-4. Normalize the job title and role category to standard professional formats.
+1. Infer and normalize the best mandatory skills and preferred skills from the description.
+2. If skills are missing or incomplete, extract them from the `jd_text`.
+3. Normalize all skills to a standard technical format.
+4. Enhance the certification list with canonical certification names.
 5. Extract or verify experience requirements (in months).
-6. Identify expected start date and duration if explicitly mentioned in the text.
+6. Return ONLY a valid JSON object with fields mandatory_skills, preferred_skills, certifications, experience, normalized_title, and normalized_role.
 
 Return ONLY a valid JSON object with this exact structure:
 {
   "normalized_title": "string - standardized job title",
   "normalized_role": "string - standardized role category",
-  "normalized_mandatory_skills": ["skill1", "skill2"],
-  "normalized_preferred_skills": ["skill3", "skill4"],
+  "mandatory_skills": ["skill1", "skill2"],
+  "preferred_skills": ["skill3", "skill4"],
   "experience": {
     "min_months": number or null,
     "max_months": number or null
   },
-  "expected_start_date": "YYYY-MM-DD or null",
-  "requisition_duration_month": number or null,
-  "certifications_required": ["cert1", "cert2"]
+  "certifications": ["cert1", "cert2"]
 }
 
 Important:
-- Combine payload skills with newly extracted ones, predict, normalize and output them as individual distinct skills.
-- Combine and normalize payload certifications with newly extracted ones.
-- Ensure the JSON is valid and only contains the requested fields.
-- Use null for missing information.
+- Return ONLY the JSON object.
+- Keep skills distinct and professional.
 """
+
+
+def _normalize_string_list(value: any) -> list[str]:
+    """Helper to normalize string lists from various formats."""
+    import re
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in re.split(r"[\n,;]+", value) if item.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [str(value).strip()]
 
 
 def parse_requisition_with_llm(
     job_description: dict,
     max_retries: int = 2
 ) -> Optional[dict]:
-    """Enrich requisition data using LLM."""
+    """Enrich requisition data using LLM following logic from embed_search.py."""
     try:
         # Prepare context for LLM
         context = {
@@ -68,11 +76,9 @@ def parse_requisition_with_llm(
             "client_name": job_description.get("client_name", "Unknown"),
             "mandatory_skills": job_description.get("mandatory_skills", []),
             "preferred_skills": job_description.get("preferred_skills", []),
-            "certifications": job_description.get("certifications", []) or job_description.get("certifications_required", []),
+            "certifications": job_description.get("certifications") or job_description.get("certifications_required", []),
             "jd_text": job_description.get("jd_text", ""),
             "experience": job_description.get("experience", {}),
-            "expected_start_date": job_description.get("expected_start_date"),
-            "requisition_duration_month": job_description.get("requisition_duration_month"),
         }
         
         def json_serial(obj):
@@ -88,36 +94,47 @@ def parse_requisition_with_llm(
             response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
         )
 
-        
         if not content:
             logger.error("LLM parsing failed - no content returned")
             return _fallback_parse(job_description), None
 
         llm_output = json.loads(content)
         
+        # Capture originals to prevent "downgrading" or "moving" as per embed_search.py
+        original_mandatory = set(_normalize_string_list(job_description.get("mandatory_skills", [])))
+        original_preferred = set(_normalize_string_list(job_description.get("preferred_skills", [])))
+        original_certs = set(_normalize_string_list(job_description.get("certifications") or job_description.get("certifications_required", [])))
+
+        # Process Skills and Certs with enrichment logic
+        def merge_enriched_items(key, original_set, exclude_set):
+            enriched_items = _normalize_string_list(llm_output.get(key, []))
+            # Merge: Use existing + any new ones the LLM found
+            # But if an item was already in exclude_set (e.g. Preferred), don't let it become Mandatory
+            new_items = [i for i in enriched_items if i not in exclude_set]
+            return sorted(list(original_set.union(set(new_items))))
+
+        final_mandatory = merge_enriched_items("mandatory_skills", original_mandatory, original_preferred)
+        final_preferred = merge_enriched_items("preferred_skills", original_preferred, original_mandatory)
+        final_certs = sorted(list(original_certs.union(set(_normalize_string_list(llm_output.get("certifications", []))))))
+
         # Merge LLM enrichment back into the full context
         enriched_jd = {
             "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
             "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
-            "extracted_mandatory_skills": llm_output.get("normalized_mandatory_skills", []) or llm_output.get("extracted_mandatory_skills", []),
-            "extracted_preferred_skills": llm_output.get("normalized_preferred_skills", []) or llm_output.get("extracted_preferred_skills", []),
+            "extracted_mandatory_skills": final_mandatory,
+            "extracted_preferred_skills": final_preferred,
             "experience": llm_output.get("experience", job_description.get("experience")),
-            "expected_start_date": llm_output.get("expected_start_date", job_description.get("expected_start_date")),
-            "requisition_duration_month": llm_output.get("requisition_duration_month", job_description.get("requisition_duration_month")),
-            "certifications_required": list(set(
-                (llm_output.get("certifications_required") or []) + 
-                (job_description.get("certifications") or []) + 
-                (job_description.get("certifications_required") or [])
-            )),
-
+            "certifications_required": final_certs,
             
-            # Original Payload fields preserved
+            # Preserve metadata and other fields
             "client_name": job_description.get("client_name"),
             "priority": job_description.get("priority"),
             "location": job_description.get("location", []),
             "work_mode": job_description.get("work_mode", []),
             "jd_text": job_description.get("jd_text", ""),
             "metadata": job_description.get("metadata", {}),
+            "expected_start_date": job_description.get("expected_start_date"),
+            "requisition_duration_month": job_description.get("requisition_duration_month"),
         }
         
         # Track tokens and cost
@@ -139,15 +156,10 @@ def parse_requisition_with_llm(
         
     except Exception as e:
         logger.error(f"Error in LLM parsing: {str(e)}")
-        # Create failure metrics to log the error to DB
         metrics = {
             "agent_name": "requisition_parsing",
             "prompt_name": "job_description_enrichment",
             "model": "unknown",
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "cost_usd": 0.0,
             "status": "FAILED",
             "error_message": str(e)
         }

@@ -147,13 +147,22 @@ def explanation_generation_node(state: GraphState) -> GraphState:
     
     for i, candidate in enumerate(candidate_scores):
         is_qualified = candidate.get("is_qualified", False)
+        final_score = candidate.get("final_score", 0.0)
         
+        # Determine fit level correctly (matched with result_aggregation)
+        if final_score >= 0.75:
+            fit_level = "HIGH"
+        elif final_score >= 0.50:
+            fit_level = "MEDIUM"
+        else:
+            fit_level = "LOW"
+            
         # Only use LLM for the top N candidates
         if i < max_llm_explanations:
             llm_result, metrics = _generate_llm_explanation(
                 team_member_id=candidate["team_member_id"],
-                final_score=candidate["final_score"],
-                fit_level="HIGH" if candidate["final_score"] >= 0.75 else "MEDIUM",
+                final_score=final_score,
+                fit_level=fit_level,
                 parsed_jd=parsed_jd,
                 candidate_data=candidate
             )
