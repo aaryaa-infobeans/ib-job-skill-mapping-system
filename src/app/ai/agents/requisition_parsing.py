@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from app.settings import settings
 
 from app.ai.utils.llm_client import llm_client
+from app.ai.utils.trulens_helper import tru, groq_app, groq_tru_app, instrument
 
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert talent matcher and HR analyst specialized in analyzing job requisitions.
@@ -86,18 +87,35 @@ def parse_requisition_with_llm(
                 return obj.isoformat()
             raise TypeError(f"Type {type(obj)} not serializable")
 
-        content, usage = llm_client.chat_completion(
-            messages=[
-                {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
-                {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
-            ],
-            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
+        prompt = f"{REQUISITION_PARSING_PROMPT}\nIMPORTANT: Return ONLY valid JSON.\n\nPlease parse this job description:\n{json.dumps(context, default=json_serial)}"
+        
+        messages = [{"role": "user", "content": prompt}]
+        model_name = "llama-3.3-70b-versatile"
+        temperature = 0.1
+        response_format = {"type": "json_object"}
+
+        # Using TruLens wrapped app for tracing
+        # We rely on the parent context manager (tru_app) and @instrument decorators
+        response_text, usage_metrics = groq_app.chat_completion(
+            messages=messages,
+            model_name=model_name,
+            temperature=temperature,
+            response_format=response_format
         )
+        
+        usage = usage_metrics or {
+            "model": model_name,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
 
-        if not content:
+        if not response_text:
             logger.error("LLM parsing failed - no content returned")
-            return _fallback_parse(job_description), None
-
+            return _fallback_parse(job_description), usage
+        
+        # Set content for the rest of processing
+        content = response_text
         llm_output = json.loads(content)
         
         # Capture originals to prevent "downgrading" or "moving" as per embed_search.py
@@ -161,7 +179,11 @@ def parse_requisition_with_llm(
             "prompt_name": "job_description_enrichment",
             "model": "unknown",
             "status": "FAILED",
-            "error_message": str(e)
+            "error_message": str(e),
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0
         }
         return _fallback_parse(job_description), metrics
 
@@ -186,6 +208,7 @@ def _fallback_parse(job_description: dict) -> dict:
     }
 
 
+@instrument
 def requisition_parsing_node(state: GraphState) -> GraphState:
     """Parse requisition and extract structured information.
     

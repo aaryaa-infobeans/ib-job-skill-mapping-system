@@ -368,6 +368,10 @@
 
 ## Phase 5: Security & Observability Enablement
 
+---
+
+## Phase 5: Security & Observability Enablement
+
 ### Epic: Security Hardening
 
 #### Task 5.1: Implement OAuth2 Token Validation
@@ -380,7 +384,7 @@
   - Requests without a valid token are rejected with a `401 Unauthorized` error.
 - **Dependencies**: Phase 4
 - **Owner Role**: Security & Compliance
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 5.2: Configure Secrets Management
 - **Description**: Integrate a secrets manager (e.g., AWS Secrets Manager, HashiCorp Vault) for storing database credentials and LLM API keys.
@@ -392,7 +396,7 @@
   - No secrets are present in configuration files or source code.
 - **Dependencies**: Task 1.3
 - **Owner Role**: Platform / DevOps
-- **Task Type**: Configure
+- **Task Type**: Configure (Completed)
 
 ### Epic: Observability
 
@@ -406,7 +410,7 @@
   - Application logs are in a parsable JSON format.
 - **Dependencies**: Phase 4
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 5.4: Implement Health Check Endpoint
 - **Description**: Implement the `GET /api/v1/health` endpoint, including a check for database connectivity.
@@ -418,7 +422,7 @@
   - The endpoint returns `200 OK` when the service is healthy and `503 Service Unavailable` if the database is unreachable.
 - **Dependencies**: Phase 4
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 5.5: Implement Metrics Endpoint
 - **Description**: Add a Prometheus-compatible `/metrics` endpoint to expose application metrics like request latency and error rates.
@@ -430,7 +434,7 @@
   - The endpoint exposes metrics that can be scraped by a Prometheus server.
 - **Dependencies**: Phase 4
 - **Owner Role**: Backend Engineering
-- **Task Type**: Build
+- **Task Type**: Build (Completed)
 
 #### Task 5.6: Implement AI Audit Trail
 - **Description**: Ensure that every LLM call within the LangGraph pipeline correctly writes a record to the `langgraph_checkpoints` table.
@@ -442,7 +446,19 @@
   - After a successful run, the `langgraph_checkpoints` table contains a complete, auditable record of the AI execution, including token counts.
 - **Dependencies**: Phase 4
 - **Owner Role**: AI / ML Engineering
-- **Task Type**: Validate
+- **Task Type**: Validate (Completed)
+
+#### Task 5.7: Implement TruLens Observability Integration
+- **Description**: Integrate TruLens for hierarchical tracing, LLM instrumentation, and dashboard visualization.
+- **Inputs**: `trulens_helper.py`, instrumented agent nodes.
+- **Outputs**: Unified `talent_search_pipeline` traces in TruLens dashboard.
+- **Spec References**:
+  - `specs/functional/fr-7-trulens-observability.md`
+- **Acceptance Criteria**:
+  - Granular traces are captured and rolled up into a single searchable record per run.
+- **Dependencies**: Phase 4
+- **Owner Role**: AI / ML Engineering
+- **Task Type**: Build (Completed)
 
 ---
 

@@ -108,6 +108,9 @@ def _is_known_valid_semantic_error(error: str) -> bool:
     return False
 
 
+from app.ai.utils.trulens_helper import instrument
+
+@instrument
 def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) -> Tuple[bool, List[str]]:
     """
     Use LLM to validate semantic quality of requisition data.

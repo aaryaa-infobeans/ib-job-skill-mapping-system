@@ -664,12 +664,6 @@ Validate NFR requirements:
 pytest tests/performance/ -m performance -v
 ```
 
-**NFR Validations:**
-- ✅ Throughput ≥ 100 records/second
-- ✅ 10,000 records < 30 minutes
-- ✅ Memory usage < 2 GB
-- ✅ Batch sizes: 100, 1,000, 10,000 records
-
 ### Test Coverage
 
 ```bash
@@ -714,6 +708,27 @@ ruff check --fix src/ tests/
 # Type checking with mypy (if configured)
 mypy src/
 ```
+
+---
+
+## 🔍 Observability with TruLens
+
+The system includes built-in observability and evaluation using TruLens 2.7.2. This allows for deep tracing of LLM calls, pipeline orchestration, and custom feedback metrics.
+
+### Key Features
+- **Pipeline Tracing**: Full execution trace of the LangGraph orchestration.
+- **Unified Context**: All agent-level LLM calls roll up to the `talent_search_pipeline` application context.
+- **LLM Instrumentation**: Capture of prompts, responses, and token usage for all Groq LLM calls.
+- **Custom Metrics**: Automatic calculation of `avg_match_score` and `mandatory_hit_rate` for each search.
+
+### Running the Dashboard
+To visualize the traces and metrics, run the TruLens dashboard:
+```bash
+python3 -c "from trulens.core import Tru; tru = Tru(); tru.run_dashboard(port=59511)"
+```
+The dashboard will be available at: `http://localhost:59511/?app_name=talent_search_pipeline`
+
+---
 
 ## 🚀 Performance Testing
 

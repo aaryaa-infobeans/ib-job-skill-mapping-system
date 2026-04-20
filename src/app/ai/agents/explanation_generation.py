@@ -11,6 +11,7 @@ from app.ai.utils.llm_client import llm_client
 from app.ai.audit import save_llm_request_log
 from app.db.session import SessionLocal
 
+from app.ai.utils.trulens_helper import instrument
 logger = logging.getLogger(__name__)
 
 def _generate_llm_explanation(
@@ -127,6 +128,7 @@ def _generate_llm_explanation(
         }
         return None, metrics
 
+@instrument
 def explanation_generation_node(state: GraphState) -> GraphState:
     """Phase 3: Explainability node."""
     logger.info("Executing Explanation_Generation_Agent node (Phase 3)")

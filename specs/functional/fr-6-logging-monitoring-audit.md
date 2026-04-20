@@ -84,6 +84,18 @@ This document specifies the requirements for logging, monitoring, and auditing t
   - LLM token usage.
   - Database query performance.
 
+### 3.3. Observability with TruLens
+- The system SHALL integrate TruLens for deep LLM observability and evaluation.
+- **Traceability**: FR-6.4
+- The system MUST capture:
+  - Full execution traces of the team member search pipeline.
+  - LLM input/output, latency, and token usage for all enrichment calls.
+  - Custom feedback metrics (e.g., matching scores, hit rates) as metadata.
+- TruLens data SHALL be stored in a persistent SQLite database (`default.sqlite`) for longitudinal analysis.
+
 ## 4. Tracing
 - The system SHOULD implement distributed tracing to provide a detailed view of requests as they flow through the various components (APIs, AI agents, database).
 - Trace data SHOULD be correlated with logs using the `correlation_id`.
+- **Instrumentation**: FR-6.5
+  - All critical LangGraph nodes MUST be instrumented for observability.
+  - The search pipeline SHALL use the `TruApp` (OTEL-based) provider for non-intrusive tracing.

@@ -47,7 +47,25 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
         }
         
         # Run graph with audit trail
-        final_state = execute_graph_with_audit(initial_state, request_id, db)
+        # Run graph with instrumented pipeline method
+        from app.ai.utils.trulens_helper import tru_app, pipeline_logic
+        
+        with tru_app as recording:
+            results, final_state = pipeline_logic.search(
+                query_text=request.job_description.jd_text,
+                db=db,
+                request_id=request_id,
+                job_description=request.job_description.model_dump()
+            )
+            
+            # Log custom metrics to TruLens via metadata
+            recording.record_metadata = {
+                "request_id": request_id,
+                "correlation_id": correlation_id,
+                "num_results": len(results),
+                "total_evaluated": final_state.get("total_evaluated", 0),
+                "total_qualified": final_state.get("total_qualified", 0)
+            }
         
         logger.info(f"Graph processing completed for correlation_id={correlation_id}")
         

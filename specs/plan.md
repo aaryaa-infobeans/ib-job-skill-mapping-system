@@ -29,10 +29,10 @@ The implementation will be broken down into six sequential phases to ensure incr
 - **Exit Criteria**: A requisition submission triggers the full AI pipeline, resulting in a correctly scored and ranked list of candidates as specified in `fr-2`, complete with generated explanations.
 
 ### Phase 5: Security & Observability Enablement
-- **Description**: Harden the system by implementing comprehensive security controls, logging, monitoring, and auditing.
-- **Spec References**: `fr-5`, `fr-6`, `nfr-security-privacy.md`, `audit-model.md`
+- **Description**: Harden the system by implementing comprehensive security controls, logging, monitoring, and auditing, including deep LLM observability.
+- **Spec References**: `fr-5`, `fr-6`, `fr-7`, `nfr-security-privacy.md`, `audit-model.md`
 - **Entry Criteria**: Phase 4 is complete and functionally validated.
-- **Exit Criteria**: The system meets all security and observability requirements, with auditable logs, metrics dashboards, and enforced authentication/authorization.
+- **Exit Criteria**: The system meets all security and observability requirements, with auditable logs, TruLens dashboard integration, and enforced authentication/authorization.
 
 ### Phase 6: Hardening & Scale Readiness
 - **Description**: Validate the system against all non-functional requirements, including performance, scalability, and reliability, before production rollout.

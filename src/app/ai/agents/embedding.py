@@ -7,8 +7,11 @@ from app.ai.state import GraphState
 from app.ai.utils.embedding import EmbeddingAgent
 from app.ai.utils.models import NormalizedRequisition, RequisitionData
 
+from app.ai.utils.trulens_helper import instrument
+
 logger = logging.getLogger(__name__)
 
+@instrument
 def embedding_node(state: GraphState) -> GraphState:
     """Generate embeddings for JD components."""
     logger.info("Executing Embedding_Agent node")

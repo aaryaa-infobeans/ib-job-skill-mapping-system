@@ -13,6 +13,7 @@ from app.db.models import SkillMaster, SkillOntology
 from app.db.session import SessionLocal
 from app.settings import settings
 
+from app.ai.utils.trulens_helper import instrument
 logger = logging.getLogger(__name__)
 
 # System prompt for skill normalization and ontology expansion
@@ -121,6 +122,7 @@ def _find_fuzzy_matches(term: str, skill_master_map: Dict[str, str]) -> List[str
             matches.append(skill_id)
     return matches
 
+@instrument
 def skill_normalization_node(state: GraphState) -> GraphState:
     """Normalize and expand skills using the skill ontology and LLM.
     
