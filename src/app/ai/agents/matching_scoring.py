@@ -12,6 +12,7 @@ from app.ai.utils.models import RAGCandidate
 from app.ai.state import GraphState
 from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification
 from app.db.session import SessionLocal
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def _sanitize_skill_list(skill_list: list) -> list:
     return sanitized
 
 
+@trace_node("matching_scoring")
 def matching_scoring_node(state: GraphState) -> GraphState:
     """Execute deterministic matching and scoring for all team members.
     

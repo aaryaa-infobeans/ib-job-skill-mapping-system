@@ -39,8 +39,11 @@ def should_continue_after_parsing(state: GraphState) -> str:
     return "skill_normalization"
 
 
-def create_graph():
+def create_graph(instrumented_app=None):
     """Create the LangGraph for JD-Skill matching with PII Scrubber.
+    
+    If instrumented_app is provided, nodes will be wrapped with its methods
+    for TruLens visibility.
     
     Topology v1.1 (CR-PII-001):
     START → PII_Scrubber (Node 0) → [Validation Gate]
@@ -60,13 +63,22 @@ def create_graph():
     workflow = StateGraph(GraphState)
     
     # Add nodes (no PII Scrubber in active workflow)
-    workflow.add_node("requisition_parsing", requisition_parsing_node)
-    workflow.add_node("skill_normalization", skill_normalization_node)
-    workflow.add_node("embedding", embedding_node)
-    workflow.add_node("rag_retrieval", rag_retrieval_node)
-    workflow.add_node("matching_scoring", matching_scoring_node)
-    workflow.add_node("explanation_generation", explanation_generation_node)
-    workflow.add_node("result_aggregation", result_aggregation_node)
+    if instrumented_app:
+        workflow.add_node("requisition_parsing", instrumented_app.requisition_parsing)
+        workflow.add_node("skill_normalization", instrumented_app.skill_normalization)
+        workflow.add_node("embedding", instrumented_app.embedding)
+        workflow.add_node("rag_retrieval", instrumented_app.rag_retrieval)
+        workflow.add_node("matching_scoring", instrumented_app.matching_scoring)
+        workflow.add_node("explanation_generation", instrumented_app.explanation_generation)
+        workflow.add_node("result_aggregation", instrumented_app.result_aggregation)
+    else:
+        workflow.add_node("requisition_parsing", requisition_parsing_node)
+        workflow.add_node("skill_normalization", skill_normalization_node)
+        workflow.add_node("embedding", embedding_node)
+        workflow.add_node("rag_retrieval", rag_retrieval_node)
+        workflow.add_node("matching_scoring", matching_scoring_node)
+        workflow.add_node("explanation_generation", explanation_generation_node)
+        workflow.add_node("result_aggregation", result_aggregation_node)
     
     # Define entry point directly to requisition parsing
     workflow.set_entry_point("requisition_parsing")

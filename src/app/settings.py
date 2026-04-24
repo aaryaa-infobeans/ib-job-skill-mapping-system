@@ -171,7 +171,7 @@ class Settings(BaseSettings):
         """
         Get database URL from secrets manager or fallback to settings.
         """
-        from app.secrets import get_secret
+        from app.app_secrets import get_secret
         
         # Try secrets manager first
         db_url = get_secret("DB_URL") or get_secret("DATABASE_URL")
@@ -183,7 +183,7 @@ class Settings(BaseSettings):
         """
         Get JWT secret key from secrets manager or fallback to settings.
         """
-        from app.secrets import get_secret
+        from app.app_secrets import get_secret
         
         # Try secrets manager
         secret = get_secret("JWT_SECRET_KEY") or get_secret("SECRET_KEY")

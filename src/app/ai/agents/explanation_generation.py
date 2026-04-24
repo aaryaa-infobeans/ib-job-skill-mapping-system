@@ -10,6 +10,7 @@ from app.ai.utils.explanation_prompt import format_explanation_prompt
 from app.ai.utils.llm_client import llm_client
 from app.ai.audit import save_llm_request_log
 from app.db.session import SessionLocal
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,7 @@ def _generate_llm_explanation(
         }
         return None, metrics
 
+@trace_node("explanation_generation")
 def explanation_generation_node(state: GraphState) -> GraphState:
     """Phase 3: Explainability node."""
     logger.info("Executing Explanation_Generation_Agent node (Phase 3)")

@@ -25,7 +25,7 @@ if SRC_PATH not in sys.path:
 
 # Import the Base and secrets helper
 from app.db.base import Base
-from app.secrets import get_secret
+from app.app_secrets import get_secret
 
 # Import all models so they're registered with Base.metadata
 import app.db.models  # noqa: F401
