@@ -159,9 +159,6 @@ curl http://localhost:8000/health
                     └───────────────────────────────┘
 ```
 
-### LangGraph Agent Topology
-
-```
 START → JD Parsing → Skill Normalization → Matching & Scoring
                                                     │
                                                     ▼
@@ -169,6 +166,44 @@ START → JD Parsing → Skill Normalization → Matching & Scoring
                                                     │
                                                     ▼
                                            Result Aggregation → END
+```
+
+## 🔍 AI Observability & Evaluation (TruLens)
+
+The system is integrated with **TruLens** for full-stack observability, tracing, and evaluation of the LangGraph-based AI agents.
+
+### Features
+- **Node-level Tracing**: Capture inputs, outputs, latency, and errors for every agent in the pipeline.
+- **LLM Evaluation**: Automated feedback functions for Groundedness, Answer Relevance, and Context Relevance.
+- **Hierarchical Traces**: Visualize the parent-child relationship between graph execution and individual agent calls.
+- **Cost & Token Tracking**: Monitor usage across all agents in real-time.
+
+### Running the Observability Dashboard
+To start the TruLens dashboard and visualize traces, use the provided utility script:
+```bash
+# Activation of venv is recommended
+source venv/bin/activate
+
+# Start dashboard (default port 8501)
+python3 scripts/start_tru_dashboard.py --port 8501
+```
+Then visit `http://localhost:8501` in your browser.
+
+> [!TIP]
+> If you see a warning about `trulens-providers-google not present in requirements`, ensure you have run `pip install -r requirements.txt` to synchronize your virtual environment with the latest dependencies.
+
+### Verification Demo
+Run the provided demo script to execute a sample workflow and verify TruLens recording:
+```bash
+# Ensure you are in the virtual environment
+python3 scripts/demo_trulens.py
+```
+
+### Configuration
+The following variables in `.env` control evaluation behavior:
+```bash
+# OpenAI key required for feedback functions
+OPENAI_API_KEY=sk-...
 ```
 
 ## 📦 Prerequisites

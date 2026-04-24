@@ -28,10 +28,12 @@ from app.ai.state import GraphState
 from app.pii.scrubber import PIIScrubber
 from app.pii.config import PIIConfig
 from app.pii.audit_logger import PIIAuditLogger
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
 
+@trace_node("pii_scrubber")
 def pii_scrubber_node(state: GraphState) -> GraphState:
     """
     LangGraph Node 0: PII Scrubber Agent.

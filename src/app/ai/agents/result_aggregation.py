@@ -3,6 +3,7 @@
 import logging
 
 from app.ai.state import GraphState
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ def determine_fit_level(final_score: float) -> str:
         return "LOW"
 
 
+@trace_node("result_aggregation")
 def result_aggregation_node(state: GraphState) -> GraphState:
     """
     Phase 2: Qualification Decision.

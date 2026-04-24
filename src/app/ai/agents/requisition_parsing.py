@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from app.settings import settings
 
 from app.ai.utils.llm_client import llm_client
+from app.observability.tracing import trace_node
 
 # System prompt for requisition parsing
 REQUISITION_PARSING_PROMPT = """You are an expert talent matcher and HR analyst specialized in analyzing job requisitions.
@@ -186,6 +187,7 @@ def _fallback_parse(job_description: dict) -> dict:
     }
 
 
+@trace_node("requisition_parsing")
 def requisition_parsing_node(state: GraphState) -> GraphState:
     """Parse requisition and extract structured information.
     

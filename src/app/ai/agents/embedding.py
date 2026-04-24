@@ -6,9 +6,11 @@ from typing import Dict, List, Any
 from app.ai.state import GraphState
 from app.ai.utils.embedding import EmbeddingAgent
 from app.ai.utils.models import NormalizedRequisition, RequisitionData
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
+@trace_node("embedding")
 def embedding_node(state: GraphState) -> GraphState:
     """Generate embeddings for JD components."""
     logger.info("Executing Embedding_Agent node")

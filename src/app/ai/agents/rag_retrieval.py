@@ -8,9 +8,11 @@ from app.ai.state import GraphState
 from app.ai.utils.rag_retrieval import RAGRetrievalAgent
 from app.ai.utils.models import EmbeddingResult, RAGCandidate
 from app.db.session import SessionLocal
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
+@trace_node("rag_retrieval")
 def rag_retrieval_node(state: GraphState) -> GraphState:
     """Execute RAG retrieval using embeddings."""
     logger.info("Executing RAG_Retrieval_Agent node")

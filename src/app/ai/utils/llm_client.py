@@ -8,6 +8,8 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
+from trulens_eval.tru_custom_app import instrument
+
 class LLMClient:
     """Unified client for multiple LLM providers."""
     
@@ -88,6 +90,7 @@ class LLMClient:
         return None, None
 
 
+    @instrument
     def _openai_completion(self, messages, model, temperature, max_tokens, response_format):
         model = model or settings.openai_model
         kwargs = {
@@ -110,6 +113,7 @@ class LLMClient:
         return content, usage
 
 
+    @instrument
     def _groq_completion(self, messages, model, temperature, max_tokens, response_format):
         model = model or settings.groq_model
         kwargs = {
@@ -132,6 +136,7 @@ class LLMClient:
         return content, usage
 
 
+    @instrument
     def _google_completion(self, messages, model, temperature, max_tokens):
         # Fallback to gemini-2.5-flash if model is not provided or unavailable
         model = model or settings.google_model or "gemini-2.5-flash"

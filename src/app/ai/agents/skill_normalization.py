@@ -12,6 +12,7 @@ from app.ai.state import GraphState
 from app.db.models import SkillMaster, SkillOntology
 from app.db.session import SessionLocal
 from app.settings import settings
+from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,7 @@ def _find_fuzzy_matches(term: str, skill_master_map: Dict[str, str]) -> List[str
             matches.append(skill_id)
     return matches
 
+@trace_node("skill_normalization")
 def skill_normalization_node(state: GraphState) -> GraphState:
     """Normalize and expand skills using the skill ontology and LLM.
     
