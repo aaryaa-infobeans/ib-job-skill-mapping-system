@@ -118,19 +118,16 @@ class ScoringAgent(BaseAgent):
                 matched.append(canonical)
                 continue
             
-            # 2. Check in profile text for group members or canonical name
+            # 2. Check in profile text for canonical name ONLY (Strict for mandatory)
             import re
-            group_name = self._get_skill_group(canonical)
-            members = self.skill_groups.get(group_name, [canonical])
             
             found_in_text = False
-            for mem in members:
-                escaped_mem = re.escape(mem.lower())
-                # prevent substring matches (e.g. 'git' in 'digital', 'scala' in 'scalable')
-                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
-                if re.search(pattern, p_text_lower):
-                    found_in_text = True
-                    break
+            # Search only for the specific canonical name in the text
+            escaped_mem = re.escape(canonical.lower())
+            # prevent substring matches (e.g. 'git' in 'digital', 'scala' in 'scalable')
+            pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
+            if re.search(pattern, p_text_lower):
+                found_in_text = True
                     
             if found_in_text:
                 matched.append(canonical)
@@ -236,8 +233,13 @@ class ScoringAgent(BaseAgent):
                 continue
                 
             # 2. Fallback to profile text using the canonical name and its skill group
+            # For preferred skills, we search group members BUT exclude the broad group name
+            # to avoid matching 'FastAPI' just because 'Python' was mentioned.
             group_name = self._get_skill_group(pid)
-            members = self.skill_groups.get(group_name, [pid])
+            all_members = self.skill_groups.get(group_name, [pid])
+            
+            # Filter out the generic group name if the skill itself is not that group
+            members = [m for m in all_members if m != group_name or pid.lower() == group_name]
             
             found_in_text = False
             for mem in members:
