@@ -198,6 +198,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     preferred_similarity=rag_scores_dict.get("preferred_similarity", 0.5),
                     jd_level_similarity=rag_scores_dict.get("jd_level_similarity", 0.5),
                     certification_similarity=rag_scores_dict.get("certification_similarity", 0.5),
+                    experience_in_months=member.experience_in_months or 0,
                     phase0_score_breakdown=rag_scores_dict.get("phase0_score_breakdown", {})
                 )
                 
@@ -208,32 +209,26 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 role_type = scoring_result.detailed_breakdown.role_type
                 
                 # --- PHASES 3 & 4: AI Override & Refined Evaluation ---
-                # User request: "send for evaluation of score if they pass more than 40% ... then further do the calculation"
-                # If they pass the skill gate, we do further AI evaluation. Otherwise, skip to save cost/time.
                 ai_fit = {"confidence_score": 0.0, "reasoning": "Skipped due to Skill Gate failure", "key_strengths": [], "major_gaps": []}
                 confidence_score = 0.0
                 ai_boost = 0.0
                 ai_override_applied = False
-                is_senior = (role_type == "SENIOR")
                 
                 if is_qualified:
                     # AI Fit Confidence (TASK-08+) - Further Evaluation
                     ai_fit = get_ai_fit_confidence(jd_text, profile_text)
                     confidence_score = ai_fit["confidence_score"]
                     
-                    # 1. AI Waiver for Seniors (Stage 1 Waiver - only if semantic gate failed but skills passed)
-                    if not scoring_result.is_qualified and is_senior and confidence_score >= settings.ai_override_threshold_senior:
+                    # 1. AI Waiver for Seniors
+                    from app.settings import settings
+                    if not scoring_result.is_qualified and role_type == "SENIOR" and confidence_score >= settings.ai_override_threshold_senior:
                         if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
                             is_qualified = True
                             ai_override_applied = True
-                            logger.info(f"AI Override: Waiving semantic gate for Senior {member.team_member_id} (Conf: {confidence_score})")
                     
-                    # 2. Refined AI Boost (only applied if qualified)
+                    # 2. Refined AI Boost
                     if is_qualified:
                         ai_boost = calculate_ai_boost(confidence_score)
-                else:
-                    # Disqualified by Skill Gate - Ensure score is capped
-                    pass
 
                 final_agentic_score = scoring_result.match_score
                 if is_qualified and ai_boost > 0:
@@ -241,7 +236,6 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 
                 final_agentic_score = round(max(0.0, min(1.0, final_agentic_score)), 4)
 
-                
                 score_dict = {
                     "team_member_id": scoring_result.team_member_id,
                     "final_score": final_agentic_score,
@@ -253,7 +247,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "ai_override_applied": ai_override_applied,
                     "ai_reasoning": ai_fit["reasoning"],
                     "role_type": role_type,
-                    "meets_threshold": is_qualified, # Threshold is now internal to ScoringAgent
+                    "experience_in_months": member.experience_in_months or 0,
+                    "meets_threshold": is_qualified,
 
                     "is_available": scoring_result.is_available,
                     "semantic_similarity": round(scoring_result.detailed_breakdown.semantic_similarity, 2),
@@ -268,8 +263,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "mandatory_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_matched),
                         "mandatory_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_missing),
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
-                        "preferred_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_matched),
-                        "preferred_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_missing),
+                        "preferred_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_matched)[:5],
+                        "preferred_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_missing)[:5],
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
                         "certification_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_matched),
@@ -285,15 +280,11 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "weight_p": scoring_result.score_breakdown.get("weight_p", 0.0),
                     "weight_s": scoring_result.score_breakdown.get("weight_s", 0.0),
                     "weight_c": scoring_result.score_breakdown.get("weight_c", 0.0),
-
-
                     "reason": scoring_result.detailed_breakdown.qualification_reason
                 }
 
-                
                 # Log detailed walkthrough
                 ScoringAudit.log_candidate_walkthrough(score_dict)
-                
                 candidate_scores.append(score_dict)
                 
             except Exception as e:

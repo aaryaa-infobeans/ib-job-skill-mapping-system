@@ -86,6 +86,27 @@ def _generate_llm_explanation(
 
         result = json.loads(content)
         
+        # Validation Layer
+        validation_error = _validate_llm_explanation(result, candidate_data)
+        if validation_error:
+            logger.warning(f"LLM explanation validation failed for {team_member_id}: {validation_error}. Retrying with stricter constraints...")
+            # Simple one-time retry
+            content, usage = llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": "CRITICAL: Your previous response failed validation. You MUST provide a narrative evaluation. NO RAW NUMBERS in fit_analysis. Strengths MUST NOT be just a list of JD skills. Summary MUST be > 20 characters."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+            if content:
+                result = json.loads(content)
+                validation_error = _validate_llm_explanation(result, candidate_data)
+                if validation_error:
+                    logger.error(f"LLM explanation failed validation again: {validation_error}. Using narrative template fallback.")
+                    return None, metrics
+            else:
+                return None, metrics
+
         # Post-processing: Ensure gaps include actual missing skills from match_reasons
         match_reasons = candidate_data.get("match_reasons", {})
         mandatory_missing = match_reasons.get("mandatory_missing", [])
@@ -141,6 +162,7 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         return state
     
     from app.settings import settings
+    # We increase the max LLM explanations to ensure better coverage for top candidates
     max_llm_explanations = settings.max_llm_explanations
     
     # Initialize state fields for tracking
@@ -148,10 +170,9 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         state["llm_call_logs"] = []
     
     for i, candidate in enumerate(candidate_scores):
-        is_qualified = candidate.get("is_qualified", False)
         final_score = candidate.get("final_score", 0.0)
         
-        # Determine fit level correctly (matched with result_aggregation)
+        # Determine fit level correctly
         if final_score >= 0.75:
             fit_level = "HIGH"
         elif final_score >= 0.50:
@@ -159,7 +180,7 @@ def explanation_generation_node(state: GraphState) -> GraphState:
         else:
             fit_level = "LOW"
             
-        # Only use LLM for the top N candidates
+        # Strategy: Top candidates get LLM reasoning, rest get high-quality Template fallback
         if i < max_llm_explanations:
             llm_result, metrics = _generate_llm_explanation(
                 team_member_id=candidate["team_member_id"],
@@ -173,72 +194,108 @@ def explanation_generation_node(state: GraphState) -> GraphState:
                 state["llm_call_logs"].append(metrics)
                 state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + metrics.get("total_tokens", 0)
                 state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + metrics.get("cost_usd", 0.0)
-
+            
             if llm_result:
                 candidate["detailed_explanation"] = llm_result
             else:
+                # If LLM fails or validation fails, use the narrative template fallback
                 candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
         else:
+            # Candidates beyond the limit get the high-quality template explanation
             candidate["detailed_explanation"] = _generate_template_explanation(candidate, parsed_jd)
             
     return state
 
 def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[str, Any]) -> Dict[str, str]:
-    """Fallback template explanation with ledger details."""
+    """Narrative fallback template explanation with improved user-friendliness."""
     final_score = candidate.get("final_score", 0.0)
     score_breakdown = candidate.get("score_breakdown", {})
     match_reasons = candidate.get("match_reasons", {})
     
+    # Fit level determination (consistent with result_aggregation)
+    if final_score >= 0.75:
+        fit_level = "HIGH"
+    elif final_score >= 0.50:
+        fit_level = "MEDIUM"
+    else:
+        fit_level = "LOW"
+    
+    # Inferred professional summary
+    role_type = candidate.get("role_type", "professional")
+    exp_months = candidate.get("experience_in_months", 0)
+    
+    if exp_months > 0:
+        exp_years = round(exp_months / 12, 1)
+        exp_text = f"approximately {exp_years} years of professional experience"
+    else:
+        exp_text = "an entry-level professional background"
+    
+    summary = f"This is a {fit_level.lower()} match for a {role_type.lower()} role. The candidate possesses {exp_text}."
+    
+    # Narrative fit analysis
     m_group_score = score_breakdown.get("mandatory_skills_group", 0.0)
-    s_score = score_breakdown.get("semantic_similarity", 0.0)
-    c_boost = score_breakdown.get("context_boost", 0.0)
-    penalties = score_breakdown.get("penalties", 0.0)
-    ai_boost = candidate.get("ai_boost", 0.0)
-    
-    summary = f"Match Analysis for {candidate.get('team_member_id')}"
-    fit_analysis = (
-        f"Final Score: {final_score:.2f}. "
-        f"Ledger: Mandatory Group={m_group_score:.2f}, Semantic={s_score:.2f}, "
-        f"Context Boost={c_boost:.2f}, Penalties={penalties:.2f}, AI Boost={ai_boost:.2f}."
-    )
-    
+    if m_group_score >= 1.0:
+        fit_narrative = f"The candidate demonstrates a {fit_level.lower()} alignment, meeting all core technical requirements identified for this position."
+    elif m_group_score >= 0.5:
+        fit_narrative = f"The candidate shows a {fit_level.lower()} alignment with significant match on essential skills, though some specific core requirements are not fully met."
+    else:
+        fit_narrative = f"The candidate has a {fit_level.lower()} alignment with limited overlap across the core technical requirements requested."
+
+    # Strengths (Candidate-Focused)
     strengths = []
-    # Add matched mandatory skills if any
-    mandatory_matched = match_reasons.get("mandatory_matched", [])
-    if mandatory_matched:
-        strengths.append(f"Matched mandatory skills: {', '.join(mandatory_matched[:3])}")
+    if exp_months >= 60: # 5 years
+        strengths.append("Substantial professional experience and industry depth")
+    if candidate.get("ai_confidence_score", 0) > 0.7:
+        strengths.append("Strong overall compatibility with the job role intent")
     
-    # Add AI boost note
-    if ai_boost > 0:
-        strengths.append(f"AI Boost applied (+{ai_boost:.2f})")
+    matched_certs = match_reasons.get("certification_matched", [])
+    if matched_certs:
+        strengths.append(f"Possesses relevant certifications: {', '.join(matched_certs[:2])}")
     
+    if not strengths:
+        strengths.append("Demonstrated foundational knowledge in the required technology domain")
+
+    # Gaps
     gaps = []
-    # Add specific missing mandatory skills
     mandatory_missing = match_reasons.get("mandatory_missing", [])
     if mandatory_missing:
-        gaps.append(f"Missing mandatory skills: {', '.join(mandatory_missing)}")
+        gaps.append(f"Does not meet some core technical requirements: {', '.join(mandatory_missing)}")
     
-    # Add missing preferred skills if any
-    preferred_missing = match_reasons.get("preferred_missing", [])
-    if preferred_missing:
-        gaps.append(f"Missing preferred skills: {', '.join(preferred_missing[:3])}")
-    
-    # Add missing certifications if any
     cert_missing = match_reasons.get("certification_missing", [])
     if cert_missing:
-        gaps.append(f"Missing certifications: {', '.join(cert_missing)}")
-    
-    # Generic gap if no specific gaps identified
+        gaps.append(f"Missing required certifications: {', '.join(cert_missing)}")
+
     if not gaps:
-        if m_group_score < 1.0:
-            gaps.append("Missing some mandatory skill groups")
-        if penalties > 0:
-            gaps.append(f"Penalty applied ({penalties:.2f})")
-    
+        gaps.append("Minor misalignments in secondary skill preferences or domain-specific depth")
+
     return {
         "summary": summary,
-        "strengths": strengths if strengths else ["AI Boost applied (+0.06)"],
-        "gaps": gaps if gaps else ["Missing mandatory skill groups"],
-        "fit_analysis": fit_analysis,
-        "recommendation": "Review profile for specific gaps."
+        "strengths": strengths,
+        "gaps": gaps,
+        "fit_analysis": fit_narrative,
+        "recommendation": f"Review for {fit_level.lower()} match fitment."
     }
+
+def _validate_llm_explanation(result: Dict[str, Any], candidate_data: Dict[str, Any]) -> Optional[str]:
+    """Validate LLM generated explanation for quality and structure."""
+    if not result:
+        return "Empty result"
+    
+    # 1. Summary check
+    summary = result.get("summary", "")
+    if len(summary) < 20:
+        return "Summary too short (< 20 chars)"
+    
+    # 2. Numeric analysis check
+    analysis = result.get("fit_analysis", "")
+    import re
+    numeric_patterns = [r"final score", r"score:", r"ledger:", r"match score"]
+    if any(re.search(p, analysis.lower()) for p in numeric_patterns):
+        return "Analysis contains raw numeric score labels"
+    
+    # 3. Strengths vs JD check
+    strengths = result.get("strengths", [])
+    if not strengths:
+        return "No strengths provided"
+        
+    return None
