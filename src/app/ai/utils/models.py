@@ -75,6 +75,7 @@ class RAGCandidate:
     preferred_similarity: float
     jd_level_similarity: float
     certification_similarity: float = 0.0
+    experience_in_months: Optional[int] = None
     profile_text: Optional[str] = None
     phase0_score_breakdown: Dict[str, float] = field(default_factory=dict)
 

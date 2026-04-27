@@ -32,11 +32,6 @@ def trace_node(node_name: str):
             
             logger.info(
                 f"Node '{node_name}' starting",
-                extra={
-                    "node": node_name,
-                    "input_keys": list(state.keys()),
-                    "request_id": state.get("requisition_input", {}).get("correlation_id", "unknown")
-                }
             )
             
             try:

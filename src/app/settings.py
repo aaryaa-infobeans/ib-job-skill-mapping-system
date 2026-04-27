@@ -51,8 +51,7 @@ class Settings(BaseSettings):
     
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.1
-
-
+ 
     
     # --- GLOBAL WEIGHTS (Fallback) ---
     weight_mandatory_skills: float = 0.30
@@ -129,7 +128,7 @@ class Settings(BaseSettings):
     
     # Penalties
     skill_family_penalty: float = -0.10
-    max_llm_explanations: int = 2
+    max_llm_explanations: int = 10
     
     # Thresholds
     fit_score_threshold: float = 0.5
