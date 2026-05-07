@@ -121,20 +121,3 @@ class ScoringResult:
     available_capacity: float = 100.0
     is_qualified: bool = True
 
-
-
-@dataclass
-class RankedCandidate:
-    """Ranked candidate with justification."""
-    team_member_id: str
-    match_score: float
-    narrative_justification: str
-    rank_position: int
-
-
-@dataclass
-class RankedCandidateList:
-    """Final ranking result."""
-    candidates: List[RankedCandidate] = field(default_factory=list)
-    total_evaluated: int = 0
-    total_qualified: int = 0

@@ -3,7 +3,7 @@
 # Configuration
 APP_PORT=9000
 DB_PORT=5433
-PROJECT_DIR="/var/www/html/ib-job-skill-mapping-system"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$PROJECT_DIR/venv"
 
 echo "🚀 Starting IB Job Skill Mapping System..."
@@ -42,7 +42,6 @@ if docker volume inspect postgres_data &> /dev/null; then
     fi
 fi
 
-docker compose pull postgres
 docker compose up -d postgres
 
 # 3. Wait for Database to be ready

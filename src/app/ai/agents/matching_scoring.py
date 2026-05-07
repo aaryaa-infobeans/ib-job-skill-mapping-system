@@ -5,14 +5,17 @@ import re
 
 from sqlalchemy.orm import Session
 
-from app.ai.availability import evaluate_availability
+from app.ai.availability import calculate_requisition_window
+from app.ai.utils.ai_confidence import get_ai_fit_confidence, calculate_ai_boost
 from app.ai.utils.scoring import ScoringAgent
 from app.ai.utils.scoring_audit import ScoringAudit
 from app.ai.utils.models import RAGCandidate
 from app.ai.state import GraphState
-from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification
+from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification, TeamMemberAllocation, SkillMaster
+from app.db.models.models import TeamMemberEmbedding
 from app.db.session import SessionLocal
 from app.observability.tracing import trace_node
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -116,53 +119,81 @@ def matching_scoring_node(state: GraphState) -> GraphState:
         
         candidate_scores = []
         scoring_agent = ScoringAgent(logger=logger)
-        from app.ai.utils.ai_confidence import get_ai_fit_confidence, calculate_ai_boost
-        from app.db.models.models import TeamMemberEmbedding
-        
         jd_text = parsed_jd.get("jd_text", "")
-        
+
+        # Pre-load all per-member data in 5 batch queries (avoids N+5 query pattern).
+        # The window is identical for every candidate in this requisition, so compute it once.
+        member_ids = [m.team_member_id for m in team_members]
+
+        skill_id_rows = (
+            db.query(TeamMemberSkill)
+            .filter(TeamMemberSkill.team_member_id.in_(member_ids))
+            .all()
+        )
+        skill_ids_by_member: dict = {}
+        for row in skill_id_rows:
+            skill_ids_by_member.setdefault(row.team_member_id, []).append(row.skill_id)
+
+        cert_rows = (
+            db.query(TeamMemberSkillCertification)
+            .filter(TeamMemberSkillCertification.team_member_id.in_(member_ids))
+            .all()
+        )
+        certs_by_member: dict = {}
+        for row in cert_rows:
+            certs_by_member.setdefault(row.team_member_id, []).append(row.certificate)
+
+        embedding_rows = (
+            db.query(TeamMemberEmbedding)
+            .filter(TeamMemberEmbedding.team_member_id.in_(member_ids))
+            .all()
+        )
+        profile_text_by_member = {row.team_member_id: (row.profile_text or "") for row in embedding_rows}
+
+        skill_name_rows = (
+            db.query(TeamMemberSkill.team_member_id, SkillMaster.skill_name)
+            .join(SkillMaster, SkillMaster.skill_id == TeamMemberSkill.skill_id)
+            .filter(TeamMemberSkill.team_member_id.in_(member_ids))
+            .all()
+        )
+        skill_names_by_member: dict = {}
+        for tm_id, skill_name in skill_name_rows:
+            skill_names_by_member.setdefault(tm_id, []).append(skill_name)
+
+        avail_start, avail_end = calculate_requisition_window(expected_start_date, requisition_duration_month)
+        alloc_rows = (
+            db.query(TeamMemberAllocation)
+            .filter(
+                TeamMemberAllocation.team_member_id.in_(member_ids),
+                TeamMemberAllocation.is_deleted == False,
+                TeamMemberAllocation.start_date < avail_end,
+                TeamMemberAllocation.end_date > avail_start,
+            )
+            .all()
+        )
+        allocs_by_member: dict = {}
+        for alloc in alloc_rows:
+            allocs_by_member.setdefault(alloc.team_member_id, []).append(alloc)
+
         for member in team_members:
             try:
-                # 1. Fetch skills, certs, and profile text
-                member_skill_ids = [
-                    skill.skill_id 
-                    for skill in db.query(TeamMemberSkill)
-                    .filter(TeamMemberSkill.team_member_id == member.team_member_id)
-                    .all()
-                ]
-                
-                member_certs = [
-                    cert.certificate
-                    for cert in db.query(TeamMemberSkillCertification)
-                    .filter(TeamMemberSkillCertification.team_member_id == member.team_member_id)
-                    .all()
-                ]
-                
-                # Fetch profile text and skill names for AI Confidence and Penalty
-                embedding_record = db.query(TeamMemberEmbedding).filter(
-                    TeamMemberEmbedding.team_member_id == member.team_member_id
-                ).first()
-                profile_text = embedding_record.profile_text if embedding_record else ""
-                
-                # Fetch skill names (needed for family penalty check in refined logic)
-                from app.db.models import SkillMaster
-                member_skill_names = [
-                    res.skill_name 
-                    for res in db.query(SkillMaster.skill_name)
-                    .join(TeamMemberSkill, SkillMaster.skill_id == TeamMemberSkill.skill_id)
-                    .filter(TeamMemberSkill.team_member_id == member.team_member_id)
-                    .all()
-                ]
+                # 1. Look up pre-loaded data (no per-member DB queries)
+                tm_id = member.team_member_id
+                member_skill_ids = skill_ids_by_member.get(tm_id, [])
+                member_certs = certs_by_member.get(tm_id, [])
+                profile_text = profile_text_by_member.get(tm_id, "")
+                member_skill_names = skill_names_by_member.get(tm_id, [])
 
-                
-                # 2. Evaluate availability
-                availability_result = evaluate_availability(
-                    db,
-                    member.team_member_id,
-                    expected_start_date,
-                    requisition_duration_month,
-                    threshold_percentage=80.0,
-                )
+                # 2. Compute availability from pre-loaded allocations
+                member_allocs = allocs_by_member.get(tm_id, [])
+                total_allocation = sum(float(a.allocation_percentage or 0) for a in member_allocs)
+                available_capacity = max(0.0, 100.0 - total_allocation)
+                availability_result = {
+                    "is_available": total_allocation < 80.0,
+                    "available_capacity": round(available_capacity, 2),
+                    "total_allocation": round(total_allocation, 2),
+                    "requisition_window": (avail_start, avail_end),
+                }
                 
                 # 3. Deterministic Agentic Scoring (Phase 1 core)
                 rag_scores_dict = retrieved_results.get(member.team_member_id, {})
@@ -220,7 +251,6 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     confidence_score = ai_fit["confidence_score"]
                     
                     # 1. AI Waiver for Seniors
-                    from app.settings import settings
                     if not scoring_result.is_qualified and role_type == "SENIOR" and confidence_score >= settings.ai_override_threshold_senior:
                         if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
                             is_qualified = True
