@@ -42,51 +42,61 @@ class EmbeddingAgent(BaseAgent):
             self.logger.info(f"Initializing local Gemma EmbeddingAgent with model={self.model_name}, device={self.device}")
             self.gemma_agent = GemmaEmbeddingAgent(device=self.device, model_name=self.model_name)
     
-    def execute(self, normalized_requisition: NormalizedRequisition) -> EmbeddingResult:
-        """
-        Generate embeddings for all JD components.
-        
-        Args:
-            normalized_requisition: Normalized requisition data
-            
-        Returns:
-            EmbeddingResult with all vectors
-        """
-        # Prepare texts to embed
-        m_skills = normalized_requisition.original_mandatory_skills
-        p_skills = normalized_requisition.original_preferred_skills
-        jd_level = getattr(normalized_requisition.original_requisition, 'jd_level', None)
-        cert_names = normalized_requisition.normalized_certifications or normalized_requisition.original_certifications
-        enriched_certs = normalized_requisition.expanded_certification_terms
-        
-        # Build texts only if content exists
-        jd_level_text = f"Job level: {jd_level}" if jd_level else None
-        mandatory_text = f"Required skills: {', '.join(m_skills)}" if m_skills else None
-        preferred_text = f"Preferred skills: {', '.join(p_skills)}" if p_skills else None
-        
-        certification_text = None
-        if cert_names or enriched_certs:
-            certification_text = f"Certifications: {', '.join(cert_names)}"
-            if enriched_certs:
-                certification_text += f". Related concepts: {', '.join(enriched_certs)}"
-        
-        # NEW: Full JD Text for Weighted Search (Semantic Fit)
-        raw_jd = normalized_requisition.original_requisition.raw_requisition if normalized_requisition.original_requisition else {}
-        jd_text = ""
-        if isinstance(raw_jd, dict):
-            jd_text = raw_jd.get("jd_text", "")
-        elif isinstance(raw_jd, str):
-            jd_text = raw_jd
-            
-        # Gemma expects 'search_query: ' prefix for retrieval queries
-        full_jd_text_with_prefix = f"search_query: {jd_text}" if jd_text else None
+    @staticmethod
+    def _level_text(jd_level: Optional[str], title: str) -> Optional[str]:
+        """Build seniority-rich level text. Uses SENIOR/MID/JUNIOR + title so the vector
+        measures career-level alignment instead of just domain similarity."""
+        if not jd_level:
+            return None
+        return f"Seniority: {jd_level}. Title: {title}." if title else f"Seniority: {jd_level}."
 
-        # Generate embeddings
-        jd_level_vec = self.embed_text(jd_level_text) if jd_level_text else None
-        mandatory_vec = self.embed_text(mandatory_text) if mandatory_text else None
-        preferred_vec = self.embed_text(preferred_text) if preferred_text else None
-        certification_vec = self.embed_text(certification_text) if certification_text else None
-        full_jd_vec = self.embed_text(full_jd_text_with_prefix) if full_jd_text_with_prefix else None
+    @staticmethod
+    def _cert_text(cert_names: list, enriched_certs: list) -> Optional[str]:
+        if not cert_names and not enriched_certs:
+            return None
+        text = f"Certifications: {', '.join(cert_names)}"
+        return text + f". Related concepts: {', '.join(enriched_certs)}" if enriched_certs else text
+
+    @staticmethod
+    def _raw_jd_text(req) -> str:
+        raw = req.raw_requisition if req else {}
+        if isinstance(raw, dict):
+            return raw.get("jd_text", "")
+        return raw if isinstance(raw, str) else ""
+
+    @staticmethod
+    def _build_texts(norm_req: NormalizedRequisition) -> dict:
+        """Prepare all raw text strings for embedding from a NormalizedRequisition."""
+        req = norm_req.original_requisition
+        m_skills = norm_req.original_mandatory_skills
+        p_skills = norm_req.original_preferred_skills
+        cert_names = norm_req.normalized_certifications or norm_req.original_certifications
+
+        jd_level = getattr(req, 'jd_level', None)
+        title = getattr(req, 'structured_intent', '')
+        jd_text = EmbeddingAgent._raw_jd_text(req)
+
+        return {
+            "jd_level":      EmbeddingAgent._level_text(jd_level, title),
+            "mandatory":     f"Required skills: {', '.join(m_skills)}" if m_skills else None,
+            "preferred":     f"Preferred skills: {', '.join(p_skills)}" if p_skills else None,
+            "certification": EmbeddingAgent._cert_text(cert_names, norm_req.expanded_certification_terms),
+            "full_jd":       f"search_query: {jd_text}" if jd_text else None,
+        }
+
+    def _embed_optional(self, text: Optional[str]) -> Optional[np.ndarray]:
+        """Embed text only when present, returning None otherwise."""
+        return self.embed_text(text) if text else None
+
+    def execute(self, normalized_requisition: NormalizedRequisition) -> EmbeddingResult:
+        """Generate embeddings for all JD components."""
+        texts = self._build_texts(normalized_requisition)
+
+        jd_level_vec      = self._embed_optional(texts["jd_level"])
+        mandatory_vec     = self._embed_optional(texts["mandatory"])
+        preferred_vec     = self._embed_optional(texts["preferred"])
+        certification_vec = self._embed_optional(texts["certification"])
+        full_jd_vec       = self._embed_optional(texts["full_jd"])
         
         result = EmbeddingResult(
             jd_level_vector=jd_level_vec,
