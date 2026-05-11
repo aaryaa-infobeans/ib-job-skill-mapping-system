@@ -13,6 +13,8 @@ from app.ai.state import GraphState
 from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification
 from app.db.session import SessionLocal
 from app.observability.tracing import trace_node
+from app.settings import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +261,14 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "semantic_similarity": round(scoring_result.detailed_breakdown.semantic_similarity, 2),
                     "experience_score": round(scoring_result.detailed_breakdown.experience_score, 2),
                     "phase0_ledger": rag_candidate.phase0_score_breakdown,
+                    "rag_signals": {
+                        "final_similarity":    round(rag_candidate.final_similarity, 4),
+                        "full_jd_similarity":  round(rag_candidate.full_jd_similarity, 4),
+                        "jd_level_similarity": round(rag_candidate.jd_level_similarity, 4),
+                        "mandatory_rag_sim":   round(rag_candidate.mandatory_similarity, 4),
+                        "preferred_rag_sim":   round(rag_candidate.preferred_similarity, 4),
+                        "cert_rag_sim":        round(rag_candidate.certification_similarity, 4),
+                    },
                     "score_breakdown": scoring_result.score_breakdown,
                     "match_reasons": {
                         "ai_reasoning": ai_fit["reasoning"],
