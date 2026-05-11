@@ -1,6 +1,7 @@
 """Scoring Agent - Extended scoring with normalized skills and certifications."""
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from app.settings import settings
@@ -97,53 +98,49 @@ class ScoringAgent(BaseAgent):
                 return group
         return s_lower
 
-    def _calculate_mandatory_group_score(
+    _SHORT_ALLOW = {"s3", "c#", "f#", "r", "go", "ui", "ux"}
+
+    def _skill_found_in_text(self, members: List[str], text: str) -> bool:
+        """Return True if any group member appears as a whole word in text."""
+        for mem in members:
+            if len(mem) <= 2 and mem.lower() not in self._SHORT_ALLOW:
+                continue
+            pattern = r'(?<![a-z0-9_])' + re.escape(mem.lower()) + r'(?![a-z0-9_])'
+            if re.search(pattern, text):
+                return True
+        return False
+
+    def _calculate_skill_group_score(
         self,
         member_skill_ids: List[str],
-        mandatory_alternatives: Dict[str, List[str]],
-        profile_text: str = ""
+        skill_alternatives: Dict[str, List[str]],
+        profile_text: str = "",
     ) -> Dict[str, Any]:
-        """TASK-04+: Mandatory Skill Grouping Logic with Profile Text Check."""
-        if not mandatory_alternatives:
+        """Two-pass skill group matching: skill ID check then profile text fallback.
+        Works for both mandatory and preferred skill groups."""
+        if not skill_alternatives:
             return {"score": 1.0, "matched": [], "missing": []}
-            
+
         member_skills = set(member_skill_ids)
         p_text_lower = (profile_text or "").lower()
-        matched = []
-        missing = []
-        
-        for canonical, alt_ids in mandatory_alternatives.items():
-            # 1. Check in normalized skill IDs
+        matched, missing = [], []
+
+        for canonical, alt_ids in skill_alternatives.items():
             if any(sid in member_skills for sid in alt_ids):
                 matched.append(canonical)
                 continue
-            
-            # 2. Check in profile text for group members or canonical name
-            import re
+
             group_name = self._get_skill_group(canonical)
             members = self.skill_groups.get(group_name, [canonical])
-            
-            found_in_text = False
-            for mem in members:
-                escaped_mem = re.escape(mem.lower())
-                # prevent substring matches (e.g. 'git' in 'digital', 'scala' in 'scalable')
-                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
-                if re.search(pattern, p_text_lower):
-                    found_in_text = True
-                    break
-                    
-            if found_in_text:
-                matched.append(canonical)
-            else:
-                missing.append(canonical)
-                
-        total_groups = len(mandatory_alternatives)
-        score = len(matched) / total_groups if total_groups > 0 else 1.0
-        return {"score": score, "matched": matched, "missing": missing}
+            found = self._skill_found_in_text(members, p_text_lower)
+            (matched if found else missing).append(canonical)
 
-    def _calculate_context_boost(self, profile_data: Dict[str, Any]) -> float:
-        """Normalized 0-1 score for context factors (Exp, Cert, Loc, Mode, Title)."""
-        
+        total = len(skill_alternatives)
+        return {"score": len(matched) / total if total else 1.0, "matched": matched, "missing": missing}
+
+    def _calculate_context_boost(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalized 0-1 score for context factors (Exp, Cert, Loc, Mode, Title).
+        Returns the aggregate score and all individual sub-scores to avoid recomputation."""
         exp_score = self._calculate_experience_score(
             profile_data.get("experience_months", 0),
             profile_data.get("min_experience_months"),
@@ -161,39 +158,40 @@ class ScoringAgent(BaseAgent):
             profile_data.get("work_mode"),
             profile_data.get("required_work_modes", [])
         )
-        
-        # Title Match (Production Rule: 0.05 weight)
+
         jd_text = profile_data.get("jd_text") or ""
         lines = jd_text.splitlines()
         jd_title = lines[0].lower() if lines else ""
-        
         if "title" in profile_data:
             jd_title = profile_data.get("title", "").lower()
-        
         member_desig = (profile_data.get("designation") or "").lower()
         title_score = 0.0
         if jd_title and member_desig:
             if jd_title in member_desig or member_desig in jd_title:
                 title_score = 1.0
-        
-        # Context Factors (Using individual weights from settings)
+
         raw_context_sum = (
-            exp_score * settings.weight_experience + 
-            cert_res["score"] * settings.weight_certification + 
-            loc_score * settings.weight_location + 
-            mode_score * settings.weight_work_mode + 
+            exp_score * settings.weight_experience +
+            cert_res["score"] * settings.weight_certification +
+            loc_score * settings.weight_location +
+            mode_score * settings.weight_work_mode +
             title_score * settings.weight_jd_text
         )
-        
-        # Normalize to 0-1 for the context group (total weight of context components)
         total_context_weight = (
-            settings.weight_experience + 
-            settings.weight_certification + 
-            settings.weight_location + 
-            settings.weight_work_mode + 
+            settings.weight_experience +
+            settings.weight_certification +
+            settings.weight_location +
+            settings.weight_work_mode +
             settings.weight_jd_text
         )
-        return raw_context_sum / total_context_weight if total_context_weight > 0 else 0.0
+        aggregate = raw_context_sum / total_context_weight if total_context_weight > 0 else 0.0
+        return {
+            "score": aggregate,
+            "exp_score": exp_score,
+            "cert_res": cert_res,
+            "loc_score": loc_score,
+            "mode_score": mode_score,
+        }
 
     def _get_skill_family_penalty(self, member_skill_names: List[str], jd_text: str) -> float:
         """
@@ -217,46 +215,6 @@ class ScoringAgent(BaseAgent):
             return settings.skill_family_penalty
         return 0.0
 
-    def _calculate_skill_score(self, member_skill_ids, mandatory_ids, preferred_ids, alternatives=None, preferred_alternatives=None, profile_text=""):
-        """Skill score for preferred skills with profile text fallback."""
-        member_skills = set(member_skill_ids)
-        matched_preferred = []
-        missing_preferred = []
-        if not preferred_ids:
-            return {"preferred_score": 0.0, "matched_preferred": [], "missing_preferred": []}
-            
-        p_text_lower = (profile_text or "").lower()
-        import re
-        
-        for pid in preferred_ids:
-            alts = (preferred_alternatives or {}).get(pid, [pid])
-            # 1. Check direct skill IDs
-            if any(aid in member_skills for aid in alts):
-                matched_preferred.append(pid)
-                continue
-                
-            # 2. Fallback to profile text using the canonical name and its skill group
-            group_name = self._get_skill_group(pid)
-            members = self.skill_groups.get(group_name, [pid])
-            
-            found_in_text = False
-            for mem in members:
-                # Protect against very short strings being matched broadly
-                if len(mem) <= 2 and mem.lower() not in ["s3", "c#", "f#", "r", "go", "ui", "ux"]:
-                    continue
-                escaped_mem = re.escape(mem.lower())
-                pattern = r'(?<![a-z0-9_])' + escaped_mem + r'(?![a-z0-9_])'
-                if re.search(pattern, p_text_lower):
-                    found_in_text = True
-                    break
-            
-            if found_in_text:
-                matched_preferred.append(pid)
-            else:
-                missing_preferred.append(pid)
-        
-        score = len(matched_preferred) / len(preferred_ids) if preferred_ids else 0.0
-        return {"preferred_score": score, "matched_preferred": matched_preferred, "missing_preferred": missing_preferred}
 
     def _calculate_experience_score(self, member_exp, min_exp, max_exp):
         if not min_exp: return 1.0
@@ -318,31 +276,38 @@ class ScoringAgent(BaseAgent):
         
         # --- STAGE 1: Preliminary Qualification Check ---
         
-        # 1. Mandatory Skills Match (Group-based + Profile Text check)
+        # 1. Mandatory Skills Match
         mandatory_alternatives = profile_data.get("mandatory_alternatives") or {}
-        m_res = self._calculate_mandatory_group_score(
+        m_res = self._calculate_skill_group_score(
             profile_data.get("skill_ids", []),
             mandatory_alternatives,
             profile_text
         )
         m_match_ratio = m_res["score"]
-        
-        # 2. Preferred Skills (Primary Skills Match)
-        p_res = self._calculate_skill_score(
-            profile_data.get("skill_ids", []),
-            [], 
-            profile_data.get("preferred_skill_ids", []),
-            None,
-            profile_data.get("preferred_alternatives"),
-            profile_text=profile_text
-        )
+
+        # 2. Preferred Skills Match
+        _pref_alts = profile_data.get("preferred_alternatives") or {}
+        if _pref_alts:
+            _p = self._calculate_skill_group_score(
+                profile_data.get("skill_ids", []),
+                _pref_alts,
+                profile_text
+            )
+            p_res = {"preferred_score": _p["score"], "matched_preferred": _p["matched"], "missing_preferred": _p["missing"]}
+        else:
+            p_res = {"preferred_score": 0.0, "matched_preferred": [], "missing_preferred": []}
         p_score = p_res["preferred_score"]
         
         # 3. Weighted Skill Score for Gate (Use role-specific Weights)
         weighted_skill_sum = (m_match_ratio * role_weights["mandatory"]) + (p_score * role_weights["preferred"])
         
-        # 4. Semantic Match (from RAG search)
-        s_score = rag_candidate.jd_level_similarity
+        # 4. Semantic Match — blend seniority alignment with overall JD fit
+        # full_jd_similarity is a pure vector signal (no experience/location overlap)
+        _blend = settings.scoring_blend_full_jd_weight
+        s_score = (
+            rag_candidate.jd_level_similarity * (1.0 - _blend) +
+            rag_candidate.full_jd_similarity   * _blend
+        )
         
         # Qualification Logic
         is_qualified = True
@@ -358,8 +323,9 @@ class ScoringAgent(BaseAgent):
         # --- STAGE 2: Full Scoring ---
         
         # Context Factors (Normalized 0-1)
-        c_raw = self._calculate_context_boost(profile_data)
-        
+        context_result = self._calculate_context_boost(profile_data)
+        c_raw = context_result["score"]
+
         # Apply Role-Specific Context Weight and CAP at 8%
         context_contribution = c_raw * role_weights["context"]
         context_contribution = min(context_contribution, settings.context_boost_cap)
@@ -394,24 +360,10 @@ class ScoringAgent(BaseAgent):
             "role_type": role_type
         }
 
-        # Fetch individual context scores for breakdown
-        exp_score = self._calculate_experience_score(
-            experience_months,
-            profile_data.get("min_experience_months"),
-            profile_data.get("max_experience_months")
-        )
-        cert_res = self._calculate_certification_score(
-            profile_data.get("certifications", []),
-            profile_data.get("required_certifications", [])
-        )
-        loc_score = self._calculate_location_score(
-            profile_data.get("location"),
-            profile_data.get("required_locations", [])
-        )
-        mode_score = self._calculate_work_mode_score(
-            profile_data.get("work_mode"),
-            profile_data.get("required_work_modes", [])
-        )
+        exp_score = context_result["exp_score"]
+        cert_res  = context_result["cert_res"]
+        loc_score = context_result["loc_score"]
+        mode_score = context_result["mode_score"]
 
         detailed = ScoringBreakdown(
             skills_matched=p_res["matched_preferred"] + m_res["matched"],
