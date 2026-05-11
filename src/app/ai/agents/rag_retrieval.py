@@ -92,7 +92,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                 for c in candidates
             ]
             
-            logger.info(f"RAG_Retrieval_Agent completed with {len(state['retrieved_candidates'])} candidates (Hybrid BM25+Gemma)")
+            logger.info(f"RAG_Retrieval_Agent completed with {len(state['retrieved_candidates'])} candidates (Multi-Vector Hybrid BM25+pgvector)")
             
         finally:
             db.close()

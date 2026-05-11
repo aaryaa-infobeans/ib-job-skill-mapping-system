@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     
     # Secrets Manager Configuration
-    secrets_backend: str
+    # secrets_backend: str
 
     
     # LLM Configuration
@@ -133,7 +133,26 @@ class Settings(BaseSettings):
     
     # Thresholds
     fit_score_threshold: float = 0.5
-    rag_similarity_threshold: float = 0.5
+    rag_similarity_threshold: float = 0.40
+
+    # RAG retrieval pool sizes
+    rag_sql_limit: int = 100            # SQL LIMIT — candidate pool before Python filtering
+    rag_final_candidates: int = 40      # cap on candidates passed to Node 5
+
+    # Multi-vector composite weights (rag_weight_* must sum to 1.0)
+    rag_weight_full_jd: float = 0.25
+    rag_weight_level: float = 0.35
+    rag_weight_skills_mandatory: float = 0.20
+    rag_weight_skills_preferred: float = 0.10
+    rag_weight_cert: float = 0.10
+
+    # Blend weight for full_jd_similarity in Node 5 s_score
+    # s_score = jd_level_similarity * (1 - weight) + full_jd_similarity * weight
+    scoring_blend_full_jd_weight: float = 0.30
+
+    # Feature flag: use jd_level_vector <-> resume_embedding for jd_level_similarity
+    # Set RAG_USE_LEVEL_VECTOR=false in .env to revert to old full_jd_vector behavior
+    rag_use_level_vector: bool = True
     
     # Retry Configuration
     max_retry_attempts: int = 3
