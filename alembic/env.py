@@ -9,6 +9,13 @@ database URL directly via the secrets helper or `DATABASE_URL`.
 import os
 import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+# Load .env file so DATABASE_URL and DB_* vars are available to os.getenv()
+_env_file = Path(__file__).parent.parent / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file, override=False)
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
