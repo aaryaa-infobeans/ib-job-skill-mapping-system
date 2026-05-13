@@ -88,9 +88,28 @@ def configure_logging(log_level: str = "INFO") -> None:
     console_handler.setFormatter(json_formatter)
     root_logger.addHandler(console_handler)
 
-    # Set level for third-party loggers to reduce noise
+    # Silence noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("langchain").setLevel(logging.WARNING)
+    logging.getLogger("langchain_core").setLevel(logging.WARNING)
+    logging.getLogger("langchain_community").setLevel(logging.WARNING)
+    logging.getLogger("langgraph").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.ERROR)
+    logging.getLogger("httpcore").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("transformers").setLevel(logging.WARNING)
+    logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+    logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+    logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+    # TruLens dumps full state on every node at WARNING level — raise to ERROR
+    logging.getLogger("trulens").setLevel(logging.ERROR)
+    logging.getLogger("trulens_eval").setLevel(logging.ERROR)
+    logging.getLogger("trulens.core").setLevel(logging.ERROR)
+    logging.getLogger("trulens.core.utils.signature").setLevel(logging.ERROR)
+    logging.getLogger("trulens.core.utils.evaluator").setLevel(logging.ERROR)
+    logging.getLogger("trulens.core.database").setLevel(logging.ERROR)
 
 
 def set_correlation_id(correlation_id: str) -> None:
