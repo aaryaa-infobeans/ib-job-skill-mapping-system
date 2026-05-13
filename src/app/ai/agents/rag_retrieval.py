@@ -87,6 +87,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                     "preferred_similarity": c.preferred_similarity,
                     "jd_level_similarity": c.jd_level_similarity,
                     "certification_similarity": c.certification_similarity,
+                    "full_jd_similarity": c.full_jd_similarity,
                     "phase0_score_breakdown": c.phase0_score_breakdown
                 }
                 for c in candidates

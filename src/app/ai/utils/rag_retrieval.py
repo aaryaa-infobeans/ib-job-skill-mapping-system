@@ -52,6 +52,12 @@ class RAGRetrievalAgent(BaseAgent):
 
             sql = self._build_sql(filters)
             result_set = self.db.execute(sql, params).fetchall()
+            self.logger.info(
+                f"RAG SQL returned {len(result_set)} rows | "
+                f"filters={[f.strip() for f in filters]} | "
+                f"kw_query={params.get('kw_query', '')!r} | "
+                f"m_query={params.get('m_query', '')!r}"
+            )
 
             candidates = [
                 self._build_structured_candidate(
@@ -102,8 +108,8 @@ class RAGRetrievalAgent(BaseAgent):
             k = k.strip()
             return f'"{k}"' if " " in k else k
 
-        all_kw = [_phrase(k) for k in mandatory_skills + preferred_skills + certifications if k.strip()]
-        mandatory_kw = [_phrase(k) for k in mandatory_skills if k.strip()]
+        all_kw = [_phrase(k) for k in (mandatory_skills or []) + (preferred_skills or []) + (certifications or []) if k.strip()]
+        mandatory_kw = [_phrase(k) for k in (mandatory_skills or []) if k.strip()]
 
         return (
             " OR ".join(all_kw),
@@ -172,9 +178,18 @@ class RAGRetrievalAgent(BaseAgent):
     def _add_experience_filters(self, filters: List[str], params: Dict, experience_req: Dict) -> None:
         if not experience_req:
             return
-        filters.append("tm.experience_in_months BETWEEN :min_m AND :max_m")
-        params["min_m"] = experience_req.get("min_months", 0)
-        params["max_m"] = experience_req.get("max_months", 9999)
+        min_m = experience_req.get("min_months")
+        max_m = experience_req.get("max_months")
+        if min_m is not None and max_m is not None:
+            filters.append("tm.experience_in_months BETWEEN :min_m AND :max_m")
+            params["min_m"] = min_m
+            params["max_m"] = max_m
+        elif min_m is not None:
+            filters.append("tm.experience_in_months >= :min_m")
+            params["min_m"] = min_m
+        elif max_m is not None:
+            filters.append("tm.experience_in_months <= :max_m")
+            params["max_m"] = max_m
 
     def _build_sql(self, filters: List[str]):
         return text(f"""
@@ -242,8 +257,8 @@ class RAGRetrievalAgent(BaseAgent):
         """Partial credit for candidates outside the experience range."""
         if not req or cand_m is None:
             return 1.0
-        min_m = req.get("min_months", 0)
-        max_m = req.get("max_months", 9999)
+        min_m = req.get("min_months") or 0
+        max_m = req.get("max_months") or 9999
         if min_m <= cand_m <= max_m:
             return 1.0
         diff = min_m - cand_m if cand_m < min_m else cand_m - max_m
@@ -275,7 +290,13 @@ class RAGRetrievalAgent(BaseAgent):
         cert_matches          = self._keyword_matches(str(certifications_text or ""), certifications)
 
         location_comp = any(loc.lower() in str(base_location).lower() for loc in locations) if locations else True
-        mode_comp     = any(mode.lower() in str(work_type).lower() for mode in work_modes) if work_modes else True
+        _mode_map = {"remote": "wfh", "wfh": "remote"}
+        _wt = str(work_type).lower()
+        _wt_aliases = {_wt, _mode_map.get(_wt, _wt)}
+        mode_comp = any(
+            mode.lower() in _wt_aliases or _mode_map.get(mode.lower(), mode.lower()) in _wt_aliases
+            for mode in work_modes
+        ) if work_modes else True
 
         experience_relevance  = self._exp_relevance(experience_in_months, experience_req)
 
@@ -292,7 +313,7 @@ class RAGRetrievalAgent(BaseAgent):
         c_score = len(cert_matches)       / max(len(certifications), 1)   if certifications   else 1.0
 
         total_score = self._compute_total_score(
-            full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim
+            full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim,
             kw_norm, m_score, p_score, c_score,
             experience_relevance, location_comp, mode_comp,
             mandatory_skills, mandatory_matches,
@@ -326,7 +347,7 @@ class RAGRetrievalAgent(BaseAgent):
 
     def _compute_total_score(
         self,
-        full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim
+        full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim,
         kw_norm, m_score, p_score, c_score,
         experience_relevance, location_comp, mode_comp,
         mandatory_skills, mandatory_matches,

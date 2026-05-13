@@ -200,6 +200,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     preferred_similarity=rag_scores_dict.get("preferred_similarity", 0.5),
                     jd_level_similarity=rag_scores_dict.get("jd_level_similarity", 0.5),
                     certification_similarity=rag_scores_dict.get("certification_similarity", 0.5),
+                    full_jd_similarity=rag_scores_dict.get("full_jd_similarity", 0.5),
                     phase0_score_breakdown=rag_scores_dict.get("phase0_score_breakdown", {})
                 )
                 
