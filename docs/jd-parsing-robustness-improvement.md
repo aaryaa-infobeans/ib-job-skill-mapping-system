@@ -1,7 +1,6 @@
 # JD Parsing Robustness Improvement — Node 1 & Node 3
 
-> Design document for making JD parsing and embedding more robust when optional input fields are absent.
-> No code has been changed yet. This document describes what needs to change and why.
+Design document for making JD parsing and embedding more robust when optional input fields are absent.
 
 ---
 
@@ -19,7 +18,7 @@
 10. [Proposed Fix — Mandatory Skills Fallback](#10-proposed-fix--mandatory-skills-fallback)
 11. [Files to Change](#11-files-to-change)
 12. [Risk and Rollback](#12-risk-and-rollback)
-13. [Verification Checklist](#13-verification-checklist)
+13. [Acceptance Criteria](#13-acceptance-criteria)
 
 ---
 
@@ -304,13 +303,12 @@ alongside `normalized_role` and `normalized_title` to produce a seniority-rich p
 jd_level_text = f"Job level: {jd_level}"
 # e.g. "Job level: Backend Engineer"  ← no seniority signal
 
-# Proposed:
-level     = getattr(req.original_requisition, 'jd_level', 'MID')  # now SENIOR/MID/JUNIOR
-role      = normalized_role    # "Backend Engineer"
-title     = normalized_title   # "Senior Backend Engineer"
+# Fix:
+level = getattr(req.original_requisition, 'jd_level', 'MID')  # now SENIOR/MID/JUNIOR
+title = normalized_title   # "Senior Backend Engineer"
 
-jd_level_text = f"Seniority: {level}. Role: {role}. Title: {title}."
-# e.g. "Seniority: SENIOR. Role: Backend Engineer. Title: Senior Backend Engineer."
+jd_level_text = f"Seniority: {level}. Title: {title}."
+# e.g. "Seniority: SENIOR. Title: Senior Backend Engineer."
 ```
 
 This gives the embedding model actual seniority vocabulary to work with. The `resume_embedding`
@@ -379,32 +377,13 @@ requisitions before deploying to production.
 
 ---
 
-## 13. Verification Checklist
+## 13. Acceptance Criteria
 
-After implementation, verify:
-
-1. **Level extraction works:** For a requisition with no explicit `level` field but `jd_text`
-   containing "Senior Python Developer, 5+ years required", `parsed_jd["level"]` must equal
-   `"SENIOR"`.
-
-2. **Level default:** For a requisition with `title: "Software Developer"`, no experience, and
-   ambiguous `jd_text`, `parsed_jd["level"]` must equal `"MID"`.
-
-3. **`jd_level_text` content:** Log or inspect `jd_level_text` in the embedding node. It must
-   contain the word `"SENIOR"`, `"MID"`, or `"JUNIOR"` — not just a role category string like
-   `"Backend Engineer"`.
-
-4. **`jd_level_vector` difference:** For the same requisition, `full_jd_vector_sim` and
-   `level_vector_sim` in `phase0_ledger` must now differ meaningfully. If they are nearly
-   identical, the `jd_level_text` is still too similar to `full_jd_text`.
-
-5. **Seniority ranking:** A requisition for "Senior Python Developer" should rank a member
-   with 7 years experience above a member with 1 year experience even if both have identical
-   skill sets. This was not guaranteed before because the semantic gate used domain similarity.
-
-6. **No regression:** For a known clear-match requisition where level is provided explicitly,
-   the top candidate ranking must be unchanged.
-
-7. **Mandatory skills warning:** Submit a requisition with no `mandatory_skills` and a vague
-   `jd_text`. The warning log `"No mandatory skills extracted"` must appear if the LLM also
-   fails to extract any.
+| # | Criterion |
+|---|---|
+| 1 | Level extracted from `jd_text` — "Senior Python Developer, 5+ years" → `"SENIOR"` |
+| 2 | Level default — plain "Software Developer", no experience range → `"MID"` |
+| 3 | `jd_level_text` contains SENIOR/MID/JUNIOR (not "Backend Engineer") |
+| 4 | `full_jd_vector_sim` and `level_vector_sim` return meaningfully different values for the same candidate |
+| 5 | Senior member ranks above junior with identical skills on a "Senior" requisition (requires real `resume_embedding` from cron pipeline; seed data falls back to general embedding) |
+| 6 | Explicit `level` in API input is respected (Layer 1 LLM extraction takes priority over heuristics) |

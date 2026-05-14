@@ -1,7 +1,6 @@
 # Hybrid Search Improvement — RAG Retrieval Node
 
-> Design document for upgrading Node 4 (RAG Retrieval) from single-vector to multi-vector hybrid search.
-> No code has been changed yet. This document describes what needs to change and why.
+Design document for upgrading Node 4 (RAG Retrieval) from single-vector to multi-vector hybrid search.
 
 ---
 
@@ -19,10 +18,11 @@
 10. [Proposed Scoring Formula Changes](#10-proposed-scoring-formula-changes)
 11. [jd_level_similarity — The Most Important Change](#11-jd_level_similarity--the-most-important-change)
 12. [Downstream Impact on Node 5](#12-downstream-impact-on-node-5)
+    - [12a. Node 5 Scoring Changes](#12a-node-5-scoring-changes)
 13. [New Settings Required](#13-new-settings-required)
 14. [Files to Change](#14-files-to-change)
 15. [Risk and Rollback](#15-risk-and-rollback)
-16. [Verification Checklist](#16-verification-checklist)
+16. [Acceptance Criteria](#16-acceptance-criteria)
 
 ---
 
@@ -366,12 +366,13 @@ cert_vec_sim      = _dist_to_sim(cert_distance)
 # Old:
 semantic_fit = 1.0 / (1.0 + float(distance))   # one value
 
-# New: weighted composite of all 4 vector similarities
+# New: weighted composite of all 5 vector similarities
 multi_vec_semantic = (
-    full_jd_sim       * settings.rag_weight_full_jd +           # 0.30
-    level_sim         * settings.rag_weight_level +             # 0.40
+    full_jd_sim       * settings.rag_weight_full_jd +           # 0.25
+    level_sim         * settings.rag_weight_level +             # 0.35
     mandatory_vec_sim * settings.rag_weight_skills_mandatory +  # 0.20
-    preferred_vec_sim * settings.rag_weight_skills_preferred    # 0.10
+    preferred_vec_sim * settings.rag_weight_skills_preferred +  # 0.10
+    cert_vec_sim      * settings.rag_weight_cert               # 0.10
 )
 # Weights sum to 1.0
 ```
@@ -483,15 +484,118 @@ Setting `RAG_USE_LEVEL_VECTOR=false` in `.env` instantly reverts to old behavior
 
 ## 12. Downstream Impact on Node 5
 
-No changes needed in `matching_scoring.py` or `scoring.py`. The field names are preserved.
+Fields flowing from Node 4 to Node 5 after the multi-vector upgrade:
 
-| Field flowing from Node 4 | Before | After | Effect |
+| Field | Before | After | Effect |
 |---|---|---|---|
-| `jd_level_similarity` | `1/(1+full_jd_dist)` | `1/(1+level_dist)` | `s_score` in scoring.py measures role alignment instead of blob proximity |
-| `phase0_score_breakdown` | 10 keys | 15 keys | Richer audit trail; `matching_scoring.py` passes it through without reading individual keys |
-| Candidate count | ≤ 10 (LIMIT bug) | up to 40 | More candidates scored by Node 5; recall improves |
-| `final_similarity` | single-vector | multi-vector | Discarded in Node 5 anyway — only used for RAG pre-filter |
-| `mandatory_similarity` | text match ratio | text match ratio (unchanged) | Not changed — Node 5 recomputes mandatory match from skill IDs anyway |
+| `jd_level_similarity` | `1/(1+full_jd_dist)` | `1/(1+level_dist)` | `s_score` measures role alignment instead of blob proximity |
+| `phase0_score_breakdown` | 10 keys | 15 keys | Richer audit trail; passed through unchanged |
+| Candidate count | ≤ 10 (LIMIT bug) | up to 40 | More candidates reach Node 5; recall improves |
+| `final_similarity` | single-vector | multi-vector | Used for RAG pre-filter; see Section 12a below |
+| `mandatory_similarity` | text match ratio | text match ratio (unchanged) | Node 5 recomputes mandatory match from skill IDs anyway |
+
+### 12a. Node 5 Scoring Design
+
+The multi-vector upgrade extends into `src/app/ai/utils/scoring.py`
+and `src/app/ai/agents/matching_scoring.py`.
+
+#### Unified skill group scoring — `_calculate_skill_group_score()`
+
+A single `_calculate_skill_group_score()` handles both mandatory and preferred skill matching
+via a two-pass algorithm:
+
+```python
+def _calculate_skill_group_score(self, member_skill_ids, skill_alternatives, profile_text=""):
+    """Two-pass: skill ID check → profile text fallback via skill group."""
+    for canonical, alt_ids in skill_alternatives.items():
+        # Pass 1: direct skill ID match
+        if any(sid in member_skills for sid in alt_ids):
+            matched.append(canonical); continue
+        # Pass 2: profile text fallback
+        group_name = self._get_skill_group(canonical)
+        members = self.skill_groups.get(group_name, [canonical])
+        found = self._skill_found_in_text(members, p_text_lower)
+        (matched if found else missing).append(canonical)
+```
+
+#### `_skill_found_in_text()` — word-boundary regex
+
+A short-word allowlist prevents false positives (`"go"` in `"google"`, `"r"` in `"react"`):
+
+```python
+_SHORT_ALLOW = {"s3", "c#", "f#", "r", "go", "ui", "ux"}
+
+def _skill_found_in_text(self, members, text):
+    for mem in members:
+        if len(mem) <= 2 and mem.lower() not in self._SHORT_ALLOW:
+            continue
+        pattern = r'(?<![a-z0-9_])' + re.escape(mem.lower()) + r'(?![a-z0-9_])'
+        if re.search(pattern, text):
+            return True
+    return False
+```
+
+#### `_calculate_context_boost()` — dict return shape
+
+Returns a dict with all sub-scores in one call, avoiding recomputation per candidate:
+
+```python
+return {
+    "score":      aggregate,
+    "exp_score":  exp_score,
+    "cert_res":   cert_res,
+    "loc_score":  loc_score,
+    "mode_score": mode_score,
+}
+```
+
+#### s_score — blended semantic signal
+
+`s_score` blends seniority alignment with a comprehensive fit signal from Node 4:
+
+```python
+_blend = settings.scoring_blend_full_jd_weight    # default 0.30
+s_score = (
+    rag_candidate.jd_level_similarity * (1.0 - _blend) +
+    rag_candidate.full_jd_similarity  * _blend
+)
+```
+
+70% seniority alignment + 30% comprehensive fit (BM25 + all 5 vectors from Node 4).
+Setting `SCORING_BLEND_FULL_JD_WEIGHT=0.0` reverts to pure seniority alignment.
+
+#### `rag_signals` in API response
+
+Node 4 signals are surfaced per candidate in `matching_scoring.py`:
+
+```python
+"rag_signals": {
+    "final_similarity":    round(rag_candidate.final_similarity, 4),
+    "full_jd_similarity":  round(rag_candidate.full_jd_similarity, 4),
+    "jd_level_similarity": round(rag_candidate.jd_level_similarity, 4),
+    "mandatory_rag_sim":   round(rag_candidate.mandatory_similarity, 4),
+    "preferred_rag_sim":   round(rag_candidate.preferred_similarity, 4),
+    "cert_rag_sim":        round(rag_candidate.certification_similarity, 4),
+},
+```
+
+Makes Node 4 vs Node 5 signal divergence visible for debugging and observability.
+
+#### Design Consideration — Pass 2 group matching scope
+
+Pass 2 checks all group members in profile text. `skill_group_python` includes FastAPI —
+so a profile saying only "Python" gets credit for a "FastAPI" requirement.
+
+Tightening to canonical skill name only increases precision at the cost of recall:
+
+```python
+# Broader (current) — all group members searched
+members = self.skill_groups.get(group_name, [canonical])
+found = self._skill_found_in_text(members, p_text_lower)
+
+# Narrower — canonical skill name only
+found = self._skill_found_in_text([canonical], p_text_lower)
+```
 
 ---
 
@@ -508,10 +612,11 @@ rag_sql_limit: int = 100            # SQL LIMIT — fixes LIMIT 10 bug
 rag_final_candidates: int = 40      # cap on candidates passed to Node 5
 
 # Multi-vector composite weights (must sum to 1.0)
-rag_weight_full_jd: float = 0.30
-rag_weight_level: float = 0.40
+rag_weight_full_jd: float = 0.25
+rag_weight_level: float = 0.35
 rag_weight_skills_mandatory: float = 0.20
 rag_weight_skills_preferred: float = 0.10
+rag_weight_cert: float = 0.10
 
 # Feature flag — set False in .env to revert jd_level_similarity to old behavior
 rag_use_level_vector: bool = True
@@ -550,23 +655,13 @@ All existing settings (`hybrid_ratio_bm25`, `hybrid_ratio_vector`, `rag_similari
 
 ---
 
-## 16. Verification Checklist
+## 16. Acceptance Criteria
 
-After implementation, verify:
-
-1. **LIMIT fix**: A broad requisition returns more than 10 candidates in the response.
-
-2. **Multi-vector active**: In `detailed_breakdown.phase0_ledger` for any candidate, all 5 keys must exist:
-   - `full_jd_vector_sim`
-   - `level_vector_sim`
-   - `mandatory_skills_vector_sim`
-   - `preferred_skills_vector_sim`
-   - `cert_vector_sim`
-
-3. **jd_level_similarity correct**: `jd_level_similarity` for a candidate must equal `level_vector_sim` in `phase0_ledger` (not `full_jd_vector_sim`).
-
-4. **Feature flag works**: Set `RAG_USE_LEVEL_VECTOR=false` → `jd_level_similarity` must equal `full_jd_vector_sim`.
-
-5. **No regression**: For a known clear-match requisition, the expected top candidate still appears in the top 3.
-
-6. **Unit test**: `_build_structured_candidate` with a 13-column row unpacks without `IndexError`.
+| # | Criterion |
+|---|---|
+| 1 | A broad requisition returns more than 10 candidates (pool capped at `rag_final_candidates`) |
+| 2 | All 5 vector similarity fields present in `phase0_ledger`: `full_jd_vector_sim`, `level_vector_sim`, `mandatory_skills_vector_sim`, `preferred_skills_vector_sim`, `cert_vector_sim` |
+| 3 | `jd_level_similarity` equals `level_vector_sim` (not `full_jd_vector_sim`) when `RAG_USE_LEVEL_VECTOR=true` |
+| 4 | Setting `RAG_USE_LEVEL_VECTOR=false` reverts `jd_level_similarity` to `full_jd_vector_sim` |
+| 5 | A known clear-match requisition produces the same top candidate before and after the upgrade |
+| 6 | Row unpacking from a 13-column SQL result does not raise `IndexError` |
