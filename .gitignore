@@ -63,3 +63,5 @@ token.json
 credentials.json
 secrets/
 *.json.key
+
+default.sqlite
