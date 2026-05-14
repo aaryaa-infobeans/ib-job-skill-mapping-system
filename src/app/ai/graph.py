@@ -39,30 +39,22 @@ def should_continue_after_parsing(state: GraphState) -> str:
     return "skill_normalization"
 
 
-def create_graph(instrumented_app=None):
-    """Create the LangGraph for JD-Skill matching with PII Scrubber.
-    
-    If instrumented_app is provided, nodes will be wrapped with its methods
-    for TruLens visibility.
-    
-    Topology v1.1 (CR-PII-001):
-    START → PII_Scrubber (Node 0) → [Validation Gate]
-                                    ↓ (if pii_scrubbed=False) → END (HTTP 422)
-                                    ↓ (if pii_scrubbed=True) → JD_Parsing → 
-                                    [Check for errors]
-                                    ↓ (if error) → END
-                                    ↓ (if success) → Skill_Normalization → Embedding → 
-                                    RAG_Retrieval → Matching_Scoring → Explanation_Generation → 
-                                    Result_Aggregation → END
-    
-    Changes from v1.0:
-    - Added Node 0: PII_Scrubber_Agent (TASK-PII-101)
-    - Added validation gate after scrubbing (FR-PII-005)
-    - Updated state schema with pii_scrubbed flag (TASK-PII-103)
+def should_continue(state: GraphState) -> str:
     """
+    Generic conditional edge to stop the graph if an error exists.
+    """
+    error_message = state.get("error_message")
+    if error_message:
+        logger.warning(f"Stopping graph execution due to error: {error_message}")
+        return "END"
+    return "CONTINUE"
+
+
+def create_graph(instrumented_app=None):
+    """Create the LangGraph for JD-Skill matching with PII Scrubber."""
     workflow = StateGraph(GraphState)
     
-    # Add nodes (no PII Scrubber in active workflow)
+    # Add nodes
     if instrumented_app:
         workflow.add_node("requisition_parsing", instrumented_app.requisition_parsing)
         workflow.add_node("skill_normalization", instrumented_app.skill_normalization)
@@ -80,13 +72,10 @@ def create_graph(instrumented_app=None):
         workflow.add_node("explanation_generation", explanation_generation_node)
         workflow.add_node("result_aggregation", result_aggregation_node)
     
-    # Define entry point directly to requisition parsing
+    # Define entry point
     workflow.set_entry_point("requisition_parsing")
 
-    # Removed PII scrubber conditional edge; direct path begins with requisition_parsing
-
-    
-    # Add conditional edge after parsing to check for errors (existing logic)
+    # Requisition Parsing -> Skill Normalization (or END on error)
     workflow.add_conditional_edges(
         "requisition_parsing",
         should_continue_after_parsing,
@@ -96,15 +85,59 @@ def create_graph(instrumented_app=None):
         }
     )
     
-    # Continue with linear edges for successful path
-    workflow.add_edge("skill_normalization", "embedding")
-    workflow.add_edge("embedding", "rag_retrieval")
-    workflow.add_edge("rag_retrieval", "matching_scoring")
-    workflow.add_edge("matching_scoring", "explanation_generation")
-    workflow.add_edge("explanation_generation", "result_aggregation")
+    # Skill Normalization -> Embedding (or END)
+    workflow.add_conditional_edges(
+        "skill_normalization",
+        should_continue,
+        {
+            "END": END,
+            "CONTINUE": "embedding"
+        }
+    )
+
+    # Embedding -> RAG Retrieval (or END)
+    workflow.add_conditional_edges(
+        "embedding",
+        should_continue,
+        {
+            "END": END,
+            "CONTINUE": "rag_retrieval"
+        }
+    )
+
+    # RAG Retrieval -> Matching Scoring (or END)
+    workflow.add_conditional_edges(
+        "rag_retrieval",
+        should_continue,
+        {
+            "END": END,
+            "CONTINUE": "matching_scoring"
+        }
+    )
+
+    # Matching Scoring -> Explanation Generation (or END)
+    workflow.add_conditional_edges(
+        "matching_scoring",
+        should_continue,
+        {
+            "END": END,
+            "CONTINUE": "explanation_generation"
+        }
+    )
+
+    # Explanation Generation -> Result Aggregation (or END)
+    workflow.add_conditional_edges(
+        "explanation_generation",
+        should_continue,
+        {
+            "END": END,
+            "CONTINUE": "result_aggregation"
+        }
+    )
+    
     workflow.add_edge("result_aggregation", END)
     
     # Compile and return
     graph = workflow.compile()
-    logger.info("LangGraph v1.1 compiled successfully with PII Scrubber (Node 0)")
+    logger.info("LangGraph compiled successfully with fail-fast error handling")
     return graph

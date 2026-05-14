@@ -39,14 +39,9 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
         
         # 2. Get requirements from state for Hard Filters
         parsed_jd = state.get("parsed_jd") or {}
-        normalized_skills = state.get("normalized_skills") or {}
         
         jd_text = parsed_jd.get("jd_text", "")
-        mandatory_ids = normalized_skills.get("mandatory_skill_ids", [])
-        preferred_ids = normalized_skills.get("preferred_skill_ids", [])
-        
         experience_req = parsed_jd.get("experience") or {}
-        min_experience_months = experience_req.get("min_months")
         initial_filter_ids = state.get("target_member_ids")
         
         # 3. Initialize and execute RAG agent
@@ -87,7 +82,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                     "preferred_similarity": c.preferred_similarity,
                     "jd_level_similarity": c.jd_level_similarity,
                     "certification_similarity": c.certification_similarity,
-                    "full_jd_similarity": c.full_jd_similarity,
+                    "experience_in_months": c.experience_in_months,
                     "phase0_score_breakdown": c.phase0_score_breakdown
                 }
                 for c in candidates

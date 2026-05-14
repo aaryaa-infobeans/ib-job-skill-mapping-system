@@ -21,9 +21,6 @@ def embedding_node(state: GraphState) -> GraphState:
     parsed_jd = state.get("parsed_jd")
     normalized_skills = state.get("normalized_skills")
     
-    if not parsed_jd or not normalized_skills:
-        logger.warning("Missing parsed_jd or normalized_skills, skipping embedding")
-        return state
         
     try:
         # Map state to RequisitionData (Utility model)

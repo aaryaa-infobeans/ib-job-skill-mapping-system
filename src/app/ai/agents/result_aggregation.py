@@ -69,7 +69,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         
         if detailed_exp:
             # Use LLM-generated or Template-based detailed explanation
-            explanation.append(f"Summary: {detailed_exp.get('summary', 'No summary available')}")
+            explanation.append(f"Summary: {detailed_exp.get('summary') or 'Candidate match profile summary is being finalized.'}")
             
             fit_analysis = detailed_exp.get('fit_analysis', '')
             if fit_analysis:
@@ -93,7 +93,6 @@ def result_aggregation_node(state: GraphState) -> GraphState:
             ai_reasoning = candidate.get("ai_reasoning", "")
             if ai_reasoning:
                 explanation.append(f"🧠 AI Analysis: {ai_reasoning}")
-
             
         # Create result entry
         result_entry = {

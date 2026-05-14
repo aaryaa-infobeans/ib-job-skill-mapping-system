@@ -143,7 +143,7 @@ def parse_requisition_with_llm(
 
         if not content:
             logger.error("LLM parsing failed - no content returned")
-            return _fallback_parse(job_description), None
+            return None, None
 
         llm_output = json.loads(content)
         
@@ -217,7 +217,7 @@ def parse_requisition_with_llm(
             "status": "FAILED",
             "error_message": str(e)
         }
-        return _fallback_parse(job_description), metrics
+        return None, metrics
 
 
 def _fallback_parse(job_description: dict) -> dict:
@@ -255,15 +255,17 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
     5. Sets state.error_message on failure after retries
     """
     logger.info("Executing Requisition_Parsing_Agent node")
-    logger.info(f"Processing request_id: {state['requisition_input']['request_id']}")
     
     # Reset error message for this node run
     state["error_message"] = None
     requisition_input = state.get("requisition_input")
+    
     if not requisition_input:
         logger.error("Missing requisition_input in state")
         state["error_message"] = "Missing requisition_input"
         return state
+        
+    logger.info(f"Processing request_id: {requisition_input.get('request_id', 'Unknown')}")
     
     job_description = requisition_input.get("job_description")
     if not job_description:
@@ -293,7 +295,7 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
             error_msg = "VALIDATION_FAILED: " + "; ".join(validation_reasons)
             state["error_message"] = error_msg
             state["validation_errors"] = validation_reasons  # Store as list for structured access
-            logger.error(f"❌ Basic validation failed for request_id={state['requisition_input']['request_id']}")
+            logger.error(f"❌ Basic validation failed for request_id={requisition_input.get('request_id', 'Unknown')}")
             logger.error(f"   Validation errors: {validation_reasons}")
             return state
         
@@ -312,7 +314,7 @@ def requisition_parsing_node(state: GraphState) -> GraphState:
             error_msg = "SEMANTIC_VALIDATION_FAILED: " + "; ".join(semantic_errors)
             state["error_message"] = error_msg
             state["validation_errors"] = semantic_errors  # Store as list for structured access
-            logger.error(f"❌ Semantic validation failed for request_id={state['requisition_input']['request_id']}")
+            logger.error(f"❌ Semantic validation failed for request_id={requisition_input.get('request_id', 'Unknown')}")
             logger.error(f"   Semantic errors: {semantic_errors}")
             return state
         

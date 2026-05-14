@@ -2,79 +2,66 @@
 
 DETAILED_EXPLANATION_PROMPT = """
 You are an expert recruiter evaluating a candidate's fit for a job position. 
-Generate a comprehensive, detailed explanation of why this candidate received their match score based on the Phase 1 Agentic Scoring Ledger.
+Generate a comprehensive, professional, and narrative evaluation of why this candidate received their match status based on the Professional Evaluation Ledger provided below.
 
 === CANDIDATE PROFILE ===
 Team Member ID: {team_member_id}
-Final Agentic Score: {final_score:.2%}
+Final Match Score: {final_score:.2%}
 Role Category: {role_type}
-Fit Level: {fit_level}
+Match Level: {fit_level} (MANDATORY: Mention this level explicitly in your summary and analysis)
 
 === REQUISITION REQUIREMENTS ===
 Job Title: {job_title}
 Job Role: {job_role}
 Required Location: {job_location}
 
-=== PHASE 1 SCORING LEDGER ===
+=== CANDIDATE MATCH DATA ===
+1. Core Technical Requirements:
+- Required: {mandatory_skills}
+- Satisfaction: {mandatory_group_score:.2%}
+- Matched: {matched_mandatory_skills}
+- Missing: {missing_mandatory_skills}
 
-**1. Mandatory Skills Grouping:**
-- Required Skills: {mandatory_skills}
-- Group Satisfaction Rate: {mandatory_group_score:.2%}
-- Matched Skills: {matched_mandatory_skills}
-- Missing Skills: {missing_mandatory_skills}
+2. Secondary Preferences:
+- Matched: {matched_preferred_skills}
+- Missing: {missing_preferred_skills}
 
-**2. Preferred Skills:**
-- Matched Preferred: {matched_preferred_skills}
-- Missing Preferred: {missing_preferred_skills}
+3. Certifications:
+- Matched: {matched_certs}
+- Missing: {missing_certs}
 
-**3. Certifications:**
-- Matched Certs: {matched_certs}
-- Missing Certs: {missing_certs}
+4. Overall Intent Alignment: {semantic_score:.2%}
 
-**4. Semantic Similarity & JD Alignment:**
-- Semantic Similarity Score: {semantic_score:.2%}
+5. Location & Work Mode:
+- Location Match: {location_matched_icon}
+- Work Mode Match: {work_mode_matched_icon}
 
-**5. Location & Work Mode Fit:**
-- Location Matched: {location_matched_icon}
-- Work Mode Matched: {work_mode_matched_icon}
+6. Experience & Context:
+- Fit Boost: {context_boost:.4f}
+- Professional Tenure: {candidate_experience} months (Note: 0 months means entry-level)
 
-**6. Context Support Boost:**
-- Context Boost Applied: {context_boost:.4f}
-- Candidate Experience: {candidate_experience} months
+7. Deficiencies/Penalties: {penalties:.2f}
 
-**7. Penalties & Deficiencies:**
-- Total Penalties applied: {penalties:.2f}
-
-**8. AI Fit Confidence (AI Analysis):**
-- AI Confidence Score: {ai_confidence:.2f}
-- AI Score Boost: +{ai_boost:.4f}
-- AI Semantic Override: {ai_override_icon}
-- AI Reasoning: {ai_reasoning}
-
+8. AI Confidence Analysis:
+- Confidence Score: {ai_confidence:.2f}
+- Narrative Reasoning: {ai_reasoning}
 
 === YOUR TASK ===
-Generate a professional, structured evaluation (3-5 sentences) that:
-1. Summarizes the overall fit and qualification status.
-2. Performs a parameter-by-parameter analysis based ONLY on the provided ledger:
-   - Skills (Mandatory & Preferred): How well the candidate's skill set aligns with requirements.
-   - Experience: Whether the candidate's tenure meets expectations.
-   - Location & Work Mode: Compatibility with the requested work arrangement.
-   - Certifications: Presence or absence of REQUIRED credentials (only mention those listed in REQUISITION REQUIREMENTS).
-3. Highlights specific strengths as "Matches" and critical deficiencies as "Gaps".
-4. Provides a clear, evidence-based recommendation derived strictly from the scoring ledger.
-   - IMPORTANT: Do not assume or hallucinate requirements not explicitly listed in the REQUISITION REQUIREMENTS or PHASE 1 SCORING LEDGER sections above.
+Generate a high-quality evaluation for a business user. Follow these STRICT rules:
+1. **Match Level Consistency**: You MUST explicitly state the match level ({fit_level}) in your summary (e.g., "This is a {fit_level_lower} match...").
+2. **Summary**: Write a 1-2 sentence professional summary. If experience is 0, describe as "early career" or "entry-level" (NEVER say "0.0 years").
+3. **Analysis (No Raw Numbers)**: Explain *why* the candidate is a {fit_level_lower} match. Use business language, not technical score labels.
 
 === RESPONSE FORMAT ===
-Provide the explanation as a JSON object with this structure:
+Return ONLY a valid JSON object:
 {{
-    "summary": "Brief overall assessment (1-2 sentences)",
-    "strengths": ["Strength 1", "Strength 2"],
-    "gaps": ["Gap 1", "Gap 2"],
-    "fit_analysis": "Concise explanation of factors and ledger impact",
-    "recommendation": "Brief recommendation"
+    "summary": "Professional summary including match level (min 20 chars)",
+    "strengths": ["Business strength 1", "Business strength 2"],
+    "gaps": ["Specific gap 1", "Specific gap 2"],
+    "fit_analysis": "Narrative explanation of the {fit_level_lower} match alignment",
+    "recommendation": "Clear recommendation"
 }}
 """
-
 
 def format_explanation_prompt(
     team_member_id: str,
@@ -105,12 +92,13 @@ def format_explanation_prompt(
     location_matched: bool = False,
     work_mode_matched: bool = False
 ) -> str:
-    """Format the Phase 1 Agentic Scoring Ledger prompt."""
+    """Format the Professional Evaluation prompt."""
     
     return DETAILED_EXPLANATION_PROMPT.format(
         team_member_id=team_member_id,
         final_score=final_score,
         fit_level=fit_level,
+        fit_level_lower=fit_level.lower(),
         job_title=job_title,
         job_role=job_role,
         job_location=job_location,
@@ -134,4 +122,3 @@ def format_explanation_prompt(
         candidate_experience=candidate_experience,
         ai_reasoning=ai_reasoning
     )
-
