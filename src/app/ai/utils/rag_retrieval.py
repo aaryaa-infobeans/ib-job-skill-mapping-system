@@ -42,8 +42,23 @@ class RAGRetrievalAgent(BaseAgent):
 
         try:
             vectors = self._extract_vectors(embedding_result)
+
+            self.logger.debug(
+                "skill_ontology expansion input | "
+                f"mandatory={mandatory_skills!r} | preferred={preferred_skills!r}"
+            )
+            expanded_mandatory = self._expand_skills_via_ontology(mandatory_skills)
+            expanded_preferred = self._expand_skills_via_ontology(preferred_skills)
+            self.logger.debug(
+                "skill_ontology expansion output | "
+                f"mandatory={expanded_mandatory!r} | preferred={expanded_preferred!r}"
+            )
+
+            expanded_mandatory_flat = [t for terms in expanded_mandatory.values() for t in terms]
+            expanded_preferred_flat = [t for terms in expanded_preferred.values() for t in terms]
+
             keyword_query_str, mandatory_query_str = self._build_keyword_strings(
-                mandatory_skills, preferred_skills, certifications
+                expanded_mandatory_flat, expanded_preferred_flat, certifications
             )
             filters, params = self._build_filters(
                 locations, work_modes, experience_req,
@@ -62,7 +77,8 @@ class RAGRetrievalAgent(BaseAgent):
             candidates = [
                 self._build_structured_candidate(
                     row, mandatory_skills, preferred_skills,
-                    certifications, locations, work_modes, experience_req
+                    certifications, locations, work_modes, experience_req,
+                    expanded_mandatory, expanded_preferred,
                 )
                 for row in result_set
             ]
@@ -115,6 +131,35 @@ class RAGRetrievalAgent(BaseAgent):
             " OR ".join(all_kw),
             " OR ".join(mandatory_kw),
         )
+
+    def _expand_skills_via_ontology(self, skill_names: List[str]) -> Dict[str, List[str]]:
+        """Return a per-skill synonym map from skill_ontology; falls back to identity map.
+
+        Bidirectional: matches rows where the input skill is the core_skill OR appears
+        inside enriched_terms, so a JD skill like 'React.js' still resolves to the full
+        synonym set even when the canonical entry is 'ReactJS'.
+        """
+        skill_names = skill_names or []
+        result: Dict[str, List[str]] = {s: [s] for s in skill_names}
+        if not skill_names or self.db is None:
+            return result
+        lower_to_original = {s.lower(): s for s in skill_names}
+        lower_names = list(lower_to_original.keys())
+        rows = self.db.execute(
+            text(
+                "SELECT core_skill, enriched_terms "
+                "FROM skill_ontology "
+                "WHERE LOWER(core_skill) = ANY(:names) "
+                "   OR EXISTS (SELECT 1 FROM unnest(enriched_terms) AS term WHERE LOWER(term) = ANY(:names))"
+            ),
+            {"names": lower_names},
+        ).fetchall()
+        for core_skill, enriched_terms in rows:
+            synonyms = [core_skill] + list(enriched_terms or [])
+            for lower_name, original_name in lower_to_original.items():
+                if lower_name == core_skill.lower() or lower_name in [t.lower() for t in (enriched_terms or [])]:
+                    result[original_name] = synonyms
+        return result
 
     # ------------------------------------------------------------------
     # SQL construction
@@ -271,10 +316,20 @@ class RAGRetrievalAgent(BaseAgent):
         t = haystack.lower()
         return [kw for kw in keywords if kw.lower() in t]
 
+    @staticmethod
+    def _synonym_keyword_matches(haystack: str, skill_synonyms: Dict[str, List[str]]) -> List[str]:
+        """Return original skill names whose synonym list has any hit in haystack."""
+        if not haystack or not skill_synonyms:
+            return []
+        t = haystack.lower()
+        return [skill for skill, synonyms in skill_synonyms.items() if any(syn.lower() in t for syn in synonyms)]
+
     def _build_structured_candidate(
         self, row,
         mandatory_skills, preferred_skills,
-        certifications, locations, work_modes, experience_req
+        certifications, locations, work_modes, experience_req,
+        expanded_mandatory: Optional[Dict[str, List[str]]] = None,
+        expanded_preferred: Optional[Dict[str, List[str]]] = None,
     ) -> RAGCandidate:
         (
             team_member_id, role, skills_text, certifications_text,
@@ -285,8 +340,14 @@ class RAGRetrievalAgent(BaseAgent):
         ) = row
 
         combined_text = f"{skills_text or ''} {role or ''}".lower()
-        mandatory_matches     = self._keyword_matches(combined_text, mandatory_skills)
-        preferred_matches     = self._keyword_matches(combined_text, preferred_skills)
+        mandatory_matches = (
+            self._synonym_keyword_matches(combined_text, expanded_mandatory)
+            if expanded_mandatory else self._keyword_matches(combined_text, mandatory_skills)
+        )
+        preferred_matches = (
+            self._synonym_keyword_matches(combined_text, expanded_preferred)
+            if expanded_preferred else self._keyword_matches(combined_text, preferred_skills)
+        )
         cert_matches          = self._keyword_matches(str(certifications_text or ""), certifications)
 
         location_comp = any(loc.lower() in str(base_location).lower() for loc in locations) if locations else True
