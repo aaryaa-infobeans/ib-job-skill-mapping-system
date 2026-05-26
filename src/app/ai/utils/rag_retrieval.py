@@ -9,6 +9,37 @@ from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import EmbeddingResult, RAGCandidate
 from app.settings import settings
 
+# Terms that indicate "no fixed location" — not physical places, so skip the location filter
+# rather than searching for candidates whose base_location contains e.g. "Remote".
+_VIRTUAL_LOCATION_TERMS: frozenset = frozenset({
+    "remote", "wfh", "work from home", "work-from-home", "work_from_home",
+    "anywhere", "global", "worldwide", "virtual", "online",
+    "n/a", "na", "not specified", "none", "any",
+})
+
+# Canonical mapping from any JD work-mode string → DB work_type value.
+# Unknown entries are skipped (no filter added) rather than causing a zero-result query.
+_WORK_MODE_ALIASES: Dict[str, str] = {
+    "remote":           "wfh",
+    "wfh":              "wfh",
+    "work from home":   "wfh",
+    "work-from-home":   "wfh",
+    "work_from_home":   "wfh",
+    "wfo":              "wfo",
+    "office":           "wfo",
+    "onsite":           "wfo",
+    "on-site":          "wfo",
+    "on site":          "wfo",
+    "in-office":        "wfo",
+    "in office":        "wfo",
+    "hybrid":           "hybrid",
+    "flexible":         "hybrid",
+    "mixed":            "hybrid",
+}
+
+# Experience bounds that are treated as "no real constraint" and skipped.
+_EXP_MAX_PLAUSIBLE_MONTHS: int = 600  # 50 years
+
 
 class RAGRetrievalAgent(BaseAgent):
     """Retrieve candidates using Multi-Vector Hybrid Search (BM25 + pgvector)."""
@@ -57,30 +88,55 @@ class RAGRetrievalAgent(BaseAgent):
             expanded_mandatory_flat = [t for terms in expanded_mandatory.values() for t in terms]
             expanded_preferred_flat = [t for terms in expanded_preferred.values() for t in terms]
 
-            keyword_query_str, mandatory_query_str = self._build_keyword_strings(
+            keyword_query_str, _ = self._build_keyword_strings(
                 expanded_mandatory_flat, expanded_preferred_flat, certifications
-            )
+            ) # second parameter is mandatory_query_str which is not used reason for unnaming
             filters, params = self._build_filters(
                 locations, work_modes, experience_req,
-                mandatory_query_str, vectors, keyword_query_str
+                vectors, keyword_query_str
             )
 
-            sql = self._build_sql(filters)
-            result_set = self.db.execute(sql, params).fetchall()
+            # Semantic path: composite vector-ordered top-N
+            # bm25_score is embedded via LEFT JOIN subquery (col 14) for accurate scoring
+            sql = self._build_sql(filters, keyword_query_str)
+            semantic_rows = self.db.execute(sql, params).fetchall()
             self.logger.info(
-                f"RAG SQL returned {len(result_set)} rows | "
-                f"filters={[f.strip() for f in filters]} | "
-                f"kw_query={params.get('kw_query', '')!r} | "
-                f"m_query={params.get('m_query', '')!r}"
+                f"RAG SQL (semantic) returned {len(semantic_rows)} rows"
+            )
+
+            # Keyword path: pg_bm25 index — BM25 drives retrieval, not a boolean pre-filter
+            keyword_rows: list = []
+            if keyword_query_str.strip():
+                try:
+                    kw_sql = self._build_keyword_sql(filters)
+                    keyword_rows = self.db.execute(kw_sql, params).fetchall()
+                    self.logger.info(
+                        f"RAG SQL (keyword/pg_bm25) returned {len(keyword_rows)} rows "
+                        f"(cap={settings.rag_keyword_fetch_limit})"
+                    )
+                except Exception as kw_err:
+                    self.logger.warning(f"pg_bm25 keyword SQL failed, skipping keyword path: {kw_err}")
+
+            # Build rank maps for RRF: {team_member_id: 1-based rank}
+            semantic_rank_map: Dict[str, int] = {row[0]: i + 1 for i, row in enumerate(semantic_rows)}
+            bm25_rank_map:     Dict[str, int] = {row[0]: i + 1 for i, row in enumerate(keyword_rows)}
+
+            merged_rows = self._merge_result_sets(semantic_rows, keyword_rows)
+            self.logger.info(
+                f"Merged pool: {len(merged_rows)} unique candidates "
+                f"(semantic={len(semantic_rows)}, keyword={len(keyword_rows)}, "
+                f"keyword-only={len(merged_rows) - len(semantic_rows)})"
             )
 
             candidates = [
                 self._build_structured_candidate(
-                    row, mandatory_skills, preferred_skills,
+                    row,
+                    semantic_rank_map, bm25_rank_map,
+                    mandatory_skills, preferred_skills,
                     certifications, locations, work_modes, experience_req,
                     expanded_mandatory, expanded_preferred,
                 )
-                for row in result_set
+                for row in merged_rows
             ]
 
             return self._filter_and_rank(candidates)
@@ -170,7 +226,6 @@ class RAGRetrievalAgent(BaseAgent):
         locations: List[str],
         work_modes: List[str],
         experience_req: Dict[str, Any],
-        mandatory_query_str: str,
         vectors: Dict[str, Any],
         keyword_query_str: str,
     ) -> Tuple[List[str], Dict[str, Any]]:
@@ -178,20 +233,13 @@ class RAGRetrievalAgent(BaseAgent):
         filters = ["e.embedding IS NOT NULL", "tm.is_active = true"]
         params: Dict[str, Any] = {
             **vectors,
-            "kw_query":  keyword_query_str,
-            "sql_limit": settings.rag_sql_limit,
+            "bm25_query":          keyword_query_str,
+            "sql_limit":           settings.rag_sql_limit,
+            "keyword_fetch_limit": settings.rag_keyword_fetch_limit,
         }
 
-        if mandatory_query_str:
-            filters.append("""
-                to_tsvector('english',
-                    coalesce(e.skills_text, '') || ' ' ||
-                    coalesce(e.certifications_text, '') || ' ' ||
-                    coalesce(e.profile_text, '')
-                ) @@ websearch_to_tsquery('english', :m_query)
-            """)
-            params["m_query"] = mandatory_query_str
-
+        # Business constraint pre-filters (location, work_mode, experience) are currently
+        # both SQL paths (SQL #1 via _build_sql and SQL #2 via _build_keyword_sql).
         self._add_location_filters(filters, params, locations)
         self._add_work_mode_filters(filters, params, work_modes)
         self._add_experience_filters(filters, params, experience_req)
@@ -201,8 +249,12 @@ class RAGRetrievalAgent(BaseAgent):
     def _add_location_filters(self, filters: List[str], params: Dict, locations: List[str]) -> None:
         if not locations:
             return
+        # Drop virtual/work-mode terms — not physical places, would match nothing in base_location.
+        physical = [loc for loc in locations if loc.strip() and loc.strip().lower() not in _VIRTUAL_LOCATION_TERMS]
+        if not physical:
+            return  # all entries were virtual — skip filter rather than returning zero rows
         loc_clauses = []
-        for i, loc in enumerate(locations):
+        for i, loc in enumerate(physical):
             key = f"loc_{i}"
             loc_clauses.append(f"tm.base_location ILIKE :{key}")
             params[key] = f"%{loc}%"
@@ -211,20 +263,40 @@ class RAGRetrievalAgent(BaseAgent):
     def _add_work_mode_filters(self, filters: List[str], params: Dict, work_modes: List[str]) -> None:
         if not work_modes:
             return
-        mode_map = {"Remote": "wfh", "WFO": "wfo", "Hybrid": "hybrid"}
         mode_clauses = []
-        for i, mode in enumerate(work_modes):
-            mapped = mode_map.get(mode, mode.lower())
+        i = 0
+        for mode in work_modes:
+            mapped = _WORK_MODE_ALIASES.get(mode.strip().lower())
+            if mapped is None:
+                continue  # unknown entry — skip rather than producing a filter that matches nothing
             key = f"mode_{i}"
             mode_clauses.append(f"CAST(tm.work_type AS text) ILIKE :{key}")
             params[key] = f"%{mapped}%"
-        filters.append("(" + " OR ".join(mode_clauses) + ")")
+            i += 1
+        if mode_clauses:
+            filters.append("(" + " OR ".join(mode_clauses) + ")")
+        # If every entry was unmappable, no clause added — safer than filtering to zero rows
 
     def _add_experience_filters(self, filters: List[str], params: Dict, experience_req: Dict) -> None:
         if not experience_req:
             return
         min_m = experience_req.get("min_months")
         max_m = experience_req.get("max_months")
+
+        # Discard values outside any plausible real-world range
+        if min_m is not None and (min_m < 0 or min_m > _EXP_MAX_PLAUSIBLE_MONTHS):
+            min_m = None
+        if max_m is not None and (max_m < 0 or max_m > _EXP_MAX_PLAUSIBLE_MONTHS):
+            max_m = None
+
+        # min=0 is a no-op lower bound — skip it
+        if min_m == 0:
+            min_m = None
+
+        # Repair inverted range instead of silently excluding everyone
+        if min_m is not None and max_m is not None and min_m > max_m:
+            min_m, max_m = max_m, min_m
+
         if min_m is not None and max_m is not None:
             filters.append("tm.experience_in_months BETWEEN :min_m AND :max_m")
             params["min_m"] = min_m
@@ -236,7 +308,19 @@ class RAGRetrievalAgent(BaseAgent):
             filters.append("tm.experience_in_months <= :max_m")
             params["max_m"] = max_m
 
-    def _build_sql(self, filters: List[str]):
+    def _build_sql(self, filters: List[str], keyword_query_str: str = ""):
+        if keyword_query_str.strip():
+            bm25_join = """
+            LEFT JOIN (
+                SELECT e2.id, paradedb.score(e2.id) AS bm25_score
+                FROM team_member_embeddings e2
+                WHERE e2 @@@ paradedb.parse(:bm25_query)
+            ) bm25_sub ON bm25_sub.id = e.id"""
+            bm25_col = "COALESCE(bm25_sub.bm25_score, 0.0)                              AS bm25_score"
+        else:
+            bm25_join = ""
+            bm25_col = "0.0::float                                                       AS bm25_score"
+
         return text(f"""
             SELECT
                 e.team_member_id,
@@ -261,34 +345,105 @@ class RAGRetrievalAgent(BaseAgent):
                 COALESCE(e.certifications_embedding, e.embedding)
                     <-> CAST(:cert_vector AS vector)                                 AS cert_distance,
 
-                ts_rank(
-                    to_tsvector('english',
-                        coalesce(e.skills_text, '') || ' ' ||
-                        coalesce(e.certifications_text, '') || ' ' ||
-                        coalesce(e.profile_text, '')
-                    ),
-                    websearch_to_tsquery('english', :kw_query)
-                )                                                                    AS keyword_score
+                COALESCE(e.profile_text, '')                                         AS profile_text,
+
+                {bm25_col}
+
+            FROM team_member_embeddings e
+            LEFT JOIN team_member tm ON tm.team_member_id = e.team_member_id{bm25_join}
+            WHERE {" AND ".join(filters)}
+            ORDER BY (
+                (e.embedding <-> CAST(:full_jd_vector AS vector))
+                    * {settings.rag_weight_full_jd} +
+                (COALESCE(e.resume_embedding, e.embedding) <-> CAST(:jd_level_vector AS vector))
+                    * {settings.rag_weight_level} +
+                (COALESCE(e.skills_embedding, e.embedding) <-> CAST(:mandatory_vector AS vector))
+                    * {settings.rag_weight_skills_mandatory} +
+                (COALESCE(e.skills_embedding, e.embedding) <-> CAST(:preferred_vector AS vector))
+                    * {settings.rag_weight_skills_preferred} +
+                (COALESCE(e.certifications_embedding, e.embedding) <-> CAST(:cert_vector AS vector))
+                    * {settings.rag_weight_cert}
+            ) ASC
+            LIMIT :sql_limit
+        """)
+
+    def _build_keyword_sql(self, filters: List[str]):
+        """SQL #2: pg_bm25 keyword retrieval path using ParadeDB @@@ operator.
+
+        Returns 14 columns: same 13 as _build_sql() + bm25_score as col 14.
+        Ordered by BM25 score DESC so the strongest keyword matches come first.
+        Uses the same filters list as _build_sql() so that enabling business constraint
+        pre-filters in _build_filters() automatically applies to both SQL paths.
+        """
+        return text(f"""
+            SELECT
+                e.team_member_id,
+                COALESCE(tm.designation, '')                                         AS role,
+                COALESCE(e.skills_text, '')                                          AS skills,
+                COALESCE(e.certifications_text, '')                                  AS certifications_text,
+                tm.experience_in_months,
+                COALESCE(tm.base_location, '')                                       AS base_location,
+                COALESCE(CAST(tm.work_type AS text), 'hybrid')                       AS work_type,
+
+                e.embedding <-> CAST(:full_jd_vector AS vector)                      AS full_jd_distance,
+
+                COALESCE(e.resume_embedding, e.embedding)
+                    <-> CAST(:jd_level_vector AS vector)                             AS level_distance,
+
+                COALESCE(e.skills_embedding, e.embedding)
+                    <-> CAST(:mandatory_vector AS vector)                            AS mandatory_skills_distance,
+
+                COALESCE(e.skills_embedding, e.embedding)
+                    <-> CAST(:preferred_vector AS vector)                            AS preferred_skills_distance,
+
+                COALESCE(e.certifications_embedding, e.embedding)
+                    <-> CAST(:cert_vector AS vector)                                 AS cert_distance,
+
+                COALESCE(e.profile_text, '')                                         AS profile_text,
+
+                paradedb.score(e.id)                                                 AS bm25_score
 
             FROM team_member_embeddings e
             LEFT JOIN team_member tm ON tm.team_member_id = e.team_member_id
-            WHERE {" AND ".join(filters)}
-            ORDER BY full_jd_distance ASC
-            LIMIT :sql_limit
+            WHERE e @@@ paradedb.parse(:bm25_query)
+              AND {" AND ".join(filters)}
+            ORDER BY paradedb.score(e.id) DESC
+            LIMIT :keyword_fetch_limit
         """)
+
+    @staticmethod
+    def _merge_result_sets(semantic_rows: list, keyword_rows: list) -> list:
+        """Union semantic and keyword rows, deduplicating by team_member_id (col 0).
+
+        Semantic rows take priority for duplicates. Keyword-only rows are appended after.
+        """
+        seen: set = set()
+        merged = []
+        for row in semantic_rows:
+            tm_id = row[0]
+            if tm_id not in seen:
+                seen.add(tm_id)
+                merged.append(row)
+        for row in keyword_rows:
+            tm_id = row[0]
+            if tm_id not in seen:
+                seen.add(tm_id)
+                merged.append(row)
+        return merged
 
     # ------------------------------------------------------------------
     # Candidate scoring
     # ------------------------------------------------------------------
 
     def _filter_and_rank(self, candidates: List[RAGCandidate]) -> List[RAGCandidate]:
-        threshold = settings.rag_similarity_threshold
-        qualified = [c for c in candidates if c.final_similarity > threshold]
-        qualified.sort(key=lambda x: x.final_similarity, reverse=True)
-        result = qualified[:settings.rag_final_candidates]
+        # RRF scores (0–0.033 range) are not comparable to the old 0–1 threshold.
+        # Phase 0 retrieval already vets candidates via vector and BM25 paths —
+        # just sort by RRF and cap at rag_final_candidates for Node 5.
+        candidates.sort(key=lambda x: x.final_similarity, reverse=True)
+        result = candidates[:settings.rag_final_candidates]
         self.logger.info(
-            f"RAG Retrieval matched {len(result)} candidates above "
-            f"{threshold} threshold (Multi-Vector Hybrid BM25+pgvector)"
+            f"RAG Retrieval: top {len(result)} candidates by RRF score "
+            f"(pool={len(candidates)}, cap={settings.rag_final_candidates})"
         )
         return result
 
@@ -326,6 +481,8 @@ class RAGRetrievalAgent(BaseAgent):
 
     def _build_structured_candidate(
         self, row,
+        semantic_rank_map: Dict[str, int],
+        bm25_rank_map: Dict[str, int],
         mandatory_skills, preferred_skills,
         certifications, locations, work_modes, experience_req,
         expanded_mandatory: Optional[Dict[str, List[str]]] = None,
@@ -336,7 +493,7 @@ class RAGRetrievalAgent(BaseAgent):
             experience_in_months, base_location, work_type,
             full_jd_distance, level_distance,
             mandatory_skills_distance, preferred_skills_distance,
-            cert_distance, keyword_score,
+            cert_distance, profile_text, bm25_score,
         ) = row
 
         combined_text = f"{skills_text or ''} {role or ''}".lower()
@@ -348,7 +505,7 @@ class RAGRetrievalAgent(BaseAgent):
             self._synonym_keyword_matches(combined_text, expanded_preferred)
             if expanded_preferred else self._keyword_matches(combined_text, preferred_skills)
         )
-        cert_matches          = self._keyword_matches(str(certifications_text or ""), certifications)
+        cert_matches = self._keyword_matches(str(certifications_text or ""), certifications)
 
         location_comp = any(loc.lower() in str(base_location).lower() for loc in locations) if locations else True
         _mode_map = {"remote": "wfh", "wfh": "remote"}
@@ -359,26 +516,32 @@ class RAGRetrievalAgent(BaseAgent):
             for mode in work_modes
         ) if work_modes else True
 
-        experience_relevance  = self._exp_relevance(experience_in_months, experience_req)
+        experience_relevance = self._exp_relevance(experience_in_months, experience_req)
 
-        # Per-vector similarities
+        # Per-vector similarities (passed to Node 5 scorer via RAGCandidate fields)
         full_jd_sim       = self._dist_to_sim(full_jd_distance)
         level_sim         = self._dist_to_sim(level_distance)
         mandatory_vec_sim = self._dist_to_sim(mandatory_skills_distance)
         preferred_vec_sim = self._dist_to_sim(preferred_skills_distance)
         cert_vec_sim      = self._dist_to_sim(cert_distance)
 
-        kw_norm = round(float(keyword_score) / (0.03 + float(keyword_score)), 4) if float(keyword_score) > 0 else 0.0
+        bm25_score = round(float(bm25_score), 4)
         m_score = len(mandatory_matches) / max(len(mandatory_skills), 1) if mandatory_skills else 1.0
         p_score = len(preferred_matches) / max(len(preferred_skills), 1) if preferred_skills else 1.0
         c_score = len(cert_matches)       / max(len(certifications), 1)   if certifications   else 1.0
 
-        total_score = self._compute_total_score(
-            full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim,
-            kw_norm, m_score, p_score, c_score,
-            experience_relevance, location_comp, mode_comp,
-            mandatory_skills, mandatory_matches,
-        )
+        # Phase 0 ranking: Reciprocal Rank Fusion (RRF)
+        # Candidates in both paths get additive contribution from each path's rank.
+        # k=60 is the standard constant used by Elasticsearch/Weaviate hybrid search.
+        _k = 60
+        semantic_rank = semantic_rank_map.get(team_member_id)
+        bm25_rank     = bm25_rank_map.get(team_member_id)
+        rrf_score = 0.0
+        if semantic_rank is not None:
+            rrf_score += 1.0 / (_k + semantic_rank)
+        if bm25_rank is not None:
+            rrf_score += 1.0 / (_k + bm25_rank)
+        rrf_score = round(rrf_score, 6)
 
         jd_level_sim_value = level_sim if settings.rag_use_level_vector else full_jd_sim
 
@@ -392,72 +555,36 @@ class RAGRetrievalAgent(BaseAgent):
 
         return RAGCandidate(
             team_member_id=team_member_id,
-            final_similarity=round(total_score, 4),
+            final_similarity=rrf_score,
             mandatory_similarity=round(m_score, 4),
             preferred_similarity=round(p_score, 4),
             jd_level_similarity=round(jd_level_sim_value, 4),
             certification_similarity=round(c_score, 4),
             full_jd_similarity=round(full_jd_sim, 4),
+            profile_text=profile_text,
             phase0_score_breakdown=self._build_breakdown(
-                total_score, kw_norm, m_score, p_score, c_score,
+                rrf_score, semantic_rank, bm25_rank,
+                bm25_score, m_score, p_score, c_score,
                 experience_relevance, location_comp, mode_comp,
                 bool(mandatory_skills and not mandatory_matches),
                 vector_sims,
             )
         )
 
-    def _compute_total_score(
-        self,
-        full_jd_sim, level_sim, mandatory_vec_sim, preferred_vec_sim, cert_vec_sim,
-        kw_norm, m_score, p_score, c_score,
-        experience_relevance, location_comp, mode_comp,
-        mandatory_skills, mandatory_matches,
-    ) -> float:
-        multi_vec_semantic = (
-            full_jd_sim       * settings.rag_weight_full_jd +
-            level_sim         * settings.rag_weight_level +
-            mandatory_vec_sim * settings.rag_weight_skills_mandatory +
-            preferred_vec_sim * settings.rag_weight_skills_preferred +
-            cert_vec_sim      * settings.rag_weight_cert
-        )
-
-        # Split semantic+keyword 0.50 budget by hybrid_ratio settings
-        vec_w = 0.50 * settings.hybrid_ratio_vector
-        kw_w  = 0.50 * settings.hybrid_ratio_bm25
-
-        score = (
-            multi_vec_semantic   * vec_w +
-            kw_norm              * kw_w  +
-            m_score              * 0.30  +
-            p_score              * 0.05  +
-            experience_relevance * 0.05  +
-            c_score              * 0.05  +
-            (1.0 if location_comp else 0.0) * 0.025 +
-            (1.0 if mode_comp     else 0.0) * 0.025
-        )
-
-        if mandatory_skills and not mandatory_matches:
-            score *= 0.6
-
-        return score
-
     @staticmethod
     def _build_breakdown(
-        total_score, kw_norm, m_score, p_score, c_score,
+        rrf_score, semantic_rank, bm25_rank,
+        bm25_score, m_score, p_score, c_score,
         experience_relevance, location_comp, mode_comp, penalty_assigned,
         vector_sims: Dict[str, float],
     ) -> Dict:
-        multi_vec_semantic = (
-            vector_sims["full_jd"]   * settings.rag_weight_full_jd +
-            vector_sims["level"]     * settings.rag_weight_level +
-            vector_sims["mandatory"] * settings.rag_weight_skills_mandatory +
-            vector_sims["preferred"] * settings.rag_weight_skills_preferred
-        )
         return {
-            # Existing keys — unchanged semantics
-            "total_score":              round(total_score, 4),
-            "semantic_fit":             round(multi_vec_semantic, 4),
-            "keyword_score":            round(kw_norm, 4),
+            # Phase 0 ranking signal
+            "rrf_score":                round(rrf_score, 6),
+            "semantic_rank":            semantic_rank,   # None if not in semantic path
+            "bm25_rank":                bm25_rank,       # None if not in keyword path
+            # Raw retrieval scores — available for Node 5 and audit
+            "bm25_score":               round(bm25_score, 4),
             "mandatory_score":          round(m_score, 4),
             "preferred_score":          round(p_score, 4),
             "experience_relevance":     round(experience_relevance, 4),
@@ -465,7 +592,6 @@ class RAGRetrievalAgent(BaseAgent):
             "location_compatibility":   location_comp,
             "work_mode_compatibility":  mode_comp,
             "mandatory_penalty_assigned": penalty_assigned,
-            # New audit fields — visible in detailed_breakdown.phase0_ledger
             "full_jd_vector_sim":           round(vector_sims["full_jd"],   4),
             "level_vector_sim":             round(vector_sims["level"],     4),
             "mandatory_skills_vector_sim":  round(vector_sims["mandatory"], 4),
