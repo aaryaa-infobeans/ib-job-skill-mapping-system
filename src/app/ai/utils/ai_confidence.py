@@ -18,7 +18,7 @@ Focus on experience alignment, skill depth (beyond keywords), and career traject
 Job Description:
 {jd_text}
 
-Candidate Profile:
+Candidate Profile and Structured Data:
 {profile_text}
 
 Provide evaluation in a valid JSON object:
@@ -29,10 +29,11 @@ Provide evaluation in a valid JSON object:
   "major_gaps": ["gap1"]
 }}
 
-IMPORTANT: 
+IMPORTANT:
 - Return ONLY the JSON object.
 - DO NOT include escaped quotes within the reasoning text.
 - Ensure all JSON fields are present.
+- If a skill from the JD appears in "Skills on record", describe its proficiency level (e.g. "limited proficiency in Python — 2/5 rating, 6 months"). Do NOT say "lacks X" or "missing X" for a skill that is present on record. Only list a skill in major_gaps if it is completely absent from "Skills on record".
 """
 
 

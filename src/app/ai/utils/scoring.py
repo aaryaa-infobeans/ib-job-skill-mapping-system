@@ -110,55 +110,128 @@ class ScoringAgent(BaseAgent):
                 return True
         return False
 
+    def _blend_skill_contribution(
+        self,
+        sid: str,
+        skill_ratings: Optional[Dict[str, float]],
+        skill_exp_months: Optional[Dict[str, Optional[int]]],
+    ) -> float:
+        """Return a 0–1 contribution for a single matched skill ID.
+
+        Blends normalised rating and experience. None values default to 0.5 (neutral)
+        so missing metadata ranks below fully-rated skills but above low-rated ones."""
+        norm_rating = skill_ratings.get(sid, 0.5) if skill_ratings is not None else 1.0
+        if skill_exp_months is not None:
+            raw_exp = skill_exp_months.get(sid)
+            norm_exp = (
+                min(raw_exp / settings.skill_exp_months_cap, 1.0)
+                if raw_exp is not None
+                else 0.5
+            )
+        else:
+            norm_exp = 1.0
+        return settings.skill_rating_weight * norm_rating + settings.skill_exp_weight * norm_exp
+
     def _calculate_skill_group_score(
         self,
         member_skill_ids: List[str],
         skill_alternatives: Dict[str, List[str]],
         profile_text: str = "",
+        skill_ratings: Optional[Dict[str, float]] = None,
+        skill_exp_months: Optional[Dict[str, Optional[int]]] = None,
     ) -> Dict[str, Any]:
         """Two-pass skill group matching: skill ID check then profile text fallback.
-        Works for both mandatory and preferred skill groups."""
+        Works for both mandatory and preferred skill groups.
+
+        When skill_ratings / skill_exp_months are provided, each matched skill's
+        contribution is a blend of normalised rating (60%) and experience (40%).
+        Text-only matches contribute settings.profile_text_match_weight.
+        When both dicts are None all contributions are 1.0 (backward-compatible)."""
         if not skill_alternatives:
             return {"score": 1.0, "matched": [], "missing": []}
 
         member_skills = set(member_skill_ids)
         p_text_lower = (profile_text or "").lower()
         matched, missing = [], []
+        contribution_sum = 0.0
 
         for canonical, alt_ids in skill_alternatives.items():
-            if any(sid in member_skills for sid in alt_ids):
+            matched_ids = [sid for sid in alt_ids if sid in member_skills]
+            if matched_ids:
                 matched.append(canonical)
+                contribution = max(
+                    self._blend_skill_contribution(sid, skill_ratings, skill_exp_months)
+                    for sid in matched_ids
+                )
+                contribution_sum += contribution
                 continue
 
             group_name = self._get_skill_group(canonical)
             members = self.skill_groups.get(group_name, [canonical])
             found = self._skill_found_in_text(members, p_text_lower)
-            (matched if found else missing).append(canonical)
+            if found:
+                matched.append(canonical)
+                contribution_sum += settings.profile_text_match_weight
+            else:
+                missing.append(canonical)
 
         total = len(skill_alternatives)
-        return {"score": len(matched) / total if total else 1.0, "matched": matched, "missing": missing}
+        return {"score": contribution_sum / total if total else 1.0, "matched": matched, "missing": missing}
+
+    # Location terms that mean "no fixed place" — never a physical constraint
+    _VIRTUAL_LOCS = frozenset({
+        "remote", "any", "wfh", "anywhere", "global", "worldwide",
+        "virtual", "online", "n/a", "na", "none",
+    })
 
     def _calculate_context_boost(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalized 0-1 score for context factors (Exp, Cert, Loc, Mode, Title).
-        Returns the aggregate score and all individual sub-scores to avoid recomputation."""
+        """Dynamic context scoring: only criteria the JD actually constrains contribute.
+        Non-constraining criteria (no certs required, remote-only location, flexible work
+        mode) are excluded from both numerator and denominator so their weight flows to
+        criteria that can actually differentiate candidates."""
+        active_sum = 0.0
+        active_weight = 0.0
+
+        # --- Experience: active only when JD sets a minimum ---
         exp_score = self._calculate_experience_score(
             profile_data.get("experience_months", 0),
             profile_data.get("min_experience_months"),
-            profile_data.get("max_experience_months")
+            profile_data.get("max_experience_months"),
         )
+        if profile_data.get("min_experience_months"):
+            active_sum    += exp_score * settings.weight_experience
+            active_weight += settings.weight_experience
+
+        # --- Certification: active only when JD requires certs ---
         cert_res = self._calculate_certification_score(
             profile_data.get("certifications", []),
-            profile_data.get("required_certifications", [])
+            profile_data.get("required_certifications", []),
+            profile_data.get("cert_validity"),
         )
-        loc_score = self._calculate_location_score(
-            profile_data.get("location"),
-            profile_data.get("required_locations", [])
-        )
-        mode_score = self._calculate_work_mode_score(
-            profile_data.get("work_mode"),
-            profile_data.get("required_work_modes", [])
-        )
+        if profile_data.get("required_certifications"):
+            active_sum    += cert_res["score"] * settings.weight_certification
+            active_weight += settings.weight_certification
 
+        # --- Location: active only when at least one physical location is required ---
+        required_locations = profile_data.get("required_locations", [])
+        physical_locs = [l for l in required_locations if l.strip().lower() not in self._VIRTUAL_LOCS]
+        loc_score = self._calculate_location_score(
+            profile_data.get("location"), required_locations
+        )
+        if physical_locs:
+            active_sum    += loc_score * settings.weight_location
+            active_weight += settings.weight_location
+
+        # --- Work mode: active only when a single mode is required (multiple = flexible) ---
+        required_work_modes = profile_data.get("required_work_modes", [])
+        mode_score = self._calculate_work_mode_score(
+            profile_data.get("work_mode"), required_work_modes
+        )
+        if len(required_work_modes) == 1:
+            active_sum    += mode_score * settings.weight_work_mode
+            active_weight += settings.weight_work_mode
+
+        # --- Title: always active ---
         jd_text = profile_data.get("jd_text") or ""
         lines = jd_text.splitlines()
         jd_title = lines[0].lower() if lines else ""
@@ -169,22 +242,10 @@ class ScoringAgent(BaseAgent):
         if jd_title and member_desig:
             if jd_title in member_desig or member_desig in jd_title:
                 title_score = 1.0
+        active_sum    += title_score * settings.weight_jd_text
+        active_weight += settings.weight_jd_text
 
-        raw_context_sum = (
-            exp_score * settings.weight_experience +
-            cert_res["score"] * settings.weight_certification +
-            loc_score * settings.weight_location +
-            mode_score * settings.weight_work_mode +
-            title_score * settings.weight_jd_text
-        )
-        total_context_weight = (
-            settings.weight_experience +
-            settings.weight_certification +
-            settings.weight_location +
-            settings.weight_work_mode +
-            settings.weight_jd_text
-        )
-        aggregate = raw_context_sum / total_context_weight if total_context_weight > 0 else 0.0
+        aggregate = active_sum / active_weight if active_weight > 0 else 0.0
         return {
             "score": aggregate,
             "exp_score": exp_score,
@@ -221,12 +282,24 @@ class ScoringAgent(BaseAgent):
         if member_exp >= min_exp: return 1.0
         return member_exp / min_exp if min_exp > 0 else 1.0
 
-    def _calculate_certification_score(self, member_certs, required_certs):
-        if not required_certs: return {"score": 1.0, "matched": [], "missing": []}
-        matched = [c for c in required_certs if c in member_certs]
-        missing = [c for c in required_certs if c not in member_certs]
+    def _calculate_certification_score(
+        self,
+        member_certs: List[str],
+        required_certs: List[str],
+        cert_validity: Optional[Dict[str, bool]] = None,
+    ) -> Dict[str, Any]:
+        if not required_certs:
+            return {"score": 1.0, "matched": [], "missing": [], "expired": []}
+        matched, missing, expired = [], [], []
+        for c in required_certs:
+            if c not in member_certs:
+                missing.append(c)
+            elif cert_validity is not None and not cert_validity.get(c, True):
+                expired.append(c)
+            else:
+                matched.append(c)
         score = len(matched) / len(required_certs)
-        return {"score": score, "matched": matched, "missing": missing}
+        return {"score": score, "matched": matched, "missing": missing + expired, "expired": expired}
 
     def _calculate_location_score(self, member_loc, required_locs):
         if not required_locs: return 1.0 # Default to 1.0 if no requirement
@@ -267,6 +340,8 @@ class ScoringAgent(BaseAgent):
         jd_level = profile_data.get("jd_level", "MID")
         profile_text = profile_data.get("profile_text", "")
         jd_text = profile_data.get("jd_text", "")
+        skill_ratings = profile_data.get("skill_ratings")       # Dict[skill_id, norm_rating] or None
+        skill_exp_months = profile_data.get("skill_exp_months") # Dict[skill_id, months|None] or None
         
         # --- PHASE 0: Configuration ---
         role_cfg = self._get_role_config(experience_months, jd_level)
@@ -281,7 +356,9 @@ class ScoringAgent(BaseAgent):
         m_res = self._calculate_skill_group_score(
             profile_data.get("skill_ids", []),
             mandatory_alternatives,
-            profile_text
+            profile_text,
+            skill_ratings,
+            skill_exp_months,
         )
         m_match_ratio = m_res["score"]
 
@@ -291,7 +368,9 @@ class ScoringAgent(BaseAgent):
             _p = self._calculate_skill_group_score(
                 profile_data.get("skill_ids", []),
                 _pref_alts,
-                profile_text
+                profile_text,
+                skill_ratings,
+                skill_exp_months,
             )
             p_res = {"preferred_score": _p["score"], "matched_preferred": _p["matched"], "missing_preferred": _p["missing"]}
         else:
@@ -376,6 +455,7 @@ class ScoringAgent(BaseAgent):
             certification_score=round(cert_res["score"], 2),
             certification_matched=cert_res["matched"],
             certification_missing=cert_res["missing"],
+            certification_expired=cert_res.get("expired", []),
             experience_score=round(exp_score, 2),
             experience_matched=(exp_score >= 1.0),
             location_score=round(loc_score, 2),

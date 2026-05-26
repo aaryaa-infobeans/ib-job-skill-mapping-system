@@ -136,6 +136,7 @@ class Settings(BaseSettings):
 
     # RAG retrieval pool sizes
     rag_sql_limit: int = 100            # SQL LIMIT — candidate pool before Python filtering
+    rag_keyword_fetch_limit: int = 100  # BM25 keyword SQL cap — matches rag_sql_limit
     rag_final_candidates: int = 40      # cap on candidates passed to Node 5
 
     # Multi-vector composite weights (rag_weight_* must sum to 1.0)
@@ -148,6 +149,12 @@ class Settings(BaseSettings):
     # Blend weight for full_jd_similarity in Node 5 s_score
     # s_score = jd_level_similarity * (1 - weight) + full_jd_similarity * weight
     scoring_blend_full_jd_weight: float = 0.30
+
+    # Per-skill contribution blend (rating + experience → single scalar passed to scorer)
+    skill_rating_weight: float = 0.6       # weight of normalised rating (rating/5) in contribution
+    skill_exp_weight: float = 0.4          # weight of normalised experience in contribution
+    skill_exp_months_cap: int = 48         # experience months at which norm_exp reaches 1.0
+    profile_text_match_weight: float = 0.6 # contribution for text-only (no skill ID) matches
 
     # Feature flag: use jd_level_vector <-> resume_embedding for jd_level_similarity
     # Set RAG_USE_LEVEL_VECTOR=false in .env to revert to old full_jd_vector behavior

@@ -91,6 +91,7 @@ class ScoringBreakdown:
     preferred_score: float = 0.0
     certification_matched: List[str] = field(default_factory=list)
     certification_missing: List[str] = field(default_factory=list)
+    certification_expired: List[str] = field(default_factory=list)
     certification_score: float = 0.0
     location_matched: bool = False
     location_score: float = 0.0

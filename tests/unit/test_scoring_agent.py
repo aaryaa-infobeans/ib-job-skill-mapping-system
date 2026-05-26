@@ -36,6 +36,64 @@ def test_skill_group_score_empty(scoring_agent):
     res = scoring_agent._calculate_skill_group_score(["PYTHON_ID"], {})
     assert res["score"] == approx(1.0)
 
+def test_skill_group_score_rating_and_exp_weighted(scoring_agent):
+    """ID-matched skill with rating=3 and exp=24m produces blended contribution."""
+    # norm_rating=0.6, norm_exp=0.5 → 0.6*0.6 + 0.4*0.5 = 0.56
+    res = scoring_agent._calculate_skill_group_score(
+        ["PYTHON_ID"],
+        {"Python": ["PYTHON_ID"]},
+        skill_ratings={"PYTHON_ID": 0.6},
+        skill_exp_months={"PYTHON_ID": 24},
+    )
+    assert res["score"] == approx(0.56)
+    assert res["matched"] == ["Python"]
+    assert res["missing"] == []
+
+
+def test_skill_group_score_rating_differentiates_candidates(scoring_agent):
+    """Same skill, different ratings → different mandatory_score."""
+    alts = {"Python": ["PYTHON_ID"]}
+    res_high = scoring_agent._calculate_skill_group_score(
+        ["PYTHON_ID"], alts,
+        skill_ratings={"PYTHON_ID": 1.0},
+        skill_exp_months={"PYTHON_ID": 48},
+    )
+    res_low = scoring_agent._calculate_skill_group_score(
+        ["PYTHON_ID"], alts,
+        skill_ratings={"PYTHON_ID": 0.4},
+        skill_exp_months={"PYTHON_ID": 12},
+    )
+    assert res_high["score"] == approx(1.0)
+    assert res_low["score"] < res_high["score"]
+
+
+def test_skill_group_score_none_fields_neutral(scoring_agent):
+    """Both rating=None and exp=None → neutral 0.5 contribution, not 1.0."""
+    # norm_rating=0.5 (None), norm_exp=0.5 (None) → 0.6*0.5 + 0.4*0.5 = 0.50
+    res = scoring_agent._calculate_skill_group_score(
+        ["PYTHON_ID"],
+        {"Python": ["PYTHON_ID"]},
+        skill_ratings={"PYTHON_ID": 0.5},
+        skill_exp_months={"PYTHON_ID": None},
+    )
+    assert res["score"] == approx(0.5)
+
+
+def test_skill_group_score_profile_text_match_weight(scoring_agent):
+    """Text-only match contributes profile_text_match_weight, not 1.0."""
+    from app.settings import settings
+    res = scoring_agent._calculate_skill_group_score(
+        [],
+        {"Python": ["PYTHON_ID"]},
+        profile_text="senior python developer with 5 years experience",
+        skill_ratings={},
+        skill_exp_months={},
+    )
+    assert res["score"] == approx(settings.profile_text_match_weight)
+    assert res["matched"] == ["Python"]
+    assert res["missing"] == []
+
+
 def test_skill_group_score_short_string_guard(scoring_agent):
     # Short strings not in the allow-list must not produce false positives
     res = scoring_agent._calculate_skill_group_score(

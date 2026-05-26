@@ -2,6 +2,8 @@
 
 import logging
 import re
+from datetime import date
+from typing import Dict
 
 from sqlalchemy.orm import Session
 
@@ -44,6 +46,83 @@ def _sanitize_skill_list(skill_list: list) -> list:
             sanitized.append(skill.strip())
     
     return sanitized
+
+
+def _build_candidate_context(
+    member,
+    skill_records,
+    skill_name_map: Dict[str, str],
+    cert_records,
+    profile_text: str,
+    mandatory_matched: list = None,
+    mandatory_missing: list = None,
+) -> str:
+    """Append live structured data to profile_text before LLM evaluation.
+
+    Gives the LLM exact per-skill ratings and experience months so its
+    qualitative assessment aligns with the deterministic mandatory_score
+    instead of contradicting it. Reuses already-fetched skill_records and
+    cert_records — no extra DB queries."""
+    # name → (rating, exp_months) for quick lookup when building mandatory section
+    name_to_skill: Dict[str, tuple] = {}
+    for s in skill_records:
+        name = skill_name_map.get(s.skill_id)
+        if name:
+            name_to_skill[name] = (s.rating, s.experience_in_months)
+
+    skill_lines = []
+    for s in skill_records:
+        name = skill_name_map.get(s.skill_id, str(s.skill_id))
+        rating = f"{s.rating}/5" if s.rating is not None else "unrated"
+        if s.experience_in_months is not None:
+            yrs, mths = divmod(s.experience_in_months, 12)
+            exp = f"{yrs}y {mths}m" if yrs else f"{mths}m"
+        else:
+            exp = "duration unknown"
+        skill_lines.append(f"  - {name}: {rating}, {exp}")
+
+    # Mandatory skills section — tells the LLM exactly which required skills
+    # are present vs absent so it uses "limited proficiency" not "lacks X".
+    mandatory_lines = []
+    for name in (mandatory_matched or []):
+        if name in name_to_skill:
+            r, em = name_to_skill[name]
+            r_str = f"{r}/5" if r is not None else "unrated"
+            if em is not None:
+                yrs, mths = divmod(em, 12)
+                e_str = f"{yrs}y {mths}m" if yrs else f"{mths}m"
+            else:
+                e_str = "duration unknown"
+            mandatory_lines.append(f"  - {name}: PRESENT ({r_str}, {e_str})")
+        else:
+            mandatory_lines.append(f"  - {name}: PRESENT (proficiency data unavailable)")
+    for name in (mandatory_missing or []):
+        mandatory_lines.append(f"  - {name}: ABSENT — not on candidate profile")
+
+    active_certs = [
+        c.certificate for c in cert_records
+        if c.certificate and (c.valid_till is None or c.valid_till >= date.today())
+    ]
+
+    total_exp = member.experience_in_months or 0
+    exp_str = f"{total_exp // 12}y {total_exp % 12}m"
+
+    mandatory_section = (
+        "JD Mandatory Skills (deterministic result — align your language here):\n"
+        + ("\n".join(mandatory_lines) if mandatory_lines else "  None required")
+    )
+
+    structured_block = (
+        f"\n\n--- Structured Candidate Data ---\n"
+        f"Designation: {member.designation or 'N/A'}\n"
+        f"Total Experience: {exp_str}\n\n"
+        f"{mandatory_section}\n\n"
+        f"All skills on record:\n"
+        f"{chr(10).join(skill_lines) if skill_lines else '  None on record'}\n\n"
+        f"Active Certifications:\n"
+        f"  {', '.join(active_certs) if active_certs else 'None'}"
+    )
+    return (profile_text or "") + structured_block
 
 
 @trace_node("matching_scoring")
@@ -126,19 +205,34 @@ def matching_scoring_node(state: GraphState) -> GraphState:
         for member in team_members:
             try:
                 # 1. Fetch skills, certs, and profile text
-                member_skill_ids = [
-                    skill.skill_id 
-                    for skill in db.query(TeamMemberSkill)
+                skill_records = (
+                    db.query(TeamMemberSkill)
                     .filter(TeamMemberSkill.team_member_id == member.team_member_id)
                     .all()
-                ]
+                )
+                member_skill_ids = [s.skill_id for s in skill_records]
+                # Normalised rating per skill (None → 0.5 neutral); used in scoring contribution
+                skill_ratings = {
+                    s.skill_id: (s.rating / 5.0) if s.rating is not None else 0.5
+                    for s in skill_records
+                }
+                # Raw experience months per skill (None preserved); normalised inside scoring
+                skill_exp_months = {
+                    s.skill_id: s.experience_in_months
+                    for s in skill_records
+                }
                 
-                member_certs = [
-                    cert.certificate
-                    for cert in db.query(TeamMemberSkillCertification)
+                from datetime import date
+                cert_records = (
+                    db.query(TeamMemberSkillCertification)
                     .filter(TeamMemberSkillCertification.team_member_id == member.team_member_id)
                     .all()
-                ]
+                )
+                member_certs = [c.certificate for c in cert_records if c.certificate]
+                cert_validity = {
+                    c.certificate: (c.valid_till is None or c.valid_till >= date.today())
+                    for c in cert_records if c.certificate
+                }
                 
                 # Fetch profile text and skill names for AI Confidence and Penalty
                 embedding_record = db.query(TeamMemberEmbedding).filter(
@@ -146,15 +240,16 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 ).first()
                 profile_text = embedding_record.profile_text if embedding_record else ""
                 
-                # Fetch skill names (needed for family penalty check in refined logic)
+                # Fetch skill names — also builds skill_id→name map for context enrichment
                 from app.db.models import SkillMaster
-                member_skill_names = [
-                    res.skill_name 
-                    for res in db.query(SkillMaster.skill_name)
+                skill_name_rows = (
+                    db.query(SkillMaster.skill_id, SkillMaster.skill_name)
                     .join(TeamMemberSkill, SkillMaster.skill_id == TeamMemberSkill.skill_id)
                     .filter(TeamMemberSkill.team_member_id == member.team_member_id)
                     .all()
-                ]
+                )
+                member_skill_names = [r.skill_name for r in skill_name_rows]
+                skill_name_map = {r.skill_id: r.skill_name for r in skill_name_rows}
 
                 
                 # 2. Evaluate availability
@@ -170,6 +265,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 rag_scores_dict = retrieved_results.get(member.team_member_id, {})
                 profile_data = {
                     "skill_ids": member_skill_ids,
+                    "skill_ratings": skill_ratings,
+                    "skill_exp_months": skill_exp_months,
                     "skill_names": member_skill_names,
                     "designation": member.designation,
                     "mandatory_skill_ids": mandatory_skill_ids,
@@ -180,6 +277,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "min_experience_months": min_experience_months,
                     "max_experience_months": max_experience_months,
                     "certifications": member_certs,
+                    "cert_validity": cert_validity,
                     "required_certifications": required_certifications,
                     "location": member.base_location,
                     "required_locations": required_locations,
@@ -218,7 +316,10 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 
                 if is_qualified:
                     # AI Fit Confidence (TASK-08+) - Further Evaluation
-                    ai_fit = get_ai_fit_confidence(jd_text, profile_text)
+                    enriched_context = _build_candidate_context(
+                        member, skill_records, skill_name_map, cert_records, profile_text
+                    )
+                    ai_fit = get_ai_fit_confidence(jd_text, enriched_context)
                     confidence_score = ai_fit["confidence_score"]
                     
                     # 1. AI Waiver for Seniors
@@ -279,6 +380,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
                         "certification_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_matched),
                         "certification_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_missing),
+                        "certification_expired": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_expired),
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched": scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,
