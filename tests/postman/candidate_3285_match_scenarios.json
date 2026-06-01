@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 3285 (WordPress specialist, actual DB: WordPress 5/5 72m, PHP 5/5 82m, JS 5/5 60m, Gutenberg 4/5 24m, MySQL-DBA 5/5 72m)",
+    "_expected": "candidate 3285 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory skills are direct team_member_skill DB hits: Wordpress(5/5,72m) + PHP(5/5,82m) + JavaScript(5/5,60m) + Gutenberg(4/5,24m) + MySQL-DBA(5/5,72m). Gutenberg is the WordPress Block Editor — a niche skill that differentiates true WordPress specialists from generic PHP devs. Previous scenario used HTML5 which caused many generic web devs to outscore 3285 (BM25 rank was 17). Gutenberg narrows the competitor pool significantly — only serious WordPress developers have it. DB also has Joomla(5/36m), WordPress-VIP(5/24m), Typescript(3/12m), Node(4/36m), React(4/36m) available as preferred coverage.",
+    "request_id": "REQ-3285-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior WordPress PHP Developer",
+      "role": "CMS and eCommerce Web Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["WordPress", "PHP", "JavaScript", "Gutenberg", "MySQL"],
+      "preferred_skills": ["React", "Node.js", "WooCommerce", "Docker", "Git"],
+      "jd_text": "We are looking for a Senior WordPress PHP Developer with 4 to 6 years of hands-on WordPress development experience. The candidate must have deep WordPress expertise including theme, plugin and headless development, PHP for server-side WordPress logic and REST API integration, JavaScript for custom Gutenberg blocks and frontend interactivity, Gutenberg block editor for modern WordPress page building and custom block development, and MySQL for database management and query optimisation. Preferred skills include React for headless WordPress frontend or Gutenberg block components, Node.js for backend services, WooCommerce for eCommerce functionality, Docker for development environments, and Git for version control. The role is based in Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 3285 (WordPress/PHP core present but missing FastAPI which is mandatory)",
+    "_expected": "candidate 3285 retrieved, mandatory_missing includes FastAPI, fit_level MEDIUM",
+    "_notes": "PHP(5/5,82m) + WordPress(5/5,72m) + JavaScript(5/5,60m) are 3 of 5 mandatory DB hits. TypeScript → DB has 'Typescript - FrontEnd and Web'(3/5,12m) — substring match gives 4th hit. FastAPI is entirely absent from DB for 3285. mandatory_score expected 0.65-0.80 (4 DB hits including weak TypeScript + 0 for FastAPI). Tests backend specialisation mismatch: PHP/WordPress vs Python/FastAPI. Semantic rank 17/300 shows moderate alignment — PHP and Python ecosystems have vocabulary overlap.",
+    "request_id": "REQ-3285-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior WordPress Full Stack Developer",
+      "role": "Full Stack Web Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["PHP", "WordPress", "JavaScript", "FastAPI", "TypeScript"],
+      "preferred_skills": ["React", "Docker", "Redis", "Git", "REST API"],
+      "jd_text": "We are looking for a Senior WordPress Full Stack Developer with 4 to 6 years of experience combining WordPress CMS expertise with modern backend development. The candidate must have strong PHP skills for WordPress plugin and REST API development, WordPress for CMS and headless architecture, JavaScript for frontend interactivity, FastAPI for lightweight Python microservice endpoints integrated with WordPress, and TypeScript for type-safe frontend components. Preferred skills include React for headless WordPress frontends, Docker for containerised environments, Redis for object caching, Git for version control, and REST API design. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

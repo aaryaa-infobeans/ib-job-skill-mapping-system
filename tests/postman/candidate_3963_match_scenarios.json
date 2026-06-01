@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 3963 (AI/ML Senior SE, actual DB: Python-AIML 4/5 72m, AI/ML TensorFlow 4/5 72m, AI/ML Scikit-Learn 4/5 72m, AI/ML PyTorch 4/5 60m, AI/ML Keras 4/5 72m)",
+    "_expected": "candidate 3963 in top results, fit_level HIGH, mandatory_missing likely empty",
+    "_notes": "All 5 mandatory skills are in team_member_skill BUT stored with 'AI/ML ' prefix in the DB: Python→'Python - AIML'(4/5,72m), TensorFlow→'AI/ML TensorFlow'(4/5,72m), Scikit-Learn→'AI/ML Scikit - Learn'(4/5,72m, NOTE: spaces around dash), PyTorch→'AI/ML PyTorch'(4/5,60m), Keras→'AI/ML Keras'(4/5,72m). BM25 tokenisation handles the prefix correctly ('tensorflow' matches 'ai/ml tensorflow'). Direct string lookup in skill_normalization may fail for Scikit-Learn due to 'scikit - learn' vs 'scikit-learn' spacing — fuzzy matching should resolve. BM25 rank 2/30, Semantic rank 1/300. Score should be HIGH.",
+    "request_id": "REQ-3963-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Machine Learning Engineer",
+      "role": "AI/ML Model Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Python", "TensorFlow", "Scikit-Learn", "PyTorch", "Keras"],
+      "preferred_skills": ["Azure AI Services", "Prompt Engineering", "Docker", "REST API", "MLflow"],
+      "jd_text": "We are seeking a Senior Machine Learning Engineer with 5 to 7 years of experience in building and deploying ML models. The candidate must have strong Python programming skills for data pipelines and model development, TensorFlow for deep learning model architecture and training, Scikit-Learn for classical ML algorithms and preprocessing pipelines, PyTorch for research-grade model prototyping and experimentation, and Keras for rapid neural network prototyping. Preferred skills include Azure AI Services for cloud-based model hosting, Prompt Engineering for LLM integration, Docker for containerised model serving, REST API for model inference endpoints, and MLflow for experiment tracking. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 3963 (strong ML but missing MLOps/Cloud mandatory stack)",
+    "_expected": "candidate 3963 retrieved but lower score, mandatory_missing includes Kubernetes and AWS SageMaker, fit_level MEDIUM",
+    "_notes": "Python-AIML(4/5,72m) covers Python mandatory. Kubernetes/Terraform/SageMaker absent from DB — candidate is a model builder, not an infrastructure engineer. Azure Container Registry is 2/5 weak signal for cloud. mandatory_score expected around 0.4-0.5 (2 of 5 match). Tests ML vs MLOps skill family differentiation.",
+    "request_id": "REQ-3963-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "MLOps Engineer",
+      "role": "ML Platform and Infrastructure",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Python", "Kubernetes", "AWS SageMaker", "Terraform", "Docker"],
+      "preferred_skills": ["TensorFlow", "PyTorch", "Jenkins", "Prometheus", "Grafana"],
+      "jd_text": "We are looking for an MLOps Engineer with 4 to 6 years of experience. The candidate must have Python for pipeline scripting and automation, Kubernetes for orchestrating ML workloads at scale, AWS SageMaker for managed model training and deployment, Terraform for infrastructure-as-code provisioning, and Docker for containerising ML services. Preferred skills include TensorFlow and PyTorch for model integration work, Jenkins for CI/CD pipelines, Prometheus for metrics collection, and Grafana for monitoring dashboards. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

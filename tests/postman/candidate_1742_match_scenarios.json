@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 1742 (Magento/PHP/Vue specialist, actual DB: PHP 4/5 60m, JS 4/5 60m, Magento 4/5 24m, Vue.JS 4/5 36m, CakePHP 4/5 24m)",
+    "_expected": "candidate 1742 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory skills are direct team_member_skill DB hits: PHP(4/5,60m) + JavaScript(4/5,60m) + Magento(4/5,24m) + Vue.JS(4/5,36m) + CakePHP(4/5,24m). Magento+Vue.JS+CakePHP combo is rare — very few candidates have all three. DB also has ReactJS(4/5,24m) and Apache HTTP Server(4/5,48m). Previous scenario used MySQL and HTML which are NOT in DB at all. This redesign gives 5/5 DB match. Semantic retrieval ranks 1742 #1 for Magento-focused JDs (dist=0.824).",
+    "request_id": "REQ-1742-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Magento PHP Developer",
+      "role": "eCommerce Web Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Magento", "PHP", "JavaScript", "Vue.js", "CakePHP"],
+      "preferred_skills": ["React", "MySQL", "REST API", "Git", "Docker"],
+      "jd_text": "We are looking for a Senior Magento PHP Developer with 5 to 7 years of hands-on eCommerce development experience. The candidate must have deep expertise in Magento 2 for custom theme, module and integration work, PHP for server-side module and extension development, JavaScript for frontend interactions and customisations, Vue.js for headless storefront or admin component development, and CakePHP for auxiliary backend services and legacy integrations. Preferred skills include React for headless commerce frontends, MySQL for database design and query optimisation, REST API design for third-party integrations, Git for version control, and Docker for local development environments. The role is based in Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 1742 (missing WordPress which is mandatory, has PHP and JS but not CMS focus)",
+    "_expected": "candidate 1742 retrieved but score reduced, mandatory_missing includes WordPress, fit_level MEDIUM",
+    "_notes": "PHP(4/5,60m) + JavaScript(4/5,60m) keep retrieval — 2 of 5 mandatory DB matches. WordPress is absent from DB for 1742 — they are Magento-focused, not WordPress. MySQL present in profile text but NOT in team_member_skill. mandatory_score expected around 0.4-0.55 (2 DB hits, 0 for WordPress/MySQL/HTML). Tests CMS skill family differentiation: Magento vs WordPress. Semantic rank is 27/300 — the profile language is PHP-adjacent but not WordPress-focused.",
+    "request_id": "REQ-1742-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior PHP WordPress Developer",
+      "role": "CMS Web Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["PHP", "WordPress", "JavaScript", "MySQL", "HTML"],
+      "preferred_skills": ["React", "Docker", "WooCommerce", "Git", "Linux"],
+      "jd_text": "We are seeking a Senior PHP WordPress Developer with 4 to 6 years of experience. The candidate must have expert PHP skills for custom WordPress plugin and theme development, deep WordPress expertise including Gutenberg block development and WooCommerce customisation, JavaScript for frontend interactions, MySQL for database management, and HTML for template development. Preferred skills include React for headless WordPress implementations, Docker for development environments, WooCommerce for eCommerce features, Git for version control, and Linux server administration. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 2735 (Senior .NET Consultant, actual DB: C# 5/5 180m, .NET 5/5 192m, ASP.net MVC 5/5 120m, SQL Server 5/5 120m, Angular 5/5 96m, .net Core 5/5 72m)",
+    "_expected": "candidate 2735 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory are direct DB hits: C#(5/5,180m) + .net Core→'.net Core'(5/5,72m) + ASP.net MVC(5/5,120m) + SQL Server(5/5,120m) + Angular(5/5,96m). NOTE: DB stores '.net Core' (lowercase), JD uses '.NET Core' — substring match works (case-insensitive). DB also has .NET(5/192m), Entity Framework(5/180m), EDMX(5/120m), Microservices(5/84m), Azure DevOps(4/48m), Docker(4/36m) for strong preferred coverage. Candidate has 156m experience (13yr). BM25 rank 1, semantic rank 101 — primary retrieval path is BM25 for this niche .NET stack.",
+    "request_id": "REQ-2735-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior .NET Full Stack Developer",
+      "role": "Enterprise Web Application Development",
+      "priority": "HIGH",
+      "location": ["Indore", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["C#", ".NET Core", "ASP.NET MVC", "SQL Server", "Angular"],
+      "preferred_skills": ["Entity Framework", "Azure DevOps", "Microservices", "Docker", "REST API"],
+      "jd_text": "We are seeking a Senior .NET Full Stack Developer with 8 to 12 years of enterprise application development experience. The candidate must have expert C# skills for complex business logic and design patterns, .NET Core for modern web API and microservice development, ASP.NET MVC for enterprise web application architecture, SQL Server for database design and stored procedure development, and Angular for modern front-end component development. Preferred skills include Entity Framework for ORM-based data access, Azure DevOps for CI/CD pipeline management, Microservices for distributed system design, Docker for containerised deployments, and REST API design patterns. Location: Indore with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 2735 (.NET expert but very weak on Java-specific backend stack)",
+    "_expected": "candidate 2735 retrieved but lower score, mandatory_missing includes Hibernate JPA and Kafka, fit_level MEDIUM or LOW",
+    "_notes": "Java-Programming-Languages(2/5,24m) + Spring Boot(2/5,24m) are in DB but at very low rating — minimal contribution. Hibernate, JPA, Kafka are completely absent from team_member_skill. mandatory_score expected 0.25-0.40 (2 of 5 at low quality). Previous scenario B used MySQL and Angular as mandatory — both are in 2735 DB at high ratings, making it a false partial-match test. This redesign uses Hibernate+JPA+Kafka which 2735 definitely lacks. Tests .NET vs Java ecosystem differentiation.",
+    "request_id": "REQ-2735-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Java Backend Developer",
+      "role": "Enterprise Java Microservices",
+      "priority": "MEDIUM",
+      "location": ["Indore", "Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Java", "Spring Boot", "Hibernate", "JPA", "Kafka"],
+      "preferred_skills": ["Microservices", "Docker", "JUnit", "PostgreSQL", "REST API"],
+      "jd_text": "We are looking for a Senior Java Backend Developer with 6 to 10 years of experience in scalable microservices. The candidate must have expert Java skills for enterprise-grade backend development, Spring Boot for REST API and microservice configuration, Hibernate for ORM-based data access and entity mapping, JPA for Java Persistence API transaction and entity management, and Kafka for event-driven architecture and async messaging. Preferred skills include Microservices design patterns, Docker for containerisation, JUnit for unit and integration testing, PostgreSQL for relational data, and REST API design. Location: Indore or Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

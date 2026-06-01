@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 2744 (QA Automation Senior Engineer, actual DB: Selenium 5/5 72m, Cucumber 5/5 24m, TestNG 4/5 60m, Appium 4/5 36m, Java-Programming-Languages 5/5 72m)",
+    "_expected": "candidate 2744 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory are direct DB hits: Selenium(5/5,72m) + Cucumber(5/5,24m) + TestNG(4/5,60m) + Appium(4/5,36m) + Java→'Java - Programming Languages'(5/5,72m). Automation Testing(5/5,84m) is also in DB but is NOT mandatory in this JD — it is a general QA descriptor, not one of the 5 required skills. Jenkins(4/5,36m) + GIT(4/5,36m) + Perfecto(4/5,36m) cover preferred. Candidate is Senior QA Engineer with 60m exp. BM25 rank expected top 10 — Appium+TestNG+Cucumber together are niche enough to narrow the field. Score should be HIGH.",
+    "request_id": "REQ-2744-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Automation Test Engineer",
+      "role": "Software Quality Assurance",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Selenium", "Cucumber", "TestNG", "Appium", "Java"],
+      "preferred_skills": ["Jenkins", "Perfecto", "Git", "Jira", "REST API Testing"],
+      "jd_text": "We are seeking a Senior Automation Test Engineer with 4 to 7 years of experience in test automation frameworks. The candidate must have expert Selenium WebDriver skills for web UI automation, Cucumber for BDD test framework development and Gherkin scenarios, TestNG for test suite management and parallel execution, Appium for mobile test automation on iOS and Android, and Java as the core automation scripting language. Preferred skills include Jenkins for CI/CD integration of test suites, Perfecto for cloud-based device testing, Git for test code version control, Jira for defect tracking, and REST API testing with Postman or RestAssured. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 2744 (strong functional QA but missing Performance and Security mandatory stack)",
+    "_expected": "candidate 2744 retrieved but lower score, mandatory_missing includes JMeter, LoadRunner, OWASP ZAP, fit_level MEDIUM or LOW",
+    "_notes": "Selenium(5/5,72m) + Python→'Python - Middleware'(2/5,24m) cover 2 of 5 mandatory. JMeter, LoadRunner, OWASP ZAP are absent from DB — candidate is a functional automation engineer, not a performance/security specialist. NOTE: Automation Testing(5/5,84m) is in candidate DB but appears only in the preferred list of this JD, not mandatory. mandatory_score expected 0.30-0.40 (2 of 5, one at very low quality). Tests functional QA vs performance/security QA differentiation.",
+    "request_id": "REQ-2744-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Performance and Security Test Engineer",
+      "role": "Non-Functional Testing",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["JMeter", "LoadRunner", "OWASP ZAP", "Selenium", "Python"],
+      "preferred_skills": ["Automation Testing", "Grafana", "Prometheus", "Burp Suite", "Jenkins"],
+      "jd_text": "We are looking for a Performance and Security Test Engineer with 4 to 6 years of experience. The candidate must have JMeter for load and stress testing of web applications, LoadRunner for enterprise-scale performance scenario design, OWASP ZAP for automated security scanning and vulnerability assessment, Selenium for web UI regression validation during load tests, and Python for scripting custom performance and security test scenarios. Preferred skills include general Automation Testing experience, Grafana for performance metrics visualisation, Prometheus for metrics collection, Burp Suite for manual penetration testing, and Jenkins for pipeline integration. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

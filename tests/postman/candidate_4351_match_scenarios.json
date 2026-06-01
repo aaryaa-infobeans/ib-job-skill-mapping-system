@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 4351 (MERN specialist, React/Next.js 5/5 60m, node.js 5/5 48m, MongoDB 4/5 36m)",
+    "_expected": "candidate 4351 in top results, fit_level HIGH or MEDIUM-HIGH, mandatory_missing may include JavaScript and TypeScript (not in team_member_skill, text-match only)",
+    "_notes": "DB (team_member_skill) for 4351 has exactly 3 skills: React/Next.js(5/5,60m) + node.js(5/5,48m) + MongoDB(4/5,36m). JavaScript and TypeScript are NOT in team_member_skill at all — they would only match via profile_text BM25 (lower confidence). mandatory_score expected 0.65-0.80 (3 DB hits + 2 text-only at ~0.6 weight). Despite only 3 DB skills, 4351 is one of very few candidates with React(5/5)+Node.js(5/5) depth — semantic retrieval ranks them #1 (dist=0.721). BM25 rank is 7/30. Both retrieval paths cover this candidate.",
+    "request_id": "REQ-4351-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior MERN Stack Developer",
+      "role": "Full Stack Web Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["React", "Node.js", "JavaScript", "TypeScript", "MongoDB"],
+      "preferred_skills": ["AWS", "Redux", "REST API", "Docker", "Git"],
+      "jd_text": "We are seeking a Senior MERN Stack Developer with 5 to 7 years of experience building scalable web applications. The candidate must have expert proficiency in React for building dynamic front-end interfaces and reusable component libraries, Node.js for server-side API development and microservice architecture, JavaScript for full-stack business logic and async programming, TypeScript for type-safe scalable codebases, and MongoDB for document-oriented data modelling and aggregation pipelines. Preferred experience includes AWS for cloud hosting and serverless deployments, Redux for global state management, REST API design patterns, Docker for containerisation, and Git for version control and collaborative workflows. The role is based in Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 4351 (strong MERN but missing PHP and MySQL which are mandatory)",
+    "_expected": "candidate 4351 retrieved but lower score, mandatory_missing includes PHP and MySQL, fit_level MEDIUM or LOW",
+    "_notes": "React/Next.js(5/5,60m) + node.js(5/5,48m) anchor retrieval — BM25 and semantic both find the candidate on React+Node.js. PHP is completely absent from DB for 4351. MySQL is absent from DB. mandatory_score expected around 0.4-0.5 (2 DB hits on React+Node.js, 0 for PHP/MySQL/JavaScript). Tests whether strong MERN skills partially satisfy a PHP+React JD. Work_mode is not a hard filter — candidate appears in semantic at rank 8/300 despite being WFH.",
+    "request_id": "REQ-4351-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Full Stack PHP and React Developer",
+      "role": "Full Stack Web Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["PHP", "React", "MySQL", "Node.js", "JavaScript"],
+      "preferred_skills": ["Laravel", "Docker", "Redis", "Git", "REST API"],
+      "jd_text": "We are looking for a Full Stack PHP and React Developer with 4 to 6 years of experience. The candidate must have strong PHP skills for backend API development, React for dynamic frontend development, MySQL for relational data management, Node.js for microservices, and JavaScript for full-stack logic. Preferred skills include Laravel framework experience, Docker for containerisation, Redis for caching, Git for version control, and REST API design patterns. Location: Pune, Hybrid work arrangement."
+    },
+    "metadata": {}
+  }
+]
