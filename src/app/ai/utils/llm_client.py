@@ -1,7 +1,6 @@
 """Unified LLM client utility to support multiple providers."""
 
 import logging
-import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.settings import settings
@@ -21,22 +20,19 @@ class LLMClient:
         """Initialize the specific provider client."""
         if self.provider == "openai":
             from openai import OpenAI
-            api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-            if api_key:
-                return OpenAI(api_key=api_key)
-        
+            if settings.openai_api_key:
+                return OpenAI(api_key=settings.openai_api_key)
+
         elif self.provider == "groq":
             from groq import Groq
-            api_key = settings.groq_api_key or os.getenv("GROQ_API_KEY")
-            if api_key:
-                return Groq(api_key=api_key)
-        
+            if settings.groq_api_key:
+                return Groq(api_key=settings.groq_api_key)
+
         elif self.provider == "google":
             from google import genai
-            api_key = settings.google_api_key or os.getenv("GOOGLE_API_KEY")
-            if api_key:
-                return genai.Client(api_key=api_key)
-        
+            if settings.google_api_key:
+                return genai.Client(api_key=settings.google_api_key)
+
         return None
 
     def chat_completion(
@@ -62,8 +58,8 @@ class LLMClient:
             return None, None
 
         import time
-        max_retries = 5
-        base_delay = 2.0  # seconds
+        max_retries = settings.llm_max_retries
+        base_delay = settings.llm_retry_base_delay
 
         for attempt in range(max_retries):
             try:
@@ -74,7 +70,6 @@ class LLMClient:
                 elif self.provider == "google":
                     return self._google_completion(messages, model, temperature, max_tokens)
             except Exception as e:
-                # Check if it's a rate limit error (429)
                 error_str = str(e).lower()
                 if "429" in error_str or "rate limit" in error_str:
                     if attempt < max_retries - 1:
@@ -82,7 +77,7 @@ class LLMClient:
                         logger.warning(f"Rate limit hit (429). Retrying in {delay}s... (Attempt {attempt + 1}/{max_retries})")
                         time.sleep(delay)
                         continue
-                
+
                 logger.error(f"LLM call failed on attempt {attempt + 1}: {str(e)}")
                 if attempt == max_retries - 1:
                     return None, None

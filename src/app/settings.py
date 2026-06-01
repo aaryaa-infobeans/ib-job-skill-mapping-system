@@ -67,20 +67,23 @@ class Settings(BaseSettings):
     # SENIOR
     weight_mandatory_senior: float = 0.50
     weight_preferred_senior: float = 0.20
-    weight_semantic_senior: float = 0.25
+    weight_semantic_senior: float = 0.20
     weight_context_senior: float = 0.05
-    
+    weight_availability_senior: float = 0.05
+
     # MID
     weight_mandatory_mid: float = 0.40
     weight_preferred_mid: float = 0.20
-    weight_semantic_mid: float = 0.25
+    weight_semantic_mid: float = 0.20
     weight_context_mid: float = 0.15
-    
+    weight_availability_mid: float = 0.05
+
     # JUNIOR
     weight_mandatory_junior: float = 0.30
     weight_preferred_junior: float = 0.30
-    weight_semantic_junior: float = 0.25
+    weight_semantic_junior: float = 0.20
     weight_context_junior: float = 0.15
+    weight_availability_junior: float = 0.05
     
     # Seniority Experience Thresholds (Months)
     senior_exp_threshold: int = 96  # 8 years
@@ -163,6 +166,16 @@ class Settings(BaseSettings):
     # Retry Configuration
     max_retry_attempts: int = 3
     retry_backoff_factor: float = 2.0
+
+    # LLM rate-limit retry (separate from general infra retry)
+    llm_max_retries: int = 5
+    llm_retry_base_delay: float = 2.0
+
+    # Availability threshold: candidate is "available" if total allocation < this %
+    availability_threshold_percentage: float = 80.0
+
+    # RAG experience sanity bound: values beyond this are treated as no constraint
+    exp_max_plausible_months: int = 600  # 50 years
     
     # pgvector Configuration
     pgvector_dimension: int = 768
