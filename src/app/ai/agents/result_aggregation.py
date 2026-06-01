@@ -1,11 +1,23 @@
 """Result aggregation agent."""
 
 import logging
+from typing import Any
 
 from app.ai.state import GraphState
 from app.observability.tracing import trace_node
 
 logger = logging.getLogger(__name__)
+
+
+def _round_floats(obj: Any, ndigits: int = 2) -> Any:
+    """Recursively round all float values in a nested dict/list structure."""
+    if isinstance(obj, float):
+        return round(obj, ndigits)
+    if isinstance(obj, dict):
+        return {k: _round_floats(v, ndigits) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_round_floats(item, ndigits) for item in obj]
+    return obj
 
 
 def determine_fit_level(final_score: float) -> str:
@@ -107,6 +119,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
                 "score_breakdown": candidate.get("score_breakdown"),
                 "match_reasons": candidate.get("match_reasons", {}),
                 "ai_confidence_score": candidate.get("ai_confidence_score"),
+                "base_agentic_score": candidate.get("base_agentic_score"),
                 "ai_boost_applied": candidate.get("ai_boost", 0.0),
                 "role_type": candidate.get("role_type"),
                 "is_qualified": is_qualified,
@@ -115,7 +128,7 @@ def result_aggregation_node(state: GraphState) -> GraphState:
         }
 
         
-        final_results.append(result_entry)
+        final_results.append(_round_floats(result_entry))
     
     state["total_qualified"] = total_qualified
     state["final_results"] = final_results

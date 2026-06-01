@@ -49,6 +49,15 @@ class JobDescription(BaseModel):
     certifications_required: Optional[List[str]] = None
     jd_text: str
 
+    # Exact-match testing overrides
+    # Pre-resolved skill_master UUIDs. When provided, Node 2 skips LLM normalization entirely
+    # and uses these IDs directly for scoring — bypassing any name→ID mapping uncertainty.
+    mandatory_skill_ids: Optional[List[str]] = None
+    preferred_skill_ids: Optional[List[str]] = None
+    # Candidate UUIDs that must always appear in the Node 4 retrieval pool regardless of
+    # their vector / BM25 ranking. Useful for exact-match testing.
+    target_member_ids: Optional[List[str]] = None
+
     @field_validator('priority', mode='before')
     @classmethod
     def normalize_priority(cls, v):

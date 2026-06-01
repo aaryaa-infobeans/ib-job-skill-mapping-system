@@ -99,6 +99,7 @@ class ScoringBreakdown:
     work_mode_score: float = 0.0
     experience_matched: bool = False
     experience_score: float = 0.0
+    title_score: float = 0.0
     semantic_similarity: float = 0.0
     jd_level_similarity: float = 0.0
     # Multi-stage scoring fields

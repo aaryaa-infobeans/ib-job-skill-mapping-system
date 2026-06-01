@@ -1,18 +1,18 @@
 """Ranking Agent - Filter, sort, and rank candidates with narratives."""
 
 import logging
-import os
 from typing import Any, List, Optional
 from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import ScoringResult, RankedCandidate, RankedCandidateList
+from app.settings import settings
 
 
 class RankingAgent(BaseAgent):
     """Filter and rank candidates with justifications."""
-    
+
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__("ranking", logger)
-        self.fit_score_threshold = float(os.getenv("FIT_SCORE_THRESHOLD", "0.5"))
+        self.fit_score_threshold = settings.fit_score_threshold
     
     def execute(self, scored_candidates: List[ScoringResult]) -> RankedCandidateList:
         """

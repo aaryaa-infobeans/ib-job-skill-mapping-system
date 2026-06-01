@@ -32,6 +32,8 @@ def process_requisition_with_graph(correlation_id: str, request: RequisitionRequ
                 "min_availability_percentage": 50,  # Default value
                 "correlation_id": correlation_id,
             },
+            # Promote target_member_ids to top-level state so Node 4 can read it directly.
+            "target_member_ids": request.job_description.target_member_ids or [],
             "parsed_jd": None,
             "normalized_skills": None,
             "candidate_scores": None,
