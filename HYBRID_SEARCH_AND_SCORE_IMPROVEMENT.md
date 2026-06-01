@@ -1,7 +1,8 @@
 # Hybrid Search & Scoring — Rollout Plan
 
 > Aligned with HYBRID_SEARCH_AND_SCORING_SPEC.docx v6.0.
-> Items 1 and 2 complete. Item 3 complete (incl. Addendums 1 & 2).
+> Items 1 and 2 complete (incl. post-implementation filter improvements). Item 3 complete (incl. Addendums 1–5).
+> Items 7–9 complete (normalization, output enrichment, availability scoring, infrastructure).
 > Item 4 (AI context enrichment) is next — unblocked. Cross-encoder renumbered to Item 5.
 
 ---
@@ -11,11 +12,14 @@
 | # | Item | Status |
 |---|------|--------|
 | 1 | skill_ontology synonym expansion | ✅ Done |
-| 2 | True Hybrid Search — pg_bm25 + RRF | ✅ Done |
-| 3 | Per-skill rating & experience in scoring | ✅ Done (incl. Addendums 1 & 2) |
+| 2 | True Hybrid Search — pg_bm25 + RRF | ✅ Done (incl. filter improvements) |
+| 3 | Per-skill rating & experience in scoring | ✅ Done (incl. Addendums 1–5) |
 | 4 | AI candidate context enrichment | Next up (unblocked — see plan) |
 | 5 | Cross-encoder reranker | Unblocked (requires Item 2 — done) |
 | 6 | RAG weight validation | Low priority — see note |
+| 7 | Skill normalization improvements | ✅ Done |
+| 8 | API schema testing overrides | ✅ Done |
+| 9 | Infrastructure & settings centralization | ✅ Done |
 
 ---
 
@@ -212,6 +216,99 @@ a safety net for candidates displaced by weight miscalibration.
 
 - If current weights are not in top-2 configurations, update `rag_weight_*` defaults in
   `settings.py` with the winning configuration
+
+---
+
+## 7. ✅ Skill Normalization Improvements (DONE)
+
+**Plan details:** `per-skill-scoring-plan.md` (Addendum 4, output enrichment); `hybrid-search-pg-bm25-plan.md` (filter improvements).
+
+### A. Direct skill-ID bypass ("Blocker-2 fix")
+
+When the API caller already knows the `skill_master` UUIDs (e.g. an integration test or a pre-resolved request), the LLM normalization step (Node 2) can be skipped entirely by providing:
+
+```json
+"job_description": {
+    "mandatory_skill_ids": ["uuid-1", "uuid-2"],
+    "preferred_skill_ids": ["uuid-3"]
+}
+```
+
+Node 2 detects these fields, builds the `alternatives` map directly from the DB (one query, no LLM call), and returns. This eliminates name→ID mapping uncertainty in testing.
+
+### B. Raw name fallback in fuzzy matching
+
+Previously, if the LLM expanded "JPA" to "Java Persistence API" and the DB stored the skill as "JPA", the direct match failed and fuzzy match was attempted on the expanded form — also failing. Now a second attempt uses the original raw JD name before falling through to fuzzy:
+
+```
+canonical match → raw name direct match → fuzzy on canonical → fuzzy on raw name
+```
+
+### C. Fuzzy match deduplication
+
+`fuzzy_ids` are filtered against the already-collected `skill_group` before being appended, preventing duplicate skill IDs in the alternatives map.
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `src/app/ai/agents/skill_normalization.py` | Direct ID bypass block; raw name fallback; fuzzy dedup |
+| `src/app/api/schemas/requisition.py` | Add `mandatory_skill_ids`, `preferred_skill_ids`, `target_member_ids` to `JobDescription` |
+| `src/app/api/routers/jd_skill_mapping.py` | Promote `target_member_ids` to top-level graph state |
+
+---
+
+## 8. ✅ API Schema Testing Overrides (DONE)
+
+Three optional fields added to `JobDescription` for exact-match testing and controlled integration testing:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `mandatory_skill_ids` | `Optional[List[str]]` | Pre-resolved UUIDs; skips LLM normalization in Node 2 |
+| `preferred_skill_ids` | `Optional[List[str]]` | Same as above for preferred skills |
+| `target_member_ids` | `Optional[List[str]]` | Candidate UUIDs that must appear in the scoring pool |
+
+`target_member_ids` is promoted to top-level graph state in `process_requisition_with_graph()` so Node 4 can read it directly without re-parsing the JD payload.
+
+### Acceptance criteria
+
+- Request with `mandatory_skill_ids` set: logs show "Skill normalization bypassed via direct IDs"; no LLM call in Node 2
+- Request with `target_member_ids`: those candidates appear in the final result set regardless of RRF rank
+- All three fields default to `None`; existing requests without them are unaffected
+
+---
+
+## 9. ✅ Infrastructure & Settings Centralization (DONE)
+
+Small cross-cutting improvements that remove hardcoded values and `os.getenv()` calls in favor of the Settings class.
+
+### Changes
+
+| Module | Old | New |
+|---|---|---|
+| `llm_client.py` | `max_retries = 5`, `base_delay = 2.0` hardcoded; `os.getenv()` API key fallback | Read from `settings.llm_max_retries`, `settings.llm_retry_base_delay`; API keys read from settings only |
+| `ranking.py` | `float(os.getenv("FIT_SCORE_THRESHOLD", "0.5"))` | `settings.fit_score_threshold` |
+| `result_aggregation.py` | Float values not rounded in output | `_round_floats()` recursive helper applied to all result entries (rounds to 2 decimal places) |
+| `result_aggregation.py` | `base_agentic_score` not surfaced | Added to result entry so it is visible in API response alongside `ai_confidence_score` |
+
+### New settings fields
+
+```python
+# settings.py
+llm_max_retries: int = 5
+llm_retry_base_delay: float = 2.0
+```
+
+`fit_score_threshold` was already a settings field; `os.getenv()` in `ranking.py` was redundant.
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `src/app/ai/utils/llm_client.py` | Remove `os.getenv()` fallbacks; read retry params from settings |
+| `src/app/ai/utils/ranking.py` | Read `fit_score_threshold` from settings; remove `os` import |
+| `src/app/ai/agents/result_aggregation.py` | Add `_round_floats()` helper; apply to result entries; expose `base_agentic_score` |
+| `src/app/settings.py` | Add `llm_max_retries`, `llm_retry_base_delay` |
 
 ---
 

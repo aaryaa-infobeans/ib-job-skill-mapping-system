@@ -38,7 +38,9 @@ _WORK_MODE_ALIASES: Dict[str, str] = {
 }
 
 # Experience bounds that are treated as "no real constraint" and skipped.
-_EXP_MAX_PLAUSIBLE_MONTHS: int = 600  # 50 years
+# Controlled via EXP_MAX_PLAUSIBLE_MONTHS in .env (fallback: 600 months / 50 years).
+from app.settings import settings as _settings
+_EXP_MAX_PLAUSIBLE_MONTHS: int = _settings.exp_max_plausible_months
 
 
 class RAGRetrievalAgent(BaseAgent):
@@ -57,7 +59,6 @@ class RAGRetrievalAgent(BaseAgent):
         self,
         embedding_result: EmbeddingResult,
         query_text: Optional[str] = None,
-        filter_ids: Optional[List[str]] = None,
         mandatory_skills: List[str] = [],
         preferred_skills: List[str] = [],
         locations: List[str] = [],
@@ -238,10 +239,19 @@ class RAGRetrievalAgent(BaseAgent):
             "keyword_fetch_limit": settings.rag_keyword_fetch_limit,
         }
 
-        # Business constraint pre-filters (location, work_mode, experience) are currently
-        # both SQL paths (SQL #1 via _build_sql and SQL #2 via _build_keyword_sql).
-        self._add_location_filters(filters, params, locations)
-        self._add_work_mode_filters(filters, params, work_modes)
+        # Hard pre-filters applied to both SQL paths.
+        # Location: only applied when the JD does NOT accept remote/WFH.
+        # Work mode: removed as a hard SQL filter — candidates are not excluded by work_type.
+        #   Fit is a scoring concern handled downstream, not a binary retrieval gate.
+        jd_accepts_remote = any(
+            _WORK_MODE_ALIASES.get(m.strip().lower()) == "wfh"
+            for m in work_modes
+        ) or any(
+            loc.strip().lower() in _VIRTUAL_LOCATION_TERMS
+            for loc in locations
+        )
+        if not jd_accepts_remote:
+            self._add_location_filters(filters, params, locations)
         self._add_experience_filters(filters, params, experience_req)
 
         return filters, params
@@ -263,19 +273,20 @@ class RAGRetrievalAgent(BaseAgent):
     def _add_work_mode_filters(self, filters: List[str], params: Dict, work_modes: List[str]) -> None:
         if not work_modes:
             return
-        mode_clauses = []
-        i = 0
-        for mode in work_modes:
-            mapped = _WORK_MODE_ALIASES.get(mode.strip().lower())
-            if mapped is None:
-                continue  # unknown entry — skip rather than producing a filter that matches nothing
-            key = f"mode_{i}"
-            mode_clauses.append(f"CAST(tm.work_type AS text) ILIKE :{key}")
-            params[key] = f"%{mapped}%"
-            i += 1
-        if mode_clauses:
-            filters.append("(" + " OR ".join(mode_clauses) + ")")
-        # If every entry was unmappable, no clause added — safer than filtering to zero rows
+        mapped_modes = {_WORK_MODE_ALIASES[m.strip().lower()] for m in work_modes if m.strip().lower() in _WORK_MODE_ALIASES}
+        if not mapped_modes:
+            return  # all entries unmappable — skip rather than filtering to zero rows
+
+        # If the JD accepts WFH, every candidate can fulfil it (a WFO candidate can work
+        # remotely when the role allows). Only filter when the JD demands physical presence.
+        if "wfh" in mapped_modes:
+            return
+
+        # JD requires physical presence (WFO-only or Hybrid-only).
+        # WFH-only candidates cannot fulfil office requirements — exclude them.
+        # Allow wfo and hybrid candidates (hybrid implies they can do in-office days).
+        filters.append("CAST(tm.work_type AS text) NOT ILIKE :wfh_exclude")
+        params["wfh_exclude"] = "wfh"
 
     def _add_experience_filters(self, filters: List[str], params: Dict, experience_req: Dict) -> None:
         if not experience_req:
@@ -293,20 +304,12 @@ class RAGRetrievalAgent(BaseAgent):
         if min_m == 0:
             min_m = None
 
-        # Repair inverted range instead of silently excluding everyone
-        if min_m is not None and max_m is not None and min_m > max_m:
-            min_m, max_m = max_m, min_m
-
-        if min_m is not None and max_m is not None:
-            filters.append("tm.experience_in_months BETWEEN :min_m AND :max_m")
-            params["min_m"] = min_m
-            params["max_m"] = max_m
-        elif min_m is not None:
+        # Only apply a minimum experience floor — over-qualified candidates are valid.
+        # The scoring layer's _exp_relevance() applies a graduated penalty for over-experience.
+        # max_m is intentionally not used as a hard SQL filter.
+        if min_m is not None:
             filters.append("tm.experience_in_months >= :min_m")
             params["min_m"] = min_m
-        elif max_m is not None:
-            filters.append("tm.experience_in_months <= :max_m")
-            params["max_m"] = max_m
 
     def _build_sql(self, filters: List[str], keyword_query_str: str = ""):
         if keyword_query_str.strip():
@@ -436,9 +439,6 @@ class RAGRetrievalAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def _filter_and_rank(self, candidates: List[RAGCandidate]) -> List[RAGCandidate]:
-        # RRF scores (0–0.033 range) are not comparable to the old 0–1 threshold.
-        # Phase 0 retrieval already vets candidates via vector and BM25 paths —
-        # just sort by RRF and cap at rag_final_candidates for Node 5.
         candidates.sort(key=lambda x: x.final_similarity, reverse=True)
         result = candidates[:settings.rag_final_candidates]
         self.logger.info(

@@ -605,3 +605,100 @@ def _build_breakdown(total_score, bm25_score, ...):
 6. **Unit tests** — `pytest tests/unit/` — no existing test references `keyword_score` or `kw_norm` (confirmed by codebase search). No test updates needed for existing tests.
 
 7. **BM25 score sanity** — for a candidate appearing in both paths, confirm their `bm25_score > 0.0` (keyword dict value used, not the 0.0 semantic default).
+
+---
+
+## Post-Implementation Filter Improvements
+
+Changes made after the pg_bm25 implementation was live, in response to over-filtering issues observed in testing.
+
+### A. `filter_ids` parameter removed from `execute()`
+
+The `filter_ids: Optional[List[str]]` parameter was removed from `RAGRetrievalAgent.execute()`. It was intended to pin specific candidates into the retrieval pool but was never correctly wired — `initial_filter_ids` was read from state in `rag_retrieval_node` but then silently dropped in the agent. The parameter is removed entirely; target-member pinning is now handled via `target_member_ids` in the graph state (see API schema overrides section in HYBRID_SEARCH_AND_SCORE_IMPROVEMENT.md).
+
+### B. Location filter — conditional on JD accepting remote
+
+**Old behaviour:** location SQL filter applied unconditionally for every JD that specified locations.
+
+**Problem:** A JD listing `["Bangalore", "Remote"]` would still filter candidates by city — excluding WFH candidates who should qualify.
+
+**New behaviour:** Location filter is skipped entirely when the JD accepts remote work:
+
+```python
+jd_accepts_remote = any(
+    _WORK_MODE_ALIASES.get(m.strip().lower()) == "wfh"
+    for m in work_modes
+) or any(
+    loc.strip().lower() in _VIRTUAL_LOCATION_TERMS
+    for loc in locations
+)
+if not jd_accepts_remote:
+    self._add_location_filters(filters, params, locations)
+```
+
+When `jd_accepts_remote` is True, all candidates pass the location gate; fit is handled downstream by `_calculate_location_score()` in scoring.
+
+### C. Work mode filter rework
+
+**Old behaviour:** Generated `CAST(tm.work_type AS text) ILIKE :mode_N` OR clauses for each mapped mode. If the JD accepted remote (`"wfh"` in mapped modes), the filter still ran and could produce confusing results.
+
+**New behaviour:** Work mode is no longer a hard SQL exclusion filter in the general case. Only WFH-only candidates are excluded when the JD requires physical presence:
+
+```python
+mapped_modes = {_WORK_MODE_ALIASES[m.strip().lower()] for m in work_modes if ...}
+
+if "wfh" in mapped_modes:
+    return  # JD accepts WFH → every candidate can fulfil it, no SQL filter
+
+# JD requires physical presence — exclude WFH-only candidates
+filters.append("CAST(tm.work_type AS text) NOT ILIKE :wfh_exclude")
+params["wfh_exclude"] = "wfh"
+```
+
+`hybrid` candidates pass (they can fulfil in-office days). Only `wfh`-only candidates are excluded.
+
+### D. Experience filter — max_m removed as a hard SQL filter
+
+**Old behaviour:** When JD specified both `min` and `max` experience, SQL used `BETWEEN` (or two one-sided filters). Inverted ranges (`min > max`) were silently swapped.
+
+**Problem:** Over-qualified candidates (senior engineers) were excluded from mid-level JDs. The BETWEEN clause was too strict — experience over-qualification is a soft concern, not a hard one.
+
+**New behaviour:** Only `min_m` is applied as a hard floor. `max_m` is intentionally ignored in SQL; the scoring layer's `_exp_relevance()` applies a graduated penalty for over-experience. Inverted-range repair is also removed.
+
+```python
+# Only apply minimum experience floor
+if min_m is not None:
+    filters.append("tm.experience_in_months >= :min_m")
+    params["min_m"] = min_m
+# max_m intentionally not applied — over-qualified candidates are valid, scoring penalises gently
+```
+
+### E. `exp_max_plausible_months` moved to settings
+
+The constant `_EXP_MAX_PLAUSIBLE_MONTHS = 600` (50 years — values above this are treated as invalid JD input) was hardcoded. It is now read from settings:
+
+```python
+# settings.py
+exp_max_plausible_months: int = 600   # default: 50 years
+
+# rag_retrieval.py
+_EXP_MAX_PLAUSIBLE_MONTHS: int = _settings.exp_max_plausible_months
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| [src/app/ai/utils/rag_retrieval.py](src/app/ai/utils/rag_retrieval.py) | Remove `filter_ids` param; make location filter conditional on `jd_accepts_remote`; rework work mode filter to exclude WFH only when JD requires physical presence; drop `max_m` SQL filter; move `_EXP_MAX_PLAUSIBLE_MONTHS` to settings |
+| [src/app/ai/agents/rag_retrieval.py](src/app/ai/agents/rag_retrieval.py) | Remove `initial_filter_ids` variable and `filter_ids=` kwarg in agent call |
+| [src/app/settings.py](src/app/settings.py) | Add `exp_max_plausible_months: int = 600` |
+
+### Edge Cases
+
+| Case | Behaviour |
+|---|---|
+| JD locations = `["Bangalore", "Remote"]` | `jd_accepts_remote=True` → location filter skipped; all candidates retrieved |
+| JD locations = `["Bangalore"]` only | Location filter applied; non-Bangalore candidates excluded at SQL |
+| JD work_modes = `["Remote", "Hybrid"]` | `"wfh"` in mapped_modes → work mode filter skipped |
+| JD work_modes = `["WFO"]` | Filter added: excludes WFH-only candidates |
+| JD `max_experience = 60m`, candidate has `120m` | Candidate retrieved; scoring `_exp_relevance()` applies graduated penalty |
