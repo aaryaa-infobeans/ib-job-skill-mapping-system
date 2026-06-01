@@ -809,3 +809,291 @@ def test_context_boost_no_active_criteria(scoring_agent):
 
 ---
 
+## Addendum 3: Availability Scoring
+
+### Why
+
+The scoring formula had no slot for a candidate's current allocation/availability. A candidate already at 95% allocation is a delivery risk even if their skills match perfectly. Availability is surfaced from the team calendar system via `availability_result["available_capacity"]` (a 0–100 % float already computed by the availability checker in `matching_scoring_node`).
+
+### Weight Adjustments
+
+Semantic weight reduced from 0.25 → 0.20 across all role levels to make room for the new availability weight, keeping role weight totals at 1.0.
+
+| Setting | Old | New |
+|---|---|---|
+| `weight_semantic_senior/mid/junior` | 0.25 | 0.20 |
+| `weight_availability_senior` | — | 0.05 |
+| `weight_availability_mid` | — | 0.05 |
+| `weight_availability_junior` | — | 0.05 |
+
+### Formula change
+
+```python
+# In scoring.py execute()
+avail_score = min(profile_data.get("available_capacity", 100.0) / 100.0, 1.0)
+
+match_score = (
+    (m_match_ratio * role_weights["mandatory"]) +
+    (p_score       * role_weights["preferred"]) +
+    (s_score       * role_weights["semantic"]) +
+    context_contribution +
+    (avail_score   * role_weights["availability"]) +   # NEW
+    penalty
+)
+```
+
+`available_capacity` defaults to 100.0 (fully available) when not present — backward-safe.
+
+### Threshold setting
+
+`matching_scoring_node` now reads the availability gate from settings instead of the previous hardcoded 80.0:
+
+```python
+# Before:
+threshold_percentage=80.0
+# After:
+threshold_percentage=settings.availability_threshold_percentage  # default 80.0
+```
+
+### Changes
+
+#### `src/app/settings.py`
+
+```python
+weight_availability_senior: float = 0.05
+weight_availability_mid:    float = 0.05
+weight_availability_junior: float = 0.05
+
+# Candidate is "available" when total allocation < this threshold
+availability_threshold_percentage: float = 80.0
+```
+
+#### `src/app/ai/utils/scoring.py` — role weight configs
+
+Add `"availability"` key to the weights dict for SENIOR, MID, JUNIOR:
+
+```python
+"availability": settings.weight_availability_senior,   # MID/JUNIOR analogous
+```
+
+#### `src/app/ai/utils/scoring.py` — `execute()`
+
+After `penalty = self._get_skill_family_penalty(...)`:
+
+```python
+avail_score = min(profile_data.get("available_capacity", 100.0) / 100.0, 1.0)
+```
+
+Add `avail_score` term to `match_score` formula and to `score_breakdown`:
+
+```python
+"availability_score": avail_score,
+"weight_a":           role_weights["availability"],
+```
+
+#### `src/app/ai/agents/matching_scoring.py` — `match_reasons`
+
+```python
+"availability_score":       round(scoring_result.score_breakdown.get("availability_score", 0.0), 2),
+"available_capacity_pct":   round(availability_result.get("available_capacity", 100.0), 2),
+```
+
+Also expose `weight_a` in the existing `score_breakdown` output block:
+
+```python
+"weight_a": scoring_result.score_breakdown.get("weight_a", 0.0),
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| [src/app/settings.py](src/app/settings.py) | Add `weight_availability_*`, `availability_threshold_percentage`; lower `weight_semantic_*` from 0.25 → 0.20 |
+| [src/app/ai/utils/scoring.py](src/app/ai/utils/scoring.py) | Add `"availability"` to role weight configs; compute `avail_score`; include in formula and breakdown |
+| [src/app/ai/agents/matching_scoring.py](src/app/ai/agents/matching_scoring.py) | Read `availability_threshold_percentage` from settings; expose `availability_score` and `available_capacity_pct` in `match_reasons` |
+
+---
+
+## Addendum 4: Output Enrichment — Per-Skill Detail in API Response
+
+### Why
+
+`mandatory_matched` / `preferred_matched` returned only skill names as flat strings. The API consumer had no way to see the rating or experience behind a matched skill without a separate DB call. Exposing this in the response removes the round-trip and makes the match reasoning transparent.
+
+### What was implemented
+
+Three module-level helpers in `matching_scoring.py`:
+
+```python
+def _fmt_rating(raw) -> str:
+    return f"{raw}/5" if raw is not None else "unrated"
+
+def _fmt_experience(exp_m) -> str:
+    if exp_m is None:
+        return "unknown"
+    yrs, mths = divmod(exp_m, 12)
+    return f"{yrs}y {mths}m" if yrs else f"{mths}m"
+
+def _enrich_skill_details(
+    skill_names: list,
+    alternatives: dict,
+    skill_raw_ratings: dict,   # {skill_id: int|None} — raw 0–5, NOT the blended float
+    skill_exp_months: dict,    # {skill_id: int|None}
+    member_skill_ids: list,
+) -> list:
+    """Return matched skill names enriched with rating and experience for display."""
+```
+
+`_enrich_skill_details` walks the same `alternatives` map used by `_calculate_skill_group_score()`. For each matched canonical name it picks the best-rated ID and returns:
+
+```json
+{"skill": "Python", "rating": "4/5", "experience": "2y 6m", "experience_months": 30}
+```
+
+For profile-text-only matches (no ID match): `"rating": "profile mention"`.
+
+### New `skill_raw_ratings` dict
+
+A second per-skill dict is derived alongside the existing blended `skill_ratings`:
+
+```python
+skill_raw_ratings = {
+    s.skill_id: s.rating          # raw 0–5 integer, None if unrated
+    for s in skill_records
+}
+```
+
+`skill_ratings` (blended 0–1 float) is for scoring. `skill_raw_ratings` (raw integer) is for display only.
+
+### `full_jd_similarity` in profile_data
+
+`full_jd_similarity` from `rag_scores_dict` was not being passed into `profile_data` even though it was available. Now included alongside the other similarity scores:
+
+```python
+full_jd_similarity=rag_scores_dict.get("full_jd_similarity", 0.5),
+```
+
+### Changes to `match_reasons` output
+
+```python
+"mandatory_matched_detail": _enrich_skill_details(
+    scoring_result.detailed_breakdown.mandatory_matched,
+    mandatory_alternatives,
+    skill_raw_ratings,
+    skill_exp_months,
+    member_skill_ids,
+),
+"preferred_matched_detail": _enrich_skill_details(
+    scoring_result.detailed_breakdown.preferred_matched,
+    preferred_alternatives,
+    skill_raw_ratings,
+    skill_exp_months,
+    member_skill_ids,
+)[:5],
+"title_score": scoring_result.detailed_breakdown.title_score,
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| [src/app/ai/agents/matching_scoring.py](src/app/ai/agents/matching_scoring.py) | Add `_fmt_rating()`, `_fmt_experience()`, `_enrich_skill_details()` helpers; derive `skill_raw_ratings`; add `full_jd_similarity` to profile_data; expose `mandatory_matched_detail`, `preferred_matched_detail`, `title_score` in `match_reasons` |
+| [src/app/ai/utils/models.py](src/app/ai/utils/models.py) | Add `title_score: float = 0.0` to `ScoringBreakdown` |
+| [src/app/ai/utils/scoring.py](src/app/ai/utils/scoring.py) | Return `title_score` and `context_breakdown` from `_calculate_context_boost()`; populate `title_score` in `ScoringBreakdown`; add to `score_breakdown` dict |
+
+---
+
+## Addendum 5: Scoring Behavior Improvements
+
+### A. Binary mode for skill contribution
+
+When both `skill_rating_weight` and `skill_exp_weight` are set to 0 in `.env`, skill _presence_ alone counts as full contribution (1.0). This lets operators toggle off rating-based differentiation without code changes:
+
+```python
+# In _skill_contribution() / _calculate_skill_group_score()
+if settings.skill_rating_weight == 0 and settings.skill_exp_weight == 0:
+    return 1.0   # binary: present = full credit
+```
+
+Same guard applied to text-only matches:
+
+```python
+text_contribution = (
+    1.0 if settings.skill_rating_weight == 0 and settings.skill_exp_weight == 0
+    else settings.profile_text_match_weight
+)
+```
+
+### B. `_calculate_context_boost()` return enrichment
+
+`_calculate_context_boost()` now returns `title_score` and a structured `context_breakdown` dict in addition to its existing scalar scores. Both flow into `score_breakdown` and are logged for audit:
+
+```python
+# Returned by _calculate_context_boost():
+{
+    "score": aggregate,
+    "exp_score": exp_score,
+    "cert_res": cert_res,
+    "loc_score": loc_score,
+    "mode_score": mode_score,
+    "title_score": title_score,          # NEW
+    "context_breakdown": {               # NEW
+        "active_weight": ...,
+        "components": {
+            "experience":    {"score", "weight", "active", "weighted_contribution"},
+            "certification": { ... },
+            "location":      { ... },
+            "work_mode":     { ... },
+            "title":         { ... },
+        }
+    }
+}
+```
+
+`context_breakdown` and `title_score` are also surfaced in `score_breakdown` in `execute()`.
+
+### C. `context_boost_cap` replaced by role weight
+
+Previously context contribution was capped by `settings.context_boost_cap` (a global constant). Now capped by the role's own `context` weight — coherent because a role's context weight already defines the maximum possible contribution:
+
+```python
+# Before:
+context_contribution = min(context_contribution, settings.context_boost_cap)
+# After:
+context_contribution = min(context_contribution, role_weights["context"])
+```
+
+### D. `_get_skill_family_penalty()` tightening
+
+The penalty previously fired whenever the JD had any single backend indicator AND the candidate had more frontend than backend skills. This produced false positives on full-stack roles (e.g. a WordPress JD also mentions "MySQL"). Three conditions are now all required:
+
+| # | Condition | Guard |
+|---|---|---|
+| 1 | JD is backend-dominant | ≥2 backend indicator hits in jd_text |
+| 2 | JD does NOT ask for frontend skills | < 2 frontend keyword hits in jd_text |
+| 3 | Candidate is frontend-only | frontend count > 1 AND > 2× backend count |
+
+```python
+# Condition 1
+jd_backend_hits = sum(1 for kw in backend_indicators if kw in jd_lower)
+if jd_backend_hits < 2:
+    return 0.0
+
+# Condition 2
+jd_frontend_hits = sum(1 for kw in frontend_kws if kw in jd_lower)
+if jd_frontend_hits >= 2:
+    return 0.0
+
+# Condition 3
+if f_count > 1 and f_count > b_count * 2:
+    return settings.skill_family_penalty
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| [src/app/ai/utils/scoring.py](src/app/ai/utils/scoring.py) | Binary mode guard in `_skill_contribution()` and text-match branch; return `title_score` + `context_breakdown` from `_calculate_context_boost()`; replace `context_boost_cap` with role weight cap; tighten `_get_skill_family_penalty()` to three conditions |
+
+---
+

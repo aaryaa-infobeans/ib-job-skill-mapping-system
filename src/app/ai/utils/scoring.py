@@ -15,9 +15,9 @@ class ScoringAgent(BaseAgent):
     def __init__(self, logger: Optional[logging.Logger] = None):
         super().__init__(agent_name="ScoringAgent", logger=logger)
     
-    def validate_input(self, input_data: Any) -> bool:
+    def validate_input(self, _input_data: Any) -> bool:
         return True
-        
+
     def format_output(self, result: Any) -> Any:
         return result
     
@@ -42,10 +42,11 @@ class ScoringAgent(BaseAgent):
                     "mandatory": settings.weight_mandatory_senior,
                     "preferred": settings.weight_preferred_senior,
                     "semantic": settings.weight_semantic_senior,
-                    "context": settings.weight_context_senior
+                    "context": settings.weight_context_senior,
+                    "availability": settings.weight_availability_senior,
                 },
                 "gates": {
-                    "min_skill_weighted": settings.min_skill_weighted_senior, 
+                    "min_skill_weighted": settings.min_skill_weighted_senior,
                     "min_semantic": settings.min_semantic_senior
                 },
                 "fit_threshold": settings.fit_threshold_senior
@@ -56,10 +57,11 @@ class ScoringAgent(BaseAgent):
                     "mandatory": settings.weight_mandatory_mid,
                     "preferred": settings.weight_preferred_mid,
                     "semantic": settings.weight_semantic_mid,
-                    "context": settings.weight_context_mid
+                    "context": settings.weight_context_mid,
+                    "availability": settings.weight_availability_mid,
                 },
                 "gates": {
-                    "min_skill_weighted": settings.min_skill_weighted_mid, 
+                    "min_skill_weighted": settings.min_skill_weighted_mid,
                     "min_semantic": settings.min_semantic_mid
                 },
                 "fit_threshold": settings.fit_threshold_mid
@@ -70,10 +72,11 @@ class ScoringAgent(BaseAgent):
                     "mandatory": settings.weight_mandatory_junior,
                     "preferred": settings.weight_preferred_junior,
                     "semantic": settings.weight_semantic_junior,
-                    "context": settings.weight_context_junior
+                    "context": settings.weight_context_junior,
+                    "availability": settings.weight_availability_junior,
                 },
                 "gates": {
-                    "min_skill_weighted": settings.min_skill_weighted_junior, 
+                    "min_skill_weighted": settings.min_skill_weighted_junior,
                     "min_semantic": settings.min_semantic_junior
                 },
                 "fit_threshold": settings.fit_threshold_junior
@@ -118,8 +121,16 @@ class ScoringAgent(BaseAgent):
     ) -> float:
         """Return a 0–1 contribution for a single matched skill ID.
 
-        Blends normalised rating and experience. None values default to 0.5 (neutral)
-        so missing metadata ranks below fully-rated skills but above low-rated ones."""
+        Binary mode (SKILL_RATING_WEIGHT=0 and SKILL_EXP_WEIGHT=0 in .env):
+          skill presence alone counts as full contribution (1.0).
+
+        Weighted mode (default):
+          blends normalised rating (60%) and experience (40%). None values
+          default to 0.5 so missing metadata ranks below fully-rated skills."""
+        # Binary mode: both weights set to 0 → presence is enough, depth ignored
+        if settings.skill_rating_weight == 0 and settings.skill_exp_weight == 0:
+            return 1.0
+
         norm_rating = skill_ratings.get(sid, 0.5) if skill_ratings is not None else 1.0
         if skill_exp_months is not None:
             raw_exp = skill_exp_months.get(sid)
@@ -171,7 +182,12 @@ class ScoringAgent(BaseAgent):
             found = self._skill_found_in_text(members, p_text_lower)
             if found:
                 matched.append(canonical)
-                contribution_sum += settings.profile_text_match_weight
+                # Binary mode: text match is also full credit
+                text_contribution = (
+                    1.0 if settings.skill_rating_weight == 0 and settings.skill_exp_weight == 0
+                    else settings.profile_text_match_weight
+                )
+                contribution_sum += text_contribution
             else:
                 missing.append(canonical)
 
@@ -246,33 +262,88 @@ class ScoringAgent(BaseAgent):
         active_weight += settings.weight_jd_text
 
         aggregate = active_sum / active_weight if active_weight > 0 else 0.0
+
+        exp_active   = bool(profile_data.get("min_experience_months"))
+        cert_active  = bool(profile_data.get("required_certifications"))
+        loc_active   = bool(physical_locs)
+        mode_active  = len(required_work_modes) == 1
+
+        context_breakdown = {
+            "active_weight": round(active_weight, 4),
+            "components": {
+                "experience": {
+                    "score": round(exp_score, 2),
+                    "weight": settings.weight_experience,
+                    "active": exp_active,
+                    "weighted_contribution": round(exp_score * settings.weight_experience, 4) if exp_active else 0.0,
+                },
+                "certification": {
+                    "score": round(cert_res["score"], 2),
+                    "weight": settings.weight_certification,
+                    "active": cert_active,
+                    "weighted_contribution": round(cert_res["score"] * settings.weight_certification, 4) if cert_active else 0.0,
+                },
+                "location": {
+                    "score": round(loc_score, 2),
+                    "weight": settings.weight_location,
+                    "active": loc_active,
+                    "weighted_contribution": round(loc_score * settings.weight_location, 4) if loc_active else 0.0,
+                },
+                "work_mode": {
+                    "score": round(mode_score, 2),
+                    "weight": settings.weight_work_mode,
+                    "active": mode_active,
+                    "weighted_contribution": round(mode_score * settings.weight_work_mode, 4) if mode_active else 0.0,
+                },
+                "title": {
+                    "score": round(title_score, 2),
+                    "weight": settings.weight_jd_text,
+                    "active": True,
+                    "weighted_contribution": round(title_score * settings.weight_jd_text, 4),
+                },
+            },
+        }
+
         return {
             "score": aggregate,
             "exp_score": exp_score,
             "cert_res": cert_res,
             "loc_score": loc_score,
             "mode_score": mode_score,
+            "title_score": title_score,
+            "context_breakdown": context_breakdown,
         }
 
     def _get_skill_family_penalty(self, member_skill_names: List[str], jd_text: str) -> float:
-        """
-        Calculates penalty for family mismatch (e.g. Frontend for Backend/AI role).
+        """Penalty for a clearly mismatched skill family.
+
+        Only fires when ALL three conditions are true:
+          1. JD is clearly backend/AI dominated (≥2 backend indicators in jd_text)
+          2. JD does NOT itself require frontend skills (< 2 frontend keywords in jd_text)
+             — this prevents penalising full-stack roles like WordPress/PHP
+          3. Candidate is frontend-dominant (frontend skill count > 2× backend skill count)
         """
         jd_lower = jd_text.lower()
-        backend_ai_indicators = [k.strip() for k in settings.backend_ai_indicators.split(",")]
-        is_backend_ai = any(kw in jd_lower for kw in backend_ai_indicators)
-        if not is_backend_ai:
+        frontend_kws      = [k.strip() for k in settings.frontend_keywords.split(",")]
+        backend_kws       = [k.strip() for k in settings.backend_keywords.split(",")]
+        backend_indicators = [k.strip() for k in settings.backend_ai_indicators.split(",")]
+
+        # Condition 1: JD must have at least 2 backend/AI signals (not just "sql" in "MySQL")
+        jd_backend_hits = sum(1 for kw in backend_indicators if kw in jd_lower)
+        if jd_backend_hits < 2:
             return 0.0
 
-        all_matched = [s.lower() for s in member_skill_names]
-        
-        frontend_kws = [k.strip() for k in settings.frontend_keywords.split(",")]
-        backend_kws = [k.strip() for k in settings.backend_keywords.split(",")]
-        
-        f_count = sum(1 for s in all_matched if any(kw in s for kw in frontend_kws))
-        b_count = sum(1 for s in all_matched if any(kw in s for kw in backend_kws))
-        
-        if f_count > b_count and f_count > 1:
+        # Condition 2: If the JD itself asks for ≥2 frontend skills it is full-stack — no penalty
+        jd_frontend_hits = sum(1 for kw in frontend_kws if kw in jd_lower)
+        if jd_frontend_hits >= 2:
+            return 0.0
+
+        # Condition 3: Candidate must be clearly frontend-only (2× more frontend than backend)
+        all_skills = [s.lower() for s in member_skill_names]
+        f_count = sum(1 for s in all_skills if any(kw in s for kw in frontend_kws))
+        b_count = sum(1 for s in all_skills if any(kw in s for kw in backend_kws))
+
+        if f_count > 1 and f_count > b_count * 2:
             return settings.skill_family_penalty
         return 0.0
 
@@ -405,24 +476,35 @@ class ScoringAgent(BaseAgent):
         context_result = self._calculate_context_boost(profile_data)
         c_raw = context_result["score"]
 
-        # Apply Role-Specific Context Weight and CAP at 8%
+        # Apply role-specific context weight; cap at the role's own weight (never exceeds it)
         context_contribution = c_raw * role_weights["context"]
-        context_contribution = min(context_contribution, settings.context_boost_cap)
+        context_contribution = min(context_contribution, role_weights["context"])
         
         # Skill Family Penalty
         penalty = self._get_skill_family_penalty(profile_data.get("skill_names", []), jd_text)
-        
+
+        # Availability Score — normalised capacity (0–100 % → 0.0–1.0)
+        avail_score = min(profile_data.get("available_capacity", 100.0) / 100.0, 1.0)
+
         # Final Score Calculation
         match_score = (
             (m_match_ratio * role_weights["mandatory"]) +
             (p_score * role_weights["preferred"]) +
             (s_score * role_weights["semantic"]) +
             context_contribution +
+            (avail_score * role_weights["availability"]) +
             penalty
         )
         
         match_score = round(max(0.0, min(1.0, match_score)), 4)
-        
+
+        exp_score         = context_result["exp_score"]
+        cert_res          = context_result["cert_res"]
+        loc_score         = context_result["loc_score"]
+        mode_score        = context_result["mode_score"]
+        title_score       = context_result["title_score"]
+        context_breakdown = context_result["context_breakdown"]
+
         # Prepare breakdown
         score_breakdown = {
             "mandatory_skills_group": m_match_ratio,
@@ -430,19 +512,18 @@ class ScoringAgent(BaseAgent):
             "semantic_similarity": s_score,
             "context_score": c_raw,
             "context_contribution": context_contribution,
+            "availability_score": avail_score,
+            "title_score": title_score,
+            "context_breakdown": context_breakdown,
             "weight_m": role_weights["mandatory"],
             "weight_p": role_weights["preferred"],
             "weight_s": role_weights["semantic"],
             "weight_c": role_weights["context"],
+            "weight_a": role_weights["availability"],
             "penalties": penalty,
             "is_qualified": is_qualified,
             "role_type": role_type
         }
-
-        exp_score = context_result["exp_score"]
-        cert_res  = context_result["cert_res"]
-        loc_score = context_result["loc_score"]
-        mode_score = context_result["mode_score"]
 
         detailed = ScoringBreakdown(
             skills_matched=p_res["matched_preferred"] + m_res["matched"],
@@ -458,6 +539,7 @@ class ScoringAgent(BaseAgent):
             certification_expired=cert_res.get("expired", []),
             experience_score=round(exp_score, 2),
             experience_matched=(exp_score >= 1.0),
+            title_score=round(title_score, 2),
             location_score=round(loc_score, 2),
             location_matched=(loc_score >= 1.0),
             work_mode_score=round(mode_score, 2),

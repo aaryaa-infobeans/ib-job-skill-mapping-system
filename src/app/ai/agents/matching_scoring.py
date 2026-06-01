@@ -48,6 +48,44 @@ def _sanitize_skill_list(skill_list: list) -> list:
     return sanitized
 
 
+def _fmt_rating(raw) -> str:
+    return f"{raw}/5" if raw is not None else "unrated"
+
+
+def _fmt_experience(exp_m) -> str:
+    if exp_m is None:
+        return "unknown"
+    yrs, mths = divmod(exp_m, 12)
+    return f"{yrs}y {mths}m" if yrs else f"{mths}m"
+
+
+def _enrich_skill_details(
+    skill_names: list,
+    alternatives: dict,
+    skill_raw_ratings: dict,
+    skill_exp_months: dict,
+    member_skill_ids: list,
+) -> list:
+    """Return matched skill names enriched with rating and experience for output display."""
+    member_set = set(member_skill_ids)
+    result = []
+    for name in _sanitize_skill_list(skill_names or []):
+        alt_ids = alternatives.get(name, [])
+        matched_ids = [sid for sid in alt_ids if sid in member_set]
+        if not matched_ids:
+            result.append({"skill": name, "rating": "profile mention", "experience": "unknown", "experience_months": None})
+            continue
+        best_id = max(matched_ids, key=lambda sid: skill_raw_ratings.get(sid) or 0)
+        exp_m = skill_exp_months.get(best_id)
+        result.append({
+            "skill": name,
+            "rating": _fmt_rating(skill_raw_ratings.get(best_id)),
+            "experience": _fmt_experience(exp_m),
+            "experience_months": exp_m,
+        })
+    return result
+
+
 def _build_candidate_context(
     member,
     skill_records,
@@ -216,6 +254,11 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     s.skill_id: (s.rating / 5.0) if s.rating is not None else 0.5
                     for s in skill_records
                 }
+                # Raw 0–5 rating for display in output (None = unrated)
+                skill_raw_ratings = {
+                    s.skill_id: s.rating
+                    for s in skill_records
+                }
                 # Raw experience months per skill (None preserved); normalised inside scoring
                 skill_exp_months = {
                     s.skill_id: s.experience_in_months
@@ -258,7 +301,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     member.team_member_id,
                     expected_start_date,
                     requisition_duration_month,
-                    threshold_percentage=80.0,
+                    threshold_percentage=settings.availability_threshold_percentage,
                 )
                 
                 # 3. Deterministic Agentic Scoring (Phase 1 core)
@@ -297,6 +340,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     mandatory_similarity=rag_scores_dict.get("mandatory_similarity", 0.5),
                     preferred_similarity=rag_scores_dict.get("preferred_similarity", 0.5),
                     jd_level_similarity=rag_scores_dict.get("jd_level_similarity", 0.5),
+                    full_jd_similarity=rag_scores_dict.get("full_jd_similarity", 0.5),
                     certification_similarity=rag_scores_dict.get("certification_similarity", 0.5),
                     experience_in_months=member.experience_in_months or 0,
                     phase0_score_breakdown=rag_scores_dict.get("phase0_score_breakdown", {})
@@ -323,7 +367,6 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     confidence_score = ai_fit["confidence_score"]
                     
                     # 1. AI Waiver for Seniors
-                    from app.settings import settings
                     if not scoring_result.is_qualified and role_type == "SENIOR" and confidence_score >= settings.ai_override_threshold_senior:
                         if "Semantic similarity" in scoring_result.detailed_breakdown.qualification_reason:
                             is_qualified = True
@@ -370,13 +413,30 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "ai_reasoning": ai_fit["reasoning"],
                         "strengths": ai_fit.get("key_strengths", []),
                         "gaps": ai_fit.get("major_gaps", []),
+                        "availability_score": round(scoring_result.score_breakdown.get("availability_score", 0.0), 2),
+                        "available_capacity_pct": round(availability_result.get("available_capacity", 100.0), 2),
                         "mandatory_score": scoring_result.detailed_breakdown.mandatory_score,
                         "mandatory_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_matched),
+                        "mandatory_matched_detail": _enrich_skill_details(
+                            scoring_result.detailed_breakdown.mandatory_matched,
+                            mandatory_alternatives,
+                            skill_raw_ratings,
+                            skill_exp_months,
+                            member_skill_ids,
+                        ),
                         "mandatory_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.mandatory_missing),
                         "preferred_score": scoring_result.detailed_breakdown.preferred_score,
                         "preferred_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_matched)[:5],
+                        "preferred_matched_detail": _enrich_skill_details(
+                            scoring_result.detailed_breakdown.preferred_matched,
+                            preferred_alternatives,
+                            skill_raw_ratings,
+                            skill_exp_months,
+                            member_skill_ids,
+                        )[:5],
                         "preferred_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.preferred_missing)[:5],
                         "experience_score": scoring_result.detailed_breakdown.experience_score,
+                        "title_score": scoring_result.detailed_breakdown.title_score,
                         "certification_score": scoring_result.detailed_breakdown.certification_score,
                         "certification_matched": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_matched),
                         "certification_missing": _sanitize_skill_list(scoring_result.detailed_breakdown.certification_missing),
@@ -384,6 +444,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "semantic_similarity": scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched": scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched": scoring_result.detailed_breakdown.work_mode_matched,
+                        "skill_family_penalty": scoring_result.score_breakdown.get("penalties", 0.0),
                         "qualification_status": "QUALIFIED" if scoring_result.is_qualified else "DISQUALIFIED",
                         "qualification_reason": scoring_result.detailed_breakdown.qualification_reason
                     },
@@ -392,6 +453,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "weight_p": scoring_result.score_breakdown.get("weight_p", 0.0),
                     "weight_s": scoring_result.score_breakdown.get("weight_s", 0.0),
                     "weight_c": scoring_result.score_breakdown.get("weight_c", 0.0),
+                    "weight_a": scoring_result.score_breakdown.get("weight_a", 0.0),
                     "reason": scoring_result.detailed_breakdown.qualification_reason
                 }
 
