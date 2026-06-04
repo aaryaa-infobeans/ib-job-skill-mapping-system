@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     weight_work_mode: float = 0.10
     weight_jd_text: float = 0.05  # Title match
     
-    # --- ROLE-SPECIFIC WEIGHTS (Phase 1) ---
+    # --- ROLE-SPECIFIC WEIGHTS (additive: M+P+S+context+availability = 1.0) ---
     # SENIOR
     weight_mandatory_senior: float = 0.50
     weight_preferred_senior: float = 0.20
@@ -84,47 +84,46 @@ class Settings(BaseSettings):
     weight_semantic_junior: float = 0.20
     weight_context_junior: float = 0.15
     weight_availability_junior: float = 0.05
-    
+
     # Seniority Experience Thresholds (Months)
     senior_exp_threshold: int = 96  # 8 years
     junior_exp_threshold: int = 24  # 2 years
-    
-    # Gate Barrier Thresholds (Qualified/Disqualified)
-    min_skill_weighted_senior: float = 0.20  # 40% of (M+P) weight
+
+    # Gate Barrier Thresholds — V1
+    min_skill_weighted_senior: float = 0.20
     min_semantic_senior: float = 0.30
     fit_threshold_senior: float = 0.75
-    
-    # Lowered mid-level skill gate to avoid excluding near-fit candidates
+
     min_skill_weighted_mid: float = 0.08
     min_semantic_mid: float = 0.20
     fit_threshold_mid: float = 0.70
-    
+
     min_skill_weighted_junior: float = 0.15
     min_semantic_junior: float = 0.15
     fit_threshold_junior: float = 0.60
-    
+
     # AI Factor Configs
     ai_boost_senior: float = 0.08
     ai_boost_mid: float = 0.05
     ai_override_threshold_senior: float = 0.75
     ai_confidence_threshold_boost: float = 0.70
-    
-    # Context Boost Cap (Optional safety)
+
+    # Context Boost Cap — V1
     context_boost_cap: float = 0.08
 
-    # Skill Family Mappings
+    # Skill Family Mappings — V1
     frontend_keywords: str = "react,angular,vue,html,css,javascript,js,frontend,ui,ux"
     backend_keywords: str = "python,java,scala,sql,node,backend,api,spark,snowflake,kafka,ai,ml"
     backend_ai_indicators: str = "backend,ai,ml,data,python,spark,sql,snowflake"
-    
-    # Skill Groupings (as comma-separated groups)
+
+    # Skill Groupings — V1
     skill_group_python: str = "python,django,flask,fastapi,pandas,numpy,scikit-learn,pytorch,tensorflow"
     skill_group_javascript: str = "javascript,js,typescript,ts,react,node,next.js,angular,vue,html,css"
     skill_group_sql: str = "sql,postgresql,postgres,mysql,sql server,snowflake,oracle,db2"
     skill_group_big_data: str = "spark,pyspark,hadoop,kafka,databricks"
     skill_group_ai_ml: str = "machine learning,ai,ml,nlp,llm,genai,deep learning,computer vision"
     skill_group_cloud: str = "aws,azure,gcp,docker,kubernetes,terraform"
-    
+
     # Hybrid Search Ratios
     hybrid_ratio_bm25: float = 0.7
     hybrid_ratio_vector: float = 0.3
@@ -149,15 +148,14 @@ class Settings(BaseSettings):
     rag_weight_skills_preferred: float = 0.10
     rag_weight_cert: float = 0.10
 
-    # Blend weight for full_jd_similarity in Node 5 s_score
-    # s_score = jd_level_similarity * (1 - weight) + full_jd_similarity * weight
+    # Blend weight for full_jd_similarity in V1 s_score
     scoring_blend_full_jd_weight: float = 0.30
 
-    # Per-skill contribution blend (rating + experience → single scalar passed to scorer)
-    skill_rating_weight: float = 0.6       # weight of normalised rating (rating/5) in contribution
-    skill_exp_weight: float = 0.4          # weight of normalised experience in contribution
+    # Per-skill contribution blend (rating + experience → single scalar, shared by both versions)
+    skill_rating_weight: float = 0.6       # weight of normalised rating (rating/5)
+    skill_exp_weight: float = 0.4          # weight of normalised experience
     skill_exp_months_cap: int = 48         # experience months at which norm_exp reaches 1.0
-    profile_text_match_weight: float = 0.6 # contribution for text-only (no skill ID) matches
+    profile_text_match_weight: float = 0.6 # V1: contribution for text-only matches
 
     # Feature flag: use jd_level_vector <-> resume_embedding for jd_level_similarity
     # Set RAG_USE_LEVEL_VECTOR=false in .env to revert to old full_jd_vector behavior

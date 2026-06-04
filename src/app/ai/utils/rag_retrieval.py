@@ -334,19 +334,19 @@ class RAGRetrievalAgent(BaseAgent):
                 COALESCE(tm.base_location, '')                                       AS base_location,
                 COALESCE(CAST(tm.work_type AS text), 'hybrid')                       AS work_type,
 
-                e.embedding <-> CAST(:full_jd_vector AS vector)                      AS full_jd_distance,
+                e.embedding <=> CAST(:full_jd_vector AS vector)                      AS full_jd_distance,
 
                 COALESCE(e.resume_embedding, e.embedding)
-                    <-> CAST(:jd_level_vector AS vector)                             AS level_distance,
+                    <=> CAST(:jd_level_vector AS vector)                             AS level_distance,
 
                 COALESCE(e.skills_embedding, e.embedding)
-                    <-> CAST(:mandatory_vector AS vector)                            AS mandatory_skills_distance,
+                    <=> CAST(:mandatory_vector AS vector)                            AS mandatory_skills_distance,
 
                 COALESCE(e.skills_embedding, e.embedding)
-                    <-> CAST(:preferred_vector AS vector)                            AS preferred_skills_distance,
+                    <=> CAST(:preferred_vector AS vector)                            AS preferred_skills_distance,
 
                 COALESCE(e.certifications_embedding, e.embedding)
-                    <-> CAST(:cert_vector AS vector)                                 AS cert_distance,
+                    <=> CAST(:cert_vector AS vector)                                 AS cert_distance,
 
                 COALESCE(e.profile_text, '')                                         AS profile_text,
 
@@ -356,15 +356,15 @@ class RAGRetrievalAgent(BaseAgent):
             LEFT JOIN team_member tm ON tm.team_member_id = e.team_member_id{bm25_join}
             WHERE {" AND ".join(filters)}
             ORDER BY (
-                (e.embedding <-> CAST(:full_jd_vector AS vector))
+                (e.embedding <=> CAST(:full_jd_vector AS vector))
                     * {settings.rag_weight_full_jd} +
-                (COALESCE(e.resume_embedding, e.embedding) <-> CAST(:jd_level_vector AS vector))
+                (COALESCE(e.resume_embedding, e.embedding) <=> CAST(:jd_level_vector AS vector))
                     * {settings.rag_weight_level} +
-                (COALESCE(e.skills_embedding, e.embedding) <-> CAST(:mandatory_vector AS vector))
+                (COALESCE(e.skills_embedding, e.embedding) <=> CAST(:mandatory_vector AS vector))
                     * {settings.rag_weight_skills_mandatory} +
-                (COALESCE(e.skills_embedding, e.embedding) <-> CAST(:preferred_vector AS vector))
+                (COALESCE(e.skills_embedding, e.embedding) <=> CAST(:preferred_vector AS vector))
                     * {settings.rag_weight_skills_preferred} +
-                (COALESCE(e.certifications_embedding, e.embedding) <-> CAST(:cert_vector AS vector))
+                (COALESCE(e.certifications_embedding, e.embedding) <=> CAST(:cert_vector AS vector))
                     * {settings.rag_weight_cert}
             ) ASC
             LIMIT :sql_limit
@@ -388,19 +388,19 @@ class RAGRetrievalAgent(BaseAgent):
                 COALESCE(tm.base_location, '')                                       AS base_location,
                 COALESCE(CAST(tm.work_type AS text), 'hybrid')                       AS work_type,
 
-                e.embedding <-> CAST(:full_jd_vector AS vector)                      AS full_jd_distance,
+                e.embedding <=> CAST(:full_jd_vector AS vector)                      AS full_jd_distance,
 
                 COALESCE(e.resume_embedding, e.embedding)
-                    <-> CAST(:jd_level_vector AS vector)                             AS level_distance,
+                    <=> CAST(:jd_level_vector AS vector)                             AS level_distance,
 
                 COALESCE(e.skills_embedding, e.embedding)
-                    <-> CAST(:mandatory_vector AS vector)                            AS mandatory_skills_distance,
+                    <=> CAST(:mandatory_vector AS vector)                            AS mandatory_skills_distance,
 
                 COALESCE(e.skills_embedding, e.embedding)
-                    <-> CAST(:preferred_vector AS vector)                            AS preferred_skills_distance,
+                    <=> CAST(:preferred_vector AS vector)                            AS preferred_skills_distance,
 
                 COALESCE(e.certifications_embedding, e.embedding)
-                    <-> CAST(:cert_vector AS vector)                                 AS cert_distance,
+                    <=> CAST(:cert_vector AS vector)                                 AS cert_distance,
 
                 COALESCE(e.profile_text, '')                                         AS profile_text,
 
@@ -449,8 +449,8 @@ class RAGRetrievalAgent(BaseAgent):
 
     @staticmethod
     def _dist_to_sim(d) -> float:
-        """Convert L2 distance to 0-1 similarity."""
-        return 1.0 / (1.0 + float(d)) if d is not None else 0.0
+        """Convert cosine distance (0=identical, 1=orthogonal) to similarity."""
+        return max(0.0, 1.0 - float(d)) if d is not None else 0.0
 
     @staticmethod
     def _exp_relevance(cand_m, req: Dict) -> float:
