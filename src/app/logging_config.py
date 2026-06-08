@@ -104,12 +104,12 @@ def configure_logging(log_level: str = "INFO") -> None:
     logging.getLogger("opentelemetry").setLevel(logging.WARNING)
     logging.getLogger("alembic").setLevel(logging.WARNING)
     # TruLens dumps full state on every node at WARNING level — raise to ERROR
-    logging.getLogger("trulens").setLevel(logging.ERROR)
-    logging.getLogger("trulens_eval").setLevel(logging.ERROR)
-    logging.getLogger("trulens.core").setLevel(logging.ERROR)
-    logging.getLogger("trulens.core.utils.signature").setLevel(logging.ERROR)
-    logging.getLogger("trulens.core.utils.evaluator").setLevel(logging.ERROR)
-    logging.getLogger("trulens.core.database").setLevel(logging.ERROR)
+    # logging.getLogger("trulens").setLevel(logging.ERROR)
+    # logging.getLogger("trulens_eval").setLevel(logging.ERROR)
+    # logging.getLogger("trulens.core").setLevel(logging.ERROR)
+    # logging.getLogger("trulens.core.utils.signature").setLevel(logging.ERROR)
+    # logging.getLogger("trulens.core.utils.evaluator").setLevel(logging.ERROR)
+    # logging.getLogger("trulens.core.database").setLevel(logging.ERROR)
 
 
 def set_correlation_id(correlation_id: str) -> None:
