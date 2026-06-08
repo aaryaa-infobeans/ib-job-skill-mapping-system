@@ -10,6 +10,7 @@ from openai import OpenAI
 
 from app.ai.state import GraphState
 from app.db.models import SkillMaster, SkillOntology
+from app.db.models.models import RoleOntology
 from app.db.session import SessionLocal
 from app.settings import settings
 from app.observability.tracing import trace_node
@@ -70,6 +71,39 @@ SKILL_ALIASES = {
     "azure": "Azure",
     "gcp": "Google Cloud Platform",
 }
+
+def _get_role_context(db: Session, normalized_role: str) -> Dict:
+    """Resolve normalized_role against role_ontology.
+
+    Tries exact match on canonical_role first, then checks aliases.
+    Returns an empty dict when no match is found (safe default for callers).
+    """
+    if not normalized_role:
+        return {}
+    try:
+        role_lower = normalized_role.strip().lower()
+        all_roles = db.query(RoleOntology).all()
+        # 1. Exact canonical match
+        for r in all_roles:
+            if r.canonical_role.lower() == role_lower:
+                return {
+                    "canonical_role": r.canonical_role,
+                    "profile_type": r.profile_type,
+                    "enriched_terms": r.enriched_terms or [],
+                }
+        # 2. Alias match
+        for r in all_roles:
+            aliases = r.aliases or []
+            if any(a.lower() == role_lower for a in aliases):
+                return {
+                    "canonical_role": r.canonical_role,
+                    "profile_type": r.profile_type,
+                    "enriched_terms": r.enriched_terms or [],
+                }
+    except Exception as e:
+        logger.error(f"Error resolving role_ontology for '{normalized_role}': {e}")
+    return {}
+
 
 def _get_ontology_data(db: Session) -> Dict[str, List[str]]:
     """Fetch all skills from the ontology table."""
@@ -160,6 +194,22 @@ def skill_normalization_node(state: GraphState) -> GraphState:
     mandatory_skills = parsed_jd.get("extracted_mandatory_skills", [])
     preferred_skills = parsed_jd.get("extracted_preferred_skills", [])
     required_certifications = parsed_jd.get("certifications_required", [])
+
+    # Resolve role_ontology — done early so role_context is always available downstream
+    _db_role = SessionLocal()
+    try:
+        role_context = _get_role_context(_db_role, parsed_jd.get("normalized_role", ""))
+        state["role_context"] = role_context
+        if role_context:
+            logger.info(
+                f"Role context resolved: canonical_role='{role_context['canonical_role']}' "
+                f"profile_type='{role_context['profile_type']}' "
+                f"enriched_terms={len(role_context['enriched_terms'])} terms"
+            )
+        else:
+            logger.info(f"No role_ontology match for normalized_role='{parsed_jd.get('normalized_role')}'")
+    finally:
+        _db_role.close()
     
     # Initialize normalized_skills in state
     state["normalized_skills"] = {

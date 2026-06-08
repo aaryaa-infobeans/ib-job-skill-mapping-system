@@ -13,6 +13,7 @@ from app.ai.utils.scoring_audit import ScoringAudit
 from app.ai.utils.models import RAGCandidate
 from app.ai.state import GraphState
 from app.db.models import TeamMember, TeamMemberSkill, TeamMemberSkillCertification
+from app.db.models.models import JdCertificationRequirement
 from app.db.session import SessionLocal
 from app.observability.tracing import trace_node
 from app.settings import settings
@@ -182,8 +183,24 @@ def matching_scoring_node(state: GraphState) -> GraphState:
     retrieved_candidates = state.get("retrieved_candidates")
     jd_text = parsed_jd.get("jd_text", "")
 
+    role_context   = state.get("role_context") or {}
+    canonical_role = role_context.get("canonical_role", "")
+
     db: Session = SessionLocal()
     try:
+        # --- Role-expected certifications (soft boost source) ---
+        role_expected_certs = []
+        if canonical_role:
+            cert_rows = (
+                db.query(JdCertificationRequirement)
+                .filter(JdCertificationRequirement.jd_type == canonical_role)
+                .all()
+            )
+            role_expected_certs = [r.certification for r in cert_rows if r.certification]
+            logger.info(
+                f"Role-expected certs for '{canonical_role}': {len(role_expected_certs)} entries"
+            )
+
         # --- Resolve candidate pool ---
         if retrieved_candidates is not None:
             retrieved_results = {c["team_member_id"]: c for c in retrieved_candidates}
@@ -289,6 +306,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "cert_validity":          cert_validity,
                     "profile_text":           profile_text,
                     "required_certifications":  required_certifications,
+                    "role_expected_certs":      role_expected_certs,
                     "location":                 member.base_location,
                     "required_locations":       required_locations,
                     "work_mode":                member.work_type.value if member.work_type else None,
@@ -300,6 +318,22 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 }
 
                 scoring_result = scoring_agent.execute(rag_candidate, profile_data)
+
+                # Soft cert boost — only active when JD has no hard cert requirements.
+                # Candidate gains up to 3% for matching role-typical certs; never penalised for missing.
+                soft_cert_boost = 0.0
+                if not required_certifications and role_expected_certs and member_certs:
+                    matched_soft = [
+                        c for c in member_certs
+                        if any(
+                            exp.lower() in c.lower() or c.lower() in exp.lower()
+                            for exp in role_expected_certs
+                        )
+                    ]
+                    if matched_soft:
+                        soft_cert_boost = round(
+                            min(0.03, 0.03 * len(matched_soft) / len(role_expected_certs)), 4
+                        )
 
                 is_qualified = scoring_result.detailed_breakdown.stage1_passed
                 role_type    = scoring_result.detailed_breakdown.role_type
@@ -338,6 +372,8 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                 final_agentic_score = scoring_result.match_score
                 if is_qualified and ai_boost > 0:
                     final_agentic_score += ai_boost
+                if soft_cert_boost > 0:
+                    final_agentic_score += soft_cert_boost
                 final_agentic_score = round(max(0.0, min(1.0, final_agentic_score)), 4)
 
                 bd = scoring_result.score_breakdown
@@ -349,6 +385,7 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                     "base_agentic_score":   scoring_result.match_score,
                     "ai_confidence_score":  confidence_score,
                     "ai_boost":             ai_boost if is_qualified else 0.0,
+                    "soft_cert_boost":      soft_cert_boost,
                     "ai_override_applied":  ai_override_applied,
                     "ai_reasoning":         ai_fit["reasoning"],
                     "role_type":            role_type,
@@ -400,6 +437,13 @@ def matching_scoring_node(state: GraphState) -> GraphState:
                         "certification_matched":  _sanitize_skill_list(scoring_result.detailed_breakdown.certification_matched),
                         "certification_missing":  _sanitize_skill_list(scoring_result.detailed_breakdown.certification_missing),
                         "certification_expired":  _sanitize_skill_list(scoring_result.detailed_breakdown.certification_expired),
+                        "bonus_certifications":   [
+                            c for c in member_certs
+                            if any(
+                                exp.lower() in c.lower() or c.lower() in exp.lower()
+                                for exp in role_expected_certs
+                            )
+                        ] if (not required_certifications and role_expected_certs) else [],
                         "semantic_similarity":    scoring_result.detailed_breakdown.semantic_similarity,
                         "location_matched":       scoring_result.detailed_breakdown.location_matched,
                         "work_mode_matched":      scoring_result.detailed_breakdown.work_mode_matched,

@@ -139,5 +139,8 @@ class GraphState(TypedDict):
     cumulative_tokens: Optional[int]
     cumulative_cost_usd: Optional[float]
 
+    # Populated by Skill_Normalization_Agent — resolved role from role_ontology
+    role_context: Optional[Dict]  # keys: canonical_role, profile_type, enriched_terms
+
     # To track errors
     error_message: Optional[str]
