@@ -111,19 +111,6 @@ class Settings(BaseSettings):
     # Context Boost Cap — V1
     context_boost_cap: float = 0.08
 
-    # Skill Family Mappings — V1
-    frontend_keywords: str = "react,angular,vue,html,css,javascript,js,frontend,ui,ux"
-    backend_keywords: str = "python,java,scala,sql,node,backend,api,spark,snowflake,kafka,ai,ml"
-    backend_ai_indicators: str = "backend,ai,ml,data,python,spark,sql,snowflake"
-
-    # Skill Groupings — V1
-    skill_group_python: str = "python,django,flask,fastapi,pandas,numpy,scikit-learn,pytorch,tensorflow"
-    skill_group_javascript: str = "javascript,js,typescript,ts,react,node,next.js,angular,vue,html,css"
-    skill_group_sql: str = "sql,postgresql,postgres,mysql,sql server,snowflake,oracle,db2"
-    skill_group_big_data: str = "spark,pyspark,hadoop,kafka,databricks"
-    skill_group_ai_ml: str = "machine learning,ai,ml,nlp,llm,genai,deep learning,computer vision"
-    skill_group_cloud: str = "aws,azure,gcp,docker,kubernetes,terraform"
-
     # Hybrid Search Ratios
     hybrid_ratio_bm25: float = 0.7
     hybrid_ratio_vector: float = 0.3

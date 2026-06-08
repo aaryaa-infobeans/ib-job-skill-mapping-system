@@ -526,3 +526,23 @@ class PiiScrubAudit(Base):
         sa.Index("ix_pii_scrub_audit_operation", "operation", "timestamp"),
         {"postgresql_partition_by": "RANGE (timestamp)"},
     )
+
+
+class SkillConfig(Base):
+    """Runtime-configurable keyword lists for skill family detection and grouping.
+
+    config_type='family': frontend/backend keyword sets used for penalty scoring.
+    config_type='group':  technology groupings used for skill-group matching.
+    """
+
+    __tablename__ = "skill_config"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    config_type = Column(String(20), nullable=False)
+    config_key = Column(String(50), nullable=False)
+    keywords = Column(postgresql.ARRAY(Text), nullable=False, server_default="{}")
+
+    __table_args__ = (
+        sa.UniqueConstraint("config_type", "config_key", name="uq_skill_config_type_key"),
+        sa.Index("ix_skill_config_type", "config_type"),
+    )

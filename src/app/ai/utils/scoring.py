@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from app.settings import settings
 from app.ai.utils.base import BaseAgent
 from app.ai.utils.models import RAGCandidate, ScoringResult, ScoringBreakdown
+from app.db.repositories.skill_config import get_skill_groups, get_family_keywords
 
 
 class ScoringAgent(BaseAgent):
@@ -23,15 +24,7 @@ class ScoringAgent(BaseAgent):
     
     @property
     def skill_groups(self) -> Dict[str, List[str]]:
-        """Fetch skill groups dynamically from settings."""
-        return {
-            "python": [k.strip() for k in settings.skill_group_python.split(",")],
-            "javascript": [k.strip() for k in settings.skill_group_javascript.split(",")],
-            "sql": [k.strip() for k in settings.skill_group_sql.split(",")],
-            "big_data": [k.strip() for k in settings.skill_group_big_data.split(",")],
-            "ai_ml": [k.strip() for k in settings.skill_group_ai_ml.split(",")],
-            "cloud": [k.strip() for k in settings.skill_group_cloud.split(",")]
-        }
+        return get_skill_groups()
 
     def _get_role_configs(self) -> Dict[str, Any]:
         """Expose ROLE_CONFIGS dynamically based on settings."""
@@ -324,9 +317,10 @@ class ScoringAgent(BaseAgent):
           3. Candidate is frontend-dominant (frontend skill count > 2× backend skill count)
         """
         jd_lower = jd_text.lower()
-        frontend_kws      = [k.strip() for k in settings.frontend_keywords.split(",")]
-        backend_kws       = [k.strip() for k in settings.backend_keywords.split(",")]
-        backend_indicators = [k.strip() for k in settings.backend_ai_indicators.split(",")]
+        family = get_family_keywords()
+        frontend_kws       = family.get("frontend", [])
+        backend_kws        = family.get("backend", [])
+        backend_indicators = family.get("backend_ai", [])
 
         # Condition 1: JD must have at least 2 backend/AI signals (not just "sql" in "MySQL")
         jd_backend_hits = sum(1 for kw in backend_indicators if kw in jd_lower)
