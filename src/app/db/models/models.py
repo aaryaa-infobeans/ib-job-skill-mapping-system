@@ -293,6 +293,38 @@ class SkillOntology(Base):
     )
 
 
+class RoleOntology(Base):
+    """Maps canonical role names to internal profile_type codes, aliases, and enriched terms.
+
+    canonical_role — standardised role name used as the lookup key
+                     (matches normalized_role from JD parsing and jd_certification_requirements.jd_type)
+    profile_type   — internal short code stored on team_member.profile_type
+    aliases        — alternative names the LLM or clients may use for the same role
+    enriched_terms — domain-specific concepts for semantic matching (scoped to this role only)
+    """
+
+    __tablename__ = "role_ontology"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    canonical_role = Column(String(100), nullable=False)
+    profile_type = Column(String(100), nullable=False)
+    aliases = Column(
+        JSON().with_variant(postgresql.ARRAY(Text), "postgresql"),
+        nullable=False,
+        server_default="[]",
+    )
+    enriched_terms = Column(
+        JSON().with_variant(postgresql.ARRAY(Text), "postgresql"),
+        nullable=False,
+        server_default="[]",
+    )
+
+    __table_args__ = (
+        sa.Index("idx_role_ontology_canonical_role", "canonical_role", unique=True),
+        sa.Index("idx_role_ontology_profile_type", "profile_type"),
+    )
+
+
 class TeamMemberEmbedding(Base):
     """Embeddings for team member profiles."""
 
