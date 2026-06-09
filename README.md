@@ -79,7 +79,26 @@ SECRET_KEY=your-generated-secret-key-here
 alembic upgrade head
 ```
 
-### Step 5: Start the Application
+### Step 5: Seed Development Data
+
+Alembic only creates the table structure — it does not insert any rows. Run the following
+three commands to populate the database with reference data and sample candidates:
+
+```bash
+# Seed categories, skills, and requisition statuses
+psql -h localhost -p 5432 -U user -d ib_job_skill_mapping -f scripts/dev/seed_data.sql
+
+# Seed skill ontology and certification requirements
+psql -h localhost -p 5432 -U user -d ib_job_skill_mapping -f scripts/dev/seed_ontology_and_certs.sql
+
+# Seed 50 sample team members with embeddings
+python scripts/seed_candidates.py
+```
+
+> **Why this is required:** The matching API uses vector similarity search against
+> `team_member_embeddings`. Without seed data, every requisition returns zero matches.
+
+### Step 6: Start the Application
 
 ```bash
 # Start API server with hot-reload
@@ -91,7 +110,7 @@ The API is now running at:
 - **API Base**: http://localhost:8000
 - **Health Check**: http://localhost:8000/health
 
-### Step 6: Test the API
+### Step 7: Test the API
 
 ```bash
 # Check health endpoint

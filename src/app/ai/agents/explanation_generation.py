@@ -54,6 +54,7 @@ def _generate_llm_explanation(
             # Pass new Phase 1 Ledger fields
             matched_certs=match_reasons.get("certification_matched", []),
             missing_certs=match_reasons.get("certification_missing", []),
+            bonus_certs=match_reasons.get("bonus_certifications", []),
             location_matched=match_reasons.get("location_matched", False),
             work_mode_matched=match_reasons.get("work_mode_matched", False)
         )
@@ -251,7 +252,14 @@ def _generate_template_explanation(candidate: Dict[str, Any], parsed_jd: Dict[st
     matched_certs = match_reasons.get("certification_matched", [])
     if matched_certs:
         strengths.append(f"Possesses relevant certifications: {', '.join(matched_certs[:2])}")
-    
+
+    bonus_certs = match_reasons.get("bonus_certifications", [])
+    if bonus_certs:
+        strengths.append(
+            f"Holds additional certifications relevant to this role type (not required by JD): "
+            f"{', '.join(bonus_certs[:2])}"
+        )
+
     if not strengths:
         strengths.append("Demonstrated foundational knowledge in the required technology domain")
 

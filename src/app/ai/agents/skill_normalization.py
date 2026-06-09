@@ -10,6 +10,7 @@ from openai import OpenAI
 
 from app.ai.state import GraphState
 from app.db.models import SkillMaster, SkillOntology
+from app.db.models.models import RoleOntology
 from app.db.session import SessionLocal
 from app.settings import settings
 from app.observability.tracing import trace_node
@@ -70,6 +71,39 @@ SKILL_ALIASES = {
     "azure": "Azure",
     "gcp": "Google Cloud Platform",
 }
+
+def _get_role_context(db: Session, normalized_role: str) -> Dict:
+    """Resolve normalized_role against role_ontology.
+
+    Tries exact match on canonical_role first, then checks aliases.
+    Returns an empty dict when no match is found (safe default for callers).
+    """
+    if not normalized_role:
+        return {}
+    try:
+        role_lower = normalized_role.strip().lower()
+        all_roles = db.query(RoleOntology).all()
+        # 1. Exact canonical match
+        for r in all_roles:
+            if r.canonical_role.lower() == role_lower:
+                return {
+                    "canonical_role": r.canonical_role,
+                    "profile_type": r.profile_type,
+                    "enriched_terms": r.enriched_terms or [],
+                }
+        # 2. Alias match
+        for r in all_roles:
+            aliases = r.aliases or []
+            if any(a.lower() == role_lower for a in aliases):
+                return {
+                    "canonical_role": r.canonical_role,
+                    "profile_type": r.profile_type,
+                    "enriched_terms": r.enriched_terms or [],
+                }
+    except Exception as e:
+        logger.error(f"Error resolving role_ontology for '{normalized_role}': {e}")
+    return {}
+
 
 def _get_ontology_data(db: Session) -> Dict[str, List[str]]:
     """Fetch all skills from the ontology table."""
@@ -160,6 +194,22 @@ def skill_normalization_node(state: GraphState) -> GraphState:
     mandatory_skills = parsed_jd.get("extracted_mandatory_skills", [])
     preferred_skills = parsed_jd.get("extracted_preferred_skills", [])
     required_certifications = parsed_jd.get("certifications_required", [])
+
+    # Resolve role_ontology — done early so role_context is always available downstream
+    _db_role = SessionLocal()
+    try:
+        role_context = _get_role_context(_db_role, parsed_jd.get("normalized_role", ""))
+        state["role_context"] = role_context
+        if role_context:
+            logger.info(
+                f"Role context resolved: canonical_role='{role_context['canonical_role']}' "
+                f"profile_type='{role_context['profile_type']}' "
+                f"enriched_terms={len(role_context['enriched_terms'])} terms"
+            )
+        else:
+            logger.info(f"No role_ontology match for normalized_role='{parsed_jd.get('normalized_role')}'")
+    finally:
+        _db_role.close()
     
     # Initialize normalized_skills in state
     state["normalized_skills"] = {
@@ -173,6 +223,44 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         "normalized_certifications": [],
         "certification_enriched": {}
     }
+
+    # --- Direct skill-ID bypass (Blocker-2 fix) ---
+    # If the caller already resolved skill_master UUIDs, skip LLM normalization entirely.
+    # DB is opened briefly only to build the name→ID map for display purposes.
+    job_desc_payload = state.get("requisition_input", {}).get("job_description", {})
+    direct_mandatory_ids = job_desc_payload.get("mandatory_skill_ids") or []
+    direct_preferred_ids = job_desc_payload.get("preferred_skill_ids") or []
+
+    if direct_mandatory_ids or direct_preferred_ids:
+        db: Session = SessionLocal()
+        try:
+            all_direct_ids = list(set(direct_mandatory_ids + direct_preferred_ids))
+            skill_rows = db.query(SkillMaster).filter(SkillMaster.skill_id.in_(all_direct_ids)).all()
+            id_to_name = {row.skill_id: row.skill_name for row in skill_rows}
+
+            def _build_alts(ids):
+                return {id_to_name.get(sid, sid): [sid] for sid in ids}
+
+            state["normalized_skills"] = {
+                "mandatory_skill_ids": direct_mandatory_ids,
+                "preferred_skill_ids": direct_preferred_ids,
+                "mandatory_enriched": {},
+                "preferred_enriched": {},
+                "mandatory_alternatives": _build_alts(direct_mandatory_ids),
+                "preferred_alternatives": _build_alts(direct_preferred_ids),
+                "original_certifications": required_certifications,
+                "normalized_certifications": required_certifications,
+                "certification_enriched": {},
+            }
+            logger.info(
+                f"Skill normalization bypassed via direct IDs: "
+                f"mandatory={direct_mandatory_ids}, preferred={direct_preferred_ids}"
+            )
+            return state
+        except Exception as e:
+            logger.error(f"Direct skill-ID bypass failed, falling through to LLM: {e}")
+        finally:
+            db.close()
 
     if not mandatory_skills and not preferred_skills and not required_certifications:
         logger.warning("No skills or certifications found to normalize")
@@ -242,30 +330,41 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             if canonical:
                 # Skill group for this requirement
                 skill_group = []
-                
+                raw_name = item.get("raw") or canonical
+
                 # Resolve alias if exists
                 if canonical.lower() in SKILL_ALIASES:
                     canonical = SKILL_ALIASES[canonical.lower()]
 
-                # Direct match
+                # Direct match on canonical (LLM-normalised form)
                 skill_id = skill_master_map.get(canonical.lower())
                 if skill_id:
                     normalized_mandatory_ids.append(skill_id)
                     mandatory_enriched[skill_id] = item.get("enriched", [])
                     skill_group.append(skill_id)
-                
-                # Fuzzy match extension
+
+                # If canonical didn't match, try the raw JD name directly.
+                # Handles LLM expansion: "JPA" → "Java Persistence API" but DB stores "JPA".
+                if not skill_id and raw_name.lower() != canonical.lower():
+                    raw_skill_id = skill_master_map.get(raw_name.lower())
+                    if raw_skill_id and raw_skill_id not in skill_group:
+                        normalized_mandatory_ids.append(raw_skill_id)
+                        mandatory_enriched[raw_skill_id] = item.get("enriched", [])
+                        skill_group.append(raw_skill_id)
+
+                # Fuzzy match extension (canonical, then raw name as fallback)
                 fuzzy_ids = _find_fuzzy_matches(canonical, skill_master_map)
-                normalized_mandatory_ids.extend(fuzzy_ids)
-                skill_group.extend(fuzzy_ids)
-                
+                if not fuzzy_ids and raw_name.lower() != canonical.lower():
+                    fuzzy_ids = _find_fuzzy_matches(raw_name, skill_master_map)
+                new_fuzzy = [fid for fid in fuzzy_ids if fid not in skill_group]
+                normalized_mandatory_ids.extend(new_fuzzy)
+                skill_group.extend(new_fuzzy)
+
                 # Store unique IDs for this requirement group
                 if skill_group:
                     mandatory_alternatives[canonical] = list(set(skill_group))
                 else:
-                    # If no core skill match, preserve the original raw name in the alternatives map
-                    # This allows subsequent scoring to at least show it was requested.
-                    raw_name = item.get("raw") or canonical
+                    # No match found via any path — store raw name so scoring can show it was requested.
                     mandatory_alternatives[raw_name] = []
         
         normalized_preferred_ids = []
@@ -277,29 +376,39 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             if canonical:
                 # Skill group for this requirement
                 skill_group = []
+                raw_name = item.get("raw") or canonical
 
                 # Resolve alias if exists
                 if canonical.lower() in SKILL_ALIASES:
                     canonical = SKILL_ALIASES[canonical.lower()]
 
-                # Direct match
+                # Direct match on canonical (LLM-normalised form)
                 skill_id = skill_master_map.get(canonical.lower())
                 if skill_id:
                     normalized_preferred_ids.append(skill_id)
                     preferred_enriched[skill_id] = item.get("enriched", [])
                     skill_group.append(skill_id)
 
-                # Fuzzy match extension
+                # If canonical didn't match, try the raw JD name directly.
+                if not skill_id and raw_name.lower() != canonical.lower():
+                    raw_skill_id = skill_master_map.get(raw_name.lower())
+                    if raw_skill_id and raw_skill_id not in skill_group:
+                        normalized_preferred_ids.append(raw_skill_id)
+                        preferred_enriched[raw_skill_id] = item.get("enriched", [])
+                        skill_group.append(raw_skill_id)
+
+                # Fuzzy match extension (canonical, then raw name as fallback)
                 fuzzy_ids = _find_fuzzy_matches(canonical, skill_master_map)
-                normalized_preferred_ids.extend(fuzzy_ids)
-                skill_group.extend(fuzzy_ids)
-                
+                if not fuzzy_ids and raw_name.lower() != canonical.lower():
+                    fuzzy_ids = _find_fuzzy_matches(raw_name, skill_master_map)
+                new_fuzzy = [fid for fid in fuzzy_ids if fid not in skill_group]
+                normalized_preferred_ids.extend(new_fuzzy)
+                skill_group.extend(new_fuzzy)
+
                 # Store unique IDs for this requirement group
                 if skill_group:
                     preferred_alternatives[canonical] = list(set(skill_group))
                 else:
-                    # If no core skill match, preserve the original raw name in the alternatives map
-                    raw_name = item.get("raw") or canonical
                     preferred_alternatives[raw_name] = []
                     
         normalized_certs = []

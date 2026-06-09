@@ -29,6 +29,7 @@ Required Location: {job_location}
 3. Certifications:
 - Matched: {matched_certs}
 - Missing: {missing_certs}
+- Bonus (not required by JD, but relevant to this role): {bonus_certs}
 
 4. Overall Intent Alignment: {semantic_score:.2%}
 
@@ -89,6 +90,7 @@ def format_explanation_prompt(
     # New Phase 1 Ledger Fields
     matched_certs: list = None,
     missing_certs: list = None,
+    bonus_certs: list = None,
     location_matched: bool = False,
     work_mode_matched: bool = False
 ) -> str:
@@ -117,6 +119,7 @@ def format_explanation_prompt(
         missing_preferred_skills=", ".join(missing_preferred_skills) if missing_preferred_skills else "None",
         matched_certs=", ".join(matched_certs) if matched_certs else "None",
         missing_certs=", ".join(missing_certs) if missing_certs else "None",
+        bonus_certs=", ".join(bonus_certs) if bonus_certs else "None",
         location_matched_icon="✅" if location_matched else "❌",
         work_mode_matched_icon="✅" if work_mode_matched else "❌",
         candidate_experience=candidate_experience,

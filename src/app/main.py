@@ -2,6 +2,7 @@
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -14,15 +15,29 @@ from app.logging_config import configure_logging
 from app.middleware import CorrelationIdMiddleware
 from app.middleware.auth import OAuth2Middleware
 from app.settings import settings
+from app.db.session import SessionLocal
+from app.db.repositories.skill_config import load_skill_config
 
 # Configure structured JSON logging
 configure_logging(log_level=settings.log_level)
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    db = SessionLocal()
+    try:
+        load_skill_config(db)
+    finally:
+        db.close()
+    yield
+
+
 app = FastAPI(
     title=settings.project_name,
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Add OAuth2 authentication middleware (validates JWT tokens)

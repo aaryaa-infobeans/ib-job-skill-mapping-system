@@ -38,7 +38,7 @@ class NormalizedRequisition:
     original_certifications: List[str] = field(default_factory=list)
     normalized_certifications: List[str] = field(default_factory=list)
     expanded_certification_terms: List[str] = field(default_factory=list)
-    original_requisition: RequisitionData = None
+    original_requisition: Optional[RequisitionData] = None
 
 
 @dataclass
@@ -53,8 +53,6 @@ class EmbeddingResult:
     
     def __post_init__(self):
         """Validate vector dimensions."""
-        # Support both 3072 (OpenAI) and 768 (Gemma) or other common sizes
-        expected_dim = 768 
         for name, vec in [
             ("jd_level", self.jd_level_vector),
             ("mandatory", self.mandatory_vector),
@@ -75,6 +73,7 @@ class RAGCandidate:
     preferred_similarity: float
     jd_level_similarity: float
     certification_similarity: float = 0.0
+    full_jd_similarity: float = 0.0
     experience_in_months: Optional[int] = None
     profile_text: Optional[str] = None
     phase0_score_breakdown: Dict[str, float] = field(default_factory=dict)
@@ -92,6 +91,7 @@ class ScoringBreakdown:
     preferred_score: float = 0.0
     certification_matched: List[str] = field(default_factory=list)
     certification_missing: List[str] = field(default_factory=list)
+    certification_expired: List[str] = field(default_factory=list)
     certification_score: float = 0.0
     location_matched: bool = False
     location_score: float = 0.0
@@ -99,6 +99,7 @@ class ScoringBreakdown:
     work_mode_score: float = 0.0
     experience_matched: bool = False
     experience_score: float = 0.0
+    title_score: float = 0.0
     semantic_similarity: float = 0.0
     jd_level_similarity: float = 0.0
     # Multi-stage scoring fields

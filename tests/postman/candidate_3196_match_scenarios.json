@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 3196 (Java Backend Module Lead, Java 5/5 84m, Spring Boot 5/5 84m, Hibernate 5/5 84m, JPA 5/5 84m, Spring 5/5 84m, Microservices 4/5 24m)",
+    "_expected": "candidate 3196 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "Java(5/5,84m) + Spring Boot(5/5,84m) + Hibernate(5/5,84m) + JPA(5/5,84m) + Microservices(4/5,24m) are all direct DB matches. GIT(5/5,60m) + Maven(5/5,72m) + AWS EC2(4/5,24m) + Mockito(4/5,24m) cover preferred. Candidate is Module Lead with 70m exp. Score should be HIGH.",
+    "request_id": "REQ-3196-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Java Backend Developer",
+      "role": "Microservices Backend Development",
+      "priority": "HIGH",
+      "location": ["Vadodara", "Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Java", "Spring Boot", "Hibernate", "JPA", "Microservices"],
+      "preferred_skills": ["AWS EC2", "Docker", "JUnit", "Git", "Apache Maven"],
+      "jd_text": "We are seeking a Senior Java Backend Developer with 5 to 8 years of experience building scalable microservices. The candidate must have expert Java skills for enterprise backend development, Spring Boot for REST microservice development and configuration, Hibernate for ORM-based data access layers, JPA for entity management and transaction handling, and Microservices for distributed system design and deployment. Preferred skills include AWS EC2 for cloud hosting, Docker for containerisation, JUnit or Mockito for unit testing, Git for version control, and Apache Maven for build automation. Location: Vadodara or Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 3196 (strong Java backend but missing Android/Kotlin mandatory mobile stack)",
+    "_expected": "candidate 3196 retrieved but lower score, mandatory_missing includes Android Native and Kotlin, fit_level MEDIUM or LOW",
+    "_notes": "Java(5/5,84m) covers the base language mandatory. Android Native and Kotlin are absent from DB records — candidate is server-side Java, not mobile. mandatory_score expected 0.3-0.4 (1-2 of 5 match). Tests backend Java vs Android Java differentiation despite same language family.",
+    "request_id": "REQ-3196-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Android Developer",
+      "role": "Mobile Application Development",
+      "priority": "MEDIUM",
+      "location": ["Vadodara", "Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Java", "Android Native", "Kotlin", "REST API", "Firebase"],
+      "preferred_skills": ["Jetpack Compose", "MVVM Architecture", "Coroutines", "Git", "Unit Testing"],
+      "jd_text": "We are looking for a Senior Android Developer with 4 to 7 years of experience. The candidate must have strong Java skills for Android application development, Android Native development expertise including Activities, Fragments, and Services, Kotlin for modern Android development with coroutines and extension functions, REST API integration for backend connectivity, and Firebase for push notifications and real-time data. Preferred skills include Jetpack Compose for declarative UI, MVVM Architecture for clean code structure, Kotlin Coroutines for async programming, Git for version control, and Unit Testing with JUnit. Location: Vadodara or Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

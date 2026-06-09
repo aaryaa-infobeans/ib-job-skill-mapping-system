@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate a valid JWT token for testing the API."""
 
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta, timezone
 
 # Load the secret from .env (should match your JWT_SECRET_KEY)

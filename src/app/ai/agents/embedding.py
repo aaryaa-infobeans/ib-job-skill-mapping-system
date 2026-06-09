@@ -23,13 +23,23 @@ def embedding_node(state: GraphState) -> GraphState:
     
         
     try:
+        # Append role-ontology enriched terms to the structured intent so the
+        # JD embedding captures domain-specific concepts for this role type.
+        # enriched_terms only widen the RAG query — they never touch mandatory/preferred skills.
+        role_context = state.get("role_context") or {}
+        role_enriched_terms = role_context.get("enriched_terms", [])
+        base_intent = parsed_jd.get("normalized_title", "")
+        structured_intent = (
+            f"{base_intent} {' '.join(role_enriched_terms)}" if role_enriched_terms else base_intent
+        )
+
         # Map state to RequisitionData (Utility model)
         requisition_data = RequisitionData(
-            structured_intent=parsed_jd.get("normalized_title", ""),
+            structured_intent=structured_intent,
             mandatory_skills=parsed_jd.get("extracted_mandatory_skills", []),
             preferred_skills=parsed_jd.get("extracted_preferred_skills", []),
             experience_requirements=str(parsed_jd.get("experience", "")),
-            jd_level=parsed_jd.get("normalized_role", ""),
+            jd_level=parsed_jd.get("level", "MID"),
             location=", ".join(parsed_jd.get("location", [])),
             certifications=parsed_jd.get("certifications_required", []),
             raw_requisition=state["requisition_input"].get("job_description")

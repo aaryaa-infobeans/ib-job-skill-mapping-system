@@ -69,9 +69,11 @@ def execute_graph_with_audit(
     Returns:
         The final graph state
     """
-    # Initialize recorder and get the instrumented app wrapper
+    # Initialize recorder — TruLens wraps execute() as the single record_root.
+    # The graph uses the original node functions (instrumented_app=None) so that
+    # each agent node does NOT create its own independent record in TruLens.
     recorder = trulens_service.get_recorder(app_id="IB-Skill-Match-Graph")
-    graph = create_graph(instrumented_app=recorder.app)
+    graph = create_graph(instrumented_app=None)
     
     logger.info(
         "Starting graph execution with audit",
@@ -86,27 +88,31 @@ def execute_graph_with_audit(
         repo.update_requisition_status(req_record.id, 2)
         db.commit()
 
+    requisition_text = initial_state.get("requisition_input", {}).get("job_description", {}).get("jd_text", "")
+    if not requisition_text:
+        requisition_text = initial_state.get("requisition_input", {}).get("job_description", {}).get("title", "")
     correlation_id = initial_state.get("requisition_input", {}).get("correlation_id", "unknown")
     current_state = initial_state
     
-    # 2. Execute the graph using stream to capture each node completion
+    # 2. Execute the graph using stream to capture each node completion wrapped by TruLens recorder.app.execute
     
     try:
-        processed_logs_count = 0
-        with recorder as recording:
-            for event in graph.stream(current_state):
+        def run_stream(state_to_run: Dict[str, Any]) -> Dict[str, Any]:
+            local_state = state_to_run.copy()
+            processed_logs_count = 0
+            for event in graph.stream(local_state):
                 for node_name, state_update in event.items():
                     logger.info(f"Node '{node_name}' completed, saving checkpoint.")
                     
-                    # Update current state with node outputs
-                    current_state.update(state_update)
+                    # Update local state with node outputs
+                    local_state.update(state_update)
                     
                     # Extract token metrics for this specific node
                     token_metrics = state_update.get("token_metrics", {}).get(node_name, {})
                     token_count = token_metrics.get("total_tokens")
                     
                     # 2a. Save any NEW LLM logs generated in this step
-                    llm_logs = current_state.get("llm_call_logs", [])
+                    llm_logs = local_state.get("llm_call_logs", [])
                     if len(llm_logs) > processed_logs_count:
                         from app.ai.audit import save_llm_request_log
                         for i in range(processed_logs_count, len(llm_logs)):
@@ -130,21 +136,21 @@ def execute_graph_with_audit(
                     # Redundant fields like llm_call_logs are excluded as they are in their own table.
                     checkpoint_state = {
                         "correlation_id": correlation_id,
-                        "parsed_jd": current_state.get("parsed_jd"),
-                        "normalized_skills": current_state.get("normalized_skills"),
-                        "retrieved_candidates": current_state.get("retrieved_candidates"),
-                        "candidate_scores": current_state.get("candidate_scores"),
-                        "final_results": current_state.get("final_results"),
-                        "total_evaluated": current_state.get("total_evaluated"),
-                        "total_qualified": current_state.get("total_qualified"),
-                        "cumulative_tokens": current_state.get("cumulative_tokens"),
-                        "cumulative_cost_usd": current_state.get("cumulative_cost_usd"),
+                        "parsed_jd": local_state.get("parsed_jd"),
+                        "normalized_skills": local_state.get("normalized_skills"),
+                        "retrieved_candidates": local_state.get("retrieved_candidates"),
+                        "candidate_scores": local_state.get("candidate_scores"),
+                        "final_results": local_state.get("final_results"),
+                        "total_evaluated": local_state.get("total_evaluated"),
+                        "total_qualified": local_state.get("total_qualified"),
+                        "cumulative_tokens": local_state.get("cumulative_tokens"),
+                        "cumulative_cost_usd": local_state.get("cumulative_cost_usd"),
                     }
                     
                     if node_name == "pii_scrubber":
                         # Save PII scrubbing metadata and audit log
-                        pii_metadata = current_state.get("pii_scrub_metadata", {})
-                        checkpoint_state["pii_scrubbed"] = current_state.get("pii_scrubbed", False)
+                        pii_metadata = local_state.get("pii_scrub_metadata", {})
+                        checkpoint_state["pii_scrubbed"] = local_state.get("pii_scrubbed", False)
                         checkpoint_state["total_pii_found"] = pii_metadata.get("total_pii_found", 0)
                         checkpoint_state["fields_scrubbed"] = pii_metadata.get("fields_scrubbed", [])
                         
@@ -152,14 +158,14 @@ def execute_graph_with_audit(
                         if pii_metadata.get("detections"):
                             save_pii_audit_log(db, request_id, pii_metadata)
                     elif node_name == "requisition_parsing":
-                        checkpoint_state["parsed_jd"] = current_state.get("parsed_jd")
+                        checkpoint_state["parsed_jd"] = local_state.get("parsed_jd")
                         # Update status to MATCHING (3) after JD is parsed
                         if req_record:
                             repo.update_requisition_status(req_record.id, 3) # MATCHING
                             db.commit()
                     
                     # Handle error state if node reported a FATAL error
-                    error_message = current_state.get("error_message")
+                    error_message = local_state.get("error_message")
                     if error_message:
                         checkpoint_state["error_message"] = error_message
                         # Save with actual node name but include error_message
@@ -186,6 +192,43 @@ def execute_graph_with_audit(
                             state=checkpoint_state,
                             token_count=token_count
                         )
+            return local_state
+
+        # Mark when this run starts so we can compute feedback for ONLY the
+        # events this run produces. Without this, compute_feedbacks(events=None)
+        # re-evaluates every event for every prior record on each run, piling up
+        # duplicate eval spans and re-scoring old records.
+        from datetime import datetime, timezone, timedelta
+        run_start = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        with recorder as recording:
+            final_state = recorder.app.execute(
+                requisition_text=requisition_text,
+                current_state=current_state,
+                execute_fn=run_stream
+            )
+        current_state = final_state
+
+        # Compute RAG feedback metrics (Answer Relevance, Context Relevance,
+        # Groundedness) for THIS run only, scoping the events to those emitted
+        # since run_start.
+        try:
+            run_events = recorder.connector.get_events(
+                app_name=recorder.app_name,
+                app_version=recorder.app_version,
+                start_time=run_start,
+            )
+            recorder.compute_feedbacks(
+                raise_error_on_no_feedbacks_computed=False,
+                events=run_events,
+            )
+            logger.info(
+                "TruLens feedback computation triggered for %d events from this run",
+                len(run_events) if run_events is not None else 0,
+            )
+        except Exception as fb_err:
+            logger.warning(f"TruLens feedback computation failed (non-fatal): {fb_err}")
+
 
         # 3. Finalize and Store Results
         final_state = current_state

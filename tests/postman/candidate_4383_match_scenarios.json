@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 4383 (DevOps Senior Lead, AWS DevOps 5/5 120m, Kubernetes 5/5 96m, Terraform 5/5 84m, Docker 5/5 96m, Jenkins 5/5 120m, Ansible 5/5 96m)",
+    "_expected": "candidate 4383 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "AWS DevOps(5/5,120m) + Kubernetes(5/5,96m) + Terraform(5/5,84m) + Docker(5/5,96m) + Jenkins(5/5,120m) are all direct DB matches. Ansible(5/5,96m) + Python Automation(5/5,156m) + BASH(5/5,180m) cover preferred strongly. Candidate is Senior Lead Consultant with 168m (14yr) exp. Score should be HIGH.",
+    "request_id": "REQ-4383-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior DevOps Engineer",
+      "role": "Cloud Infrastructure and CI/CD",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["AWS DevOps", "Kubernetes", "Terraform", "Docker", "Jenkins"],
+      "preferred_skills": ["Ansible", "Python Automation", "BASH", "Prometheus", "Grafana"],
+      "jd_text": "We are seeking a Senior DevOps Engineer with 8 to 12 years of experience in cloud infrastructure and CI/CD automation. The candidate must have deep AWS DevOps expertise for pipeline orchestration and cloud operations, Kubernetes for container orchestration and cluster management, Terraform for infrastructure-as-code provisioning across multi-cloud environments, Docker for containerisation and image management, and Jenkins for CI/CD pipeline design and maintenance. Preferred skills include Ansible for configuration management and server provisioning, Python Automation for scripting infrastructure workflows, BASH for shell automation and system administration, Prometheus for monitoring and alerting, and Grafana for metrics dashboards. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 4383 (strong AWS/Kubernetes DevOps but missing Azure-mandatory stack)",
+    "_expected": "candidate 4383 retrieved but lower score, mandatory_missing includes Azure DevOps and Azure Pipelines, fit_level MEDIUM",
+    "_notes": "Kubernetes(5/5,96m) + Docker(5/5,96m) + Terraform(5/5,84m) satisfy 3 of 5 mandatory (cloud-agnostic). Azure DevOps and Azure Pipelines are absent — candidate is AWS-focused, not Azure. mandatory_score expected 0.6-0.7. Tests AWS vs Azure cloud platform differentiation within DevOps skill family.",
+    "request_id": "REQ-4383-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Azure DevOps Engineer",
+      "role": "Azure Cloud and CI/CD",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Azure DevOps", "Azure Pipelines", "Kubernetes", "Terraform", "Docker"],
+      "preferred_skills": ["Ansible", "Jenkins", "Azure Functions", "AKS", "Prometheus"],
+      "jd_text": "We are looking for a Senior Azure DevOps Engineer with 6 to 10 years of experience. The candidate must have Azure DevOps for end-to-end project management and pipeline orchestration, Azure Pipelines for CI/CD pipeline design including YAML-based pipeline authoring, Kubernetes for container orchestration (preferably AKS), Terraform for Azure infrastructure-as-code, and Docker for container image management. Preferred skills include Ansible for server configuration management, Jenkins for legacy pipeline migrations, Azure Functions for serverless task automation, AKS for managed Kubernetes on Azure, and Prometheus for cluster monitoring. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

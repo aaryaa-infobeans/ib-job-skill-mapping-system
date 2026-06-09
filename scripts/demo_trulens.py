@@ -87,26 +87,32 @@ def run_demo():
         print("\n📊 TruLens Trace Summary:")
         tru = trulens_service.tru
         try:
-            records_df, feedbacks = tru.get_records_and_feedback(app_ids=["IB-Skill-Match-Graph"])
+            records_df, feedbacks = tru.get_records_and_feedback(
+                app_name="IB-Skill-Match-Graph"
+            )
             if not records_df.empty:
                 last_record = records_df.iloc[-1]
-                print(f"Record ID: {last_record.record_id}")
-                print(f"App ID: {last_record.app_id}")
-                print(f"Input: {str(last_record.main_input)[:100]}...")
-                print(f"Output: {str(last_record.main_output)[:100]}...")
+                print(f"✅ TruLens record captured successfully!")
+                print(f"  Record ID : {last_record.get('record_id', 'N/A')}")
+                print(f"  App Name  : {last_record.get('app_name', 'N/A')}")
+                print(f"  Latency   : {last_record.get('latency', 0):.2f}s")
+                print(f"  Tokens    : {last_record.get('total_tokens', 0)}")
+                inp = str(last_record.get('input', ''))
+                out = str(last_record.get('output', ''))
+                print(f"  Input     : {inp[:120]}...")
+                print(f"  Output    : {out[:120]}...")
+                print(f"\n  Feedback columns: {feedbacks if feedbacks else 'pending evaluation'}")
             else:
-                print("⚠️ No TruLens records found in the database yet.")
+                print("⚠️  No TruLens records found yet — evaluator may still be processing.")
         except Exception as e:
-            print(f"⚠️ Could not retrieve TruLens records: {e}")
-            print("Check the TruLens dashboard for the full trace.")
-            
-            # Show node latencies from our custom tracing
-            print("\n⏱️ Node Latencies (from custom tracing):")
-            node_metadata = final_state.get("node_metadata", {})
-            for node, meta in node_metadata.items():
-                print(f"  - {node}: {meta.get('latency', 0):.4f}s")
-        else:
-            print("❌ No TruLens records found. Instrumentation might have failed.")
+            print(f"⚠️  Could not retrieve TruLens records: {e}")
+            print("    Check the TruLens dashboard for the full trace.")
+
+        # Show node latencies from our custom tracing
+        print("\n⏱️ Node Latencies (from custom tracing):")
+        node_metadata = final_state.get("node_metadata", {})
+        for node, meta in node_metadata.items():
+            print(f"  - {node}: {meta.get('latency', 0):.4f}s")
 
     except Exception as e:
         logger.error(f"Demo failed: {str(e)}", exc_info=True)

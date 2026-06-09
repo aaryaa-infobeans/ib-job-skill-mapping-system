@@ -293,6 +293,38 @@ class SkillOntology(Base):
     )
 
 
+class RoleOntology(Base):
+    """Maps canonical role names to internal profile_type codes, aliases, and enriched terms.
+
+    canonical_role — standardised role name used as the lookup key
+                     (matches normalized_role from JD parsing and jd_certification_requirements.jd_type)
+    profile_type   — internal short code stored on team_member.profile_type
+    aliases        — alternative names the LLM or clients may use for the same role
+    enriched_terms — domain-specific concepts for semantic matching (scoped to this role only)
+    """
+
+    __tablename__ = "role_ontology"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    canonical_role = Column(String(100), nullable=False)
+    profile_type = Column(String(100), nullable=False)
+    aliases = Column(
+        JSON().with_variant(postgresql.ARRAY(Text), "postgresql"),
+        nullable=False,
+        server_default="[]",
+    )
+    enriched_terms = Column(
+        JSON().with_variant(postgresql.ARRAY(Text), "postgresql"),
+        nullable=False,
+        server_default="[]",
+    )
+
+    __table_args__ = (
+        sa.Index("idx_role_ontology_canonical_role", "canonical_role", unique=True),
+        sa.Index("idx_role_ontology_profile_type", "profile_type"),
+    )
+
+
 class TeamMemberEmbedding(Base):
     """Embeddings for team member profiles."""
 
@@ -493,4 +525,24 @@ class PiiScrubAudit(Base):
         sa.Index("ix_pii_scrub_audit_entity", "entity_type", "entity_id"),
         sa.Index("ix_pii_scrub_audit_operation", "operation", "timestamp"),
         {"postgresql_partition_by": "RANGE (timestamp)"},
+    )
+
+
+class SkillConfig(Base):
+    """Runtime-configurable keyword lists for skill family detection and grouping.
+
+    config_type='family': frontend/backend keyword sets used for penalty scoring.
+    config_type='group':  technology groupings used for skill-group matching.
+    """
+
+    __tablename__ = "skill_config"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    config_type = Column(String(20), nullable=False)
+    config_key = Column(String(50), nullable=False)
+    keywords = Column(postgresql.ARRAY(Text), nullable=False, server_default="{}")
+
+    __table_args__ = (
+        sa.UniqueConstraint("config_type", "config_key", name="uq_skill_config_type_key"),
+        sa.Index("ix_skill_config_type", "config_type"),
     )

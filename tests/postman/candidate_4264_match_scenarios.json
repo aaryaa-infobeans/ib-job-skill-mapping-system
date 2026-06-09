@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 4264 (Project Manager, actual DB: Project Management 4/5 96m, Scrum Management 4/5 96m, Stakeholder Management 4/5 96m, Team Management 4/5 72m, Negotiation Skill 4/5 48m)",
+    "_expected": "candidate 4264 in top results, fit_level HIGH or MEDIUM, mandatory_missing empty",
+    "_notes": "All 5 mandatory are direct DB hits: Project Management(4/5,96m) + Scrum Management(4/5,96m) + Stakeholder Management(4/5,96m) + Team Management(4/5,72m) + Negotiation Skill(4/5,48m). Contracts Management(4/5,24m) covers preferred. BM25 rank expected top 5 — 'Scrum Management', 'Stakeholder Management', 'Negotiation Skill' together are niche enough to narrow the field. Candidate is Project Manager with 132m (11yr) exp. Score should be HIGH.",
+    "request_id": "REQ-4264-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Project Manager",
+      "role": "Software Delivery Management",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Project Management", "Scrum Management", "Stakeholder Management", "Team Management", "Negotiation Skill"],
+      "preferred_skills": ["Contracts Management", "Budget Management", "Risk Management", "Jira", "Program Management"],
+      "jd_text": "We are seeking a Senior Project Manager with 8 to 12 years of experience delivering software projects across distributed teams. The candidate must have strong Project Management skills for end-to-end delivery ownership, Scrum Management expertise for agile sprint planning and retrospectives, Stakeholder Management for client communication and expectation alignment, Team Management for leading cross-functional engineering teams, and Negotiation Skill for scope and contract discussions. Preferred skills include Contracts Management for vendor and SOW management, Budget Management for project financial tracking, Risk Management for issue identification and mitigation, Jira for project tracking and reporting, and Program Management for multi-project portfolio oversight. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 4264 (strong PM but missing technical CI/CD and infrastructure mandatory stack)",
+    "_expected": "candidate 4264 retrieved but lower score, mandatory_missing includes Kubernetes, Jenkins, Terraform, fit_level MEDIUM or LOW",
+    "_notes": "Project Management(4/5,96m) + Scrum Management(4/5,96m) satisfy 2 of 5 mandatory. Kubernetes, Jenkins, Terraform are absent from DB — candidate is a delivery PM without container orchestration or CI/CD expertise. NOTE: Microservices removed from mandatory vs earlier design because 4264 has Microservices(2/5,36m) in DB which would make it a 3/5 false match — Jenkins and Terraform are genuinely absent. mandatory_score expected 0.30-0.40 (2 of 5). Tests pure management profile vs technical program manager role.",
+    "request_id": "REQ-4264-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Technical Program Manager",
+      "role": "Engineering Program Leadership",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Project Management", "Scrum Management", "Kubernetes", "Jenkins", "Terraform"],
+      "preferred_skills": ["Stakeholder Management", "Microservices", "AWS", "Architecture Review", "Team Management"],
+      "jd_text": "We are looking for a Technical Program Manager with 8 to 12 years of experience bridging delivery management and engineering leadership. The candidate must have Project Management skills for multi-team delivery coordination, Scrum Management for agile ceremonies at programme level, Kubernetes for understanding container workload management and capacity planning, Jenkins for governing CI/CD pipelines and release automation, and Terraform for infrastructure-as-code oversight and cloud cost governance. Preferred skills include Stakeholder Management for executive reporting, Microservices architecture knowledge for technical roadmap discussions, AWS cloud services for infrastructure planning, Architecture Review experience for design approvals, and Team Management for engineering leads. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

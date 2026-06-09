@@ -42,8 +42,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
         
         jd_text = parsed_jd.get("jd_text", "")
         experience_req = parsed_jd.get("experience") or {}
-        initial_filter_ids = state.get("target_member_ids")
-        
+
         # 3. Initialize and execute RAG agent
         db = SessionLocal()
         try:
@@ -61,9 +60,8 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
             
             agent = RAGRetrievalAgent(db_connection=db)
             candidates = agent.execute(
-                embedding_result, 
-                query_text=jd_text, 
-                filter_ids=initial_filter_ids,
+                embedding_result,
+                query_text=jd_text,
                 mandatory_skills=m_skills,
                 preferred_skills=p_skills,
                 locations=locs,
@@ -81,6 +79,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                     "mandatory_similarity": c.mandatory_similarity,
                     "preferred_similarity": c.preferred_similarity,
                     "jd_level_similarity": c.jd_level_similarity,
+                    "full_jd_similarity": c.full_jd_similarity,
                     "certification_similarity": c.certification_similarity,
                     "experience_in_months": c.experience_in_months,
                     "phase0_score_breakdown": c.phase0_score_breakdown
@@ -88,7 +87,7 @@ def rag_retrieval_node(state: GraphState) -> GraphState:
                 for c in candidates
             ]
             
-            logger.info(f"RAG_Retrieval_Agent completed with {len(state['retrieved_candidates'])} candidates (Hybrid BM25+Gemma)")
+            logger.info(f"RAG_Retrieval_Agent completed with {len(state['retrieved_candidates'])} candidates (Multi-Vector Hybrid BM25+pgvector)")
             
         finally:
             db.close()

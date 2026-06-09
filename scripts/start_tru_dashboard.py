@@ -5,6 +5,13 @@ import os
 import sys
 import argparse
 import logging
+import warnings
+
+# Silence noisy trulens warnings and deprecations
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="trulens")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="trulens_eval")
+logging.getLogger("trulens.core.utils.imports").setLevel(logging.ERROR)
+logging.getLogger("trulens_eval.utils.imports").setLevel(logging.ERROR)
 
 # Add src to sys.path
 sys.path.append(os.path.join(os.getcwd(), "src"))
@@ -29,6 +36,12 @@ def main():
     print(f"🔗 Once started, visit: http://localhost:{args.port}")
     
     try:
+        # Prepend the virtual environment's bin directory to PATH so that
+        # TruLens starts the correct Streamlit installation.
+        venv_bin = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "venv", "bin"))
+        os.environ["PATH"] = f"{venv_bin}{os.path.pathsep}{os.environ.get('PATH', '')}"
+        logger.info(f"Prepended {venv_bin} to PATH for streamlit execution")
+        
         trulens_service.start_dashboard(port=args.port)
         # Keep the script running
         import time

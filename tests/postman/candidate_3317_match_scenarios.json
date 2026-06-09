@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 3317 (ServiceNow/JS specialist, actual DB: ServiceNow integration 5/5 84m, JS 5/5 84m, HTML5 4/5 60m, MySQL-DBA 4/5 60m, PHP 4/5 24m)",
+    "_expected": "candidate 3317 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory skills match via team_member_skill DB substring: ServiceNow→'ServiceNow integration'(5/5,84m) + ITSM→'ServiceNow-ITSM'(5/5,60m) + JavaScript(5/5,84m) + PHP(4/5,24m) + HTML→'HTML5'(4/5,60m). DB ALSO has ServiceNow(3/48m) — 'servicenow' substring matches all three entries. NOTE: 'MySQL' replaced by 'ITSM' as mandatory vs earlier design — MySQL attracted all web developers (BM25 rank 21). With ITSM in mandatory, BM25 query filters to ServiceNow specialists only (expected rank top 5). PRIMARY retrieval path: BM25 now strong due to ITSM narrowing; SEMANTIC also strong at #7/300. RRF merges both paths — candidate is definitely retrieved.",
+    "request_id": "REQ-3317-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior ServiceNow Developer",
+      "role": "ITSM Platform Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["ServiceNow", "ITSM", "JavaScript", "PHP", "HTML"],
+      "preferred_skills": ["Node.js", "React", "REST API", "Git", "MySQL"],
+      "jd_text": "We are seeking a Senior ServiceNow Developer with 5 to 7 years of experience in ITSM platform customisation and integration. The candidate must have deep ServiceNow expertise including custom application development, workflows, and integrations, ITSM process knowledge for incident, change, and problem management modules, JavaScript for client scripts and business rules, PHP for legacy system bridge scripts and backend logic, and HTML for Service Portal widget development and UI customisation. Preferred skills include Node.js for integration middleware, React for custom portal components, REST API design for third-party system integrations, Git for version control, and MySQL for understanding relational data structures used in integrations. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 3317 (strong JS/HTML but missing Docker, Git, Linux which candidate lacks per DB)",
+    "_expected": "candidate 3317 retrieved, mandatory_score high on JS/PHP/HTML, preferred_missing includes Docker Git Linux, fit_level MEDIUM",
+    "_notes": "PHP(4/5, 24m) + JavaScript(5/5, 84m) + HTML5(4/5, 60m) + MySQL-DBA(4/5, 60m) satisfy 4 of 5 mandatory. WordPress absent entirely — candidate has ServiceNow but no CMS experience. Node.js/React present via profile mention but low confidence in DB. Docker, Git, Linux all absent from team_member_skill. Tests ServiceNow specialist who has core web skills but misses CMS and DevOps preferred stack.",
+    "request_id": "REQ-3317-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior PHP JavaScript Full Stack Developer",
+      "role": "Full Stack Web Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["PHP", "JavaScript", "MySQL", "HTML", "WordPress"],
+      "preferred_skills": ["Docker", "Git", "Linux", "Node.js", "React"],
+      "jd_text": "We are looking for a Senior PHP JavaScript Full Stack Developer with 4 to 6 years of experience. The candidate must have strong PHP skills for server-side development, JavaScript for frontend interactivity, MySQL for database management, HTML for markup and templates, and WordPress for CMS-based project delivery. Preferred skills include Docker for containerised environments, Git for version control workflows, Linux server administration, Node.js for backend services, and React for modern frontend components. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 3881 (MERN Module Lead, actual DB: JavaScript 5/5 96m, Node.js 5/5 84m, React 5/5 60m, TypeScript 5/5 48m, MongoDB 5/5 36m)",
+    "_expected": "candidate 3881 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory are direct DB hits at 5/5: JavaScript(5/5,96m) + Node.js(5/5,84m) + React(5/5,60m) + TypeScript(5/5,48m) + MongoDB(5/5,36m). Candidate is Module Lead, Pune, WFO, 73m exp, 32 DB skills. BM25 rank expected top 5 — TypeScript+MongoDB+React together are niche enough that general web developers without full MERN depth rank lower. Semantic rank also expected strong (dense MERN vocabulary in profile). NOTE: This candidate replaces 4351 as the primary MERN test candidate — 4351 has only 3 DB skills and lacks JavaScript/TypeScript entries. Score should be HIGH.",
+    "request_id": "REQ-3881-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior MERN Stack Developer",
+      "role": "Full Stack JavaScript Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["React", "Node.js", "JavaScript", "TypeScript", "MongoDB"],
+      "preferred_skills": ["Redux", "Express.js", "Docker", "REST API", "Jest"],
+      "jd_text": "We are seeking a Senior MERN Stack Developer with 5 to 8 years of experience building scalable full-stack JavaScript applications. The candidate must have strong React for modern SPA and component-based UI development, Node.js for server-side JavaScript and REST API development, JavaScript as the core language for both frontend and backend, TypeScript for type-safe large-scale application development, and MongoDB for document store database design and querying. Preferred skills include Redux for state management, Express.js for lightweight API framework, Docker for containerised deployment, REST API design patterns, and Jest for unit and integration testing. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 3881 (strong JS/React but missing PHP/Laravel backend mandatory stack)",
+    "_expected": "candidate 3881 retrieved but lower score, mandatory_missing includes PHP, Laravel, MySQL, fit_level MEDIUM",
+    "_notes": "React(5/5,60m) + Node.js(5/5,84m) satisfy 2 of 5 mandatory. PHP, Laravel, MySQL are absent from DB — candidate is a pure JavaScript/MERN developer, not a PHP backend developer. MongoDB is a strong DB skill but MySQL (relational) is absent. mandatory_score expected 0.35-0.45 (2 of 5, both at 5/5 quality so contribution is high for the matched skills). Tests JavaScript generalist who has frontend/Node strengths but misses PHP CMS backend entirely.",
+    "request_id": "REQ-3881-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior PHP Laravel Full Stack Developer",
+      "role": "Full Stack Web Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["React", "Node.js", "PHP", "Laravel", "MySQL"],
+      "preferred_skills": ["JavaScript", "TypeScript", "Docker", "Git", "REST API"],
+      "jd_text": "We are looking for a Senior PHP Laravel Full Stack Developer with 5 to 7 years of experience. The candidate must have React for modern frontend component development, Node.js for middleware and BFF layer development, PHP for server-side application logic and API development, Laravel for MVC framework-based backend architecture, and MySQL for relational database design and query optimisation. Preferred skills include JavaScript for frontend interactivity, TypeScript for type-safe development, Docker for containerised deployments, Git for version control, and REST API design. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

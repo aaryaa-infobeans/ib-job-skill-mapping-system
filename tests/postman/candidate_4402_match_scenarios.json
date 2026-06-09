@@ -1,0 +1,42 @@
+[
+  {
+    "_scenario": "A — Perfect Match for candidate 4402 (Salesforce specialist, actual DB: Salesforce 5/5 48m, Apex Programming 5/5 41m, LWC 4/5 41m, SOQL 5/5 41m, Sales Cloud 5/5 41m)",
+    "_expected": "candidate 4402 in top results, fit_level HIGH, mandatory_missing empty",
+    "_notes": "All 5 mandatory are direct DB hits: Salesforce(5/5,48m) + Apex Programming(5/5,41m) + SOQL(5/5,41m) + LWC(4/5,41m) + Sales Cloud(5/5,41m). Experience Cloud(4/5) + Salesforce Integration(4/5) + Service Cloud(5/5) cover preferred. BM25 rank expected top 5 — Apex/LWC/SOQL/Sales Cloud together are very niche Salesforce-specific terms. Score should be HIGH.",
+    "request_id": "REQ-4402-PERFECT-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Senior Salesforce Developer",
+      "role": "CRM Platform Development",
+      "priority": "HIGH",
+      "location": ["Pune", "Remote"],
+      "work_mode": ["WFH", "Hybrid"],
+      "mandatory_skills": ["Salesforce", "Apex Programming", "LWC", "SOQL", "Sales Cloud"],
+      "preferred_skills": ["Service Cloud", "Experience Cloud", "Salesforce Integration", "Marketing Cloud", "Copado"],
+      "jd_text": "We are seeking a Senior Salesforce Developer with 3 to 5 years of hands-on Salesforce platform development experience. The candidate must have deep Salesforce platform expertise, Apex Programming for custom business logic and triggers, LWC (Lightning Web Components) for modern UI development, SOQL for data querying and optimisation, and Sales Cloud for CRM implementation and customisation. Preferred experience includes Service Cloud for customer support implementations, Experience Cloud for partner and community portals, Salesforce Integration for third-party system connectivity, Marketing Cloud for campaign automation, and Copado for DevOps pipelines. Location: Pune with WFH or Hybrid arrangement."
+    },
+    "metadata": {}
+  },
+  {
+    "_scenario": "B — Partial Match for candidate 4402 (strong Salesforce but missing .NET mandatory skills)",
+    "_expected": "candidate 4402 retrieved but score reduced, mandatory_missing includes C#, .NET Core, SQL Server, REST API, fit_level LOW",
+    "_notes": "Salesforce(5/5,48m) is the ONLY mandatory match (1 of 5). C#, .NET Core, SQL Server, REST API are completely absent from DB — candidate is pure Salesforce, not a .NET developer. NOTE: Apex Programming is in candidate DB but appears only in the preferred list of this JD (not mandatory), so it does NOT count toward mandatory_score. mandatory_score expected ~0.20 (1 of 5). Tests CRM vs .NET backend skill family differentiation.",
+    "request_id": "REQ-4402-PARTIAL-001",
+    "schema_version": "1.0",
+    "source_system": "postman",
+    "job_description": {
+      "client_name": "Infobeans",
+      "title": "Salesforce and .NET Integration Developer",
+      "role": "Enterprise Integration Development",
+      "priority": "MEDIUM",
+      "location": ["Pune"],
+      "work_mode": ["Hybrid"],
+      "mandatory_skills": ["Salesforce", "C#", ".NET Core", "SQL Server", "REST API"],
+      "preferred_skills": ["Apex Programming", "Azure Functions", "Microservices", "Git", "Docker"],
+      "jd_text": "We are looking for a Salesforce and .NET Integration Developer with 4 to 6 years of experience. The candidate must have Salesforce platform knowledge for CRM customisation, C# for backend service development, .NET Core for API and microservice development, SQL Server for data persistence and integration, and REST API design for Salesforce-to-enterprise system integrations. Preferred skills include Apex Programming for Salesforce-side logic, Azure Functions for serverless integration layers, Microservices for distributed architecture, Git for version control, and Docker for containerised deployments. Location: Pune, Hybrid work model."
+    },
+    "metadata": {}
+  }
+]

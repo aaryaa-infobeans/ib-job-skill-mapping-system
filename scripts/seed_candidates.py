@@ -470,14 +470,11 @@ CANDIDATES = [
 
 
 def generate_embedding_vector(team_member: dict) -> np.ndarray:
-    """Generate a deterministic embedding vector based on skills and designation.
-    
-    In production, this would use OpenAI's embedding API.
-    For now, we generate a mock 3072-dimensional vector based on skill hash.
-    """
-    seed = hash(f"{team_member['designation']}:{','.join(sorted(team_member['skills']))}")
-    rng = np.random.RandomState(seed % (2**31))
-    return rng.randn(3072).astype(np.float32)
+    """Generate a real 768-dim embedding using the local Gemma model."""
+    from app.ai.utils.gemma_embedding import GemmaEmbeddingAgent
+    agent = GemmaEmbeddingAgent(device="cpu")
+    text = f"{team_member['designation']} with skills: {', '.join(team_member['skills'])}"
+    return agent.embed_text(text)
 
 
 def seed_candidates(db: Session):
@@ -495,44 +492,46 @@ def seed_candidates(db: Session):
     
     for candidate in CANDIDATES:
         try:
-            # Check if candidate already exists
+            # Create team member and skills only if they don't exist yet
             existing = db.query(TeamMember).filter(
                 TeamMember.team_member_id == candidate["id"]
             ).first()
-            
+
             if existing:
-                print(f"⚠️  Candidate {candidate['id']} already exists, skipping")
+                print(f"↩  {candidate['id']} profile exists — refreshing embedding")
                 skipped_count += 1
-                continue
-            
-            # Create team member
-            team_member = TeamMember(
-                team_member_id=candidate["id"],
-                designation=candidate["designation"],
-                experience_in_months=candidate["experience"],
-                base_location=candidate["location"],
-                work_type=candidate["work_type"],
-                is_active=True,
-                profile_type="candidate",
+            else:
+                team_member = TeamMember(
+                    team_member_id=candidate["id"],
+                    designation=candidate["designation"],
+                    experience_in_months=candidate["experience"],
+                    base_location=candidate["location"],
+                    work_type=candidate["work_type"],
+                    is_active=True,
+                    profile_type="candidate",
+                )
+                db.add(team_member)
+                db.flush()
+
+                for skill_name in candidate["skills"]:
+                    skill_id = skill_map.get(skill_name.lower())
+                    if skill_id:
+                        team_member_skill = TeamMemberSkill(
+                            team_member_id=candidate["id"],
+                            skill_id=skill_id,
+                            rating=4 + (hash(skill_name) % 2),
+                            experience_in_months=candidate["experience"],
+                        )
+                        db.add(team_member_skill)
+                    else:
+                        print(f"  ⚠️  Skill '{skill_name}' not found for {candidate['id']}")
+
+            # Always delete and re-insert embedding so skills_text is current
+            db.execute(
+                text("DELETE FROM team_member_embeddings WHERE team_member_id = :id"),
+                {"id": candidate["id"]},
             )
-            db.add(team_member)
-            db.flush()  # Flush to ensure team_member_id is available
-            
-            # Assign skills to candidate
-            for skill_name in candidate["skills"]:
-                skill_id = skill_map.get(skill_name.lower())
-                
-                if skill_id:
-                    team_member_skill = TeamMemberSkill(
-                        team_member_id=candidate["id"],
-                        skill_id=skill_id,
-                        rating=4 + (hash(skill_name) % 2),  # Rating 4 or 5
-                        experience_in_months=candidate["experience"],
-                    )
-                    db.add(team_member_skill)
-                else:
-                    print(f"  ⚠️  Skill '{skill_name}' not found for {candidate['id']}")
-            
+
             # Generate and store embedding
             embedding_vector = generate_embedding_vector(candidate)
             
@@ -541,24 +540,26 @@ def seed_candidates(db: Session):
             embedding_str = f"[{','.join(str(x) for x in embedding_list)}]"
             
             insert_sql = text("""
-                INSERT INTO team_member_embeddings 
-                (team_member_id, embedding, profile_text, metadata, created_at)
-                VALUES (:team_member_id, :embedding, :profile_text, :metadata, :created_at)
+                INSERT INTO team_member_embeddings
+                (team_member_id, embedding, profile_text, skills_text, metadata, created_at)
+                VALUES (:team_member_id, :embedding, :profile_text, :skills_text, :metadata, :created_at)
             """)
-            
+
             profile_text = f"{candidate['designation']} with skills: {', '.join(candidate['skills'])}"
+            skills_text = " ".join(candidate["skills"])
             metadata_json = json.dumps({
                 "location": candidate["location"],
                 "work_type": candidate["work_type"],
                 "skills": candidate["skills"],
             })
-            
+
             db.execute(
                 insert_sql,
                 {
                     "team_member_id": candidate["id"],
                     "embedding": embedding_str,
                     "profile_text": profile_text,
+                    "skills_text": skills_text,
                     "metadata": metadata_json,
                     "created_at": datetime.utcnow(),
                 },

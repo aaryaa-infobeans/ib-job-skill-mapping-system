@@ -31,12 +31,14 @@ Your responsibilities:
 3. Normalize all skills to a standard technical format.
 4. Enhance the certification list with canonical certification names.
 5. Extract or verify experience requirements (in months).
-6. Return ONLY a valid JSON object with fields mandatory_skills, preferred_skills, certifications, experience, normalized_title, and normalized_role.
+6. Infer the seniority level of the role (JUNIOR, MID, or SENIOR).
+7. Return ONLY a valid JSON object with fields normalized_title, normalized_role, level, mandatory_skills, preferred_skills, certifications, and experience.
 
 Return ONLY a valid JSON object with this exact structure:
 {
   "normalized_title": "string - standardized job title",
   "normalized_role": "string - standardized role category",
+  "level": "JUNIOR | MID | SENIOR - seniority level inferred from title, responsibilities, and experience",
   "mandatory_skills": ["skill1", "skill2"],
   "preferred_skills": ["skill3", "skill4"],
   "experience": {
@@ -46,10 +48,54 @@ Return ONLY a valid JSON object with this exact structure:
   "certifications": ["cert1", "cert2"]
 }
 
+Level inference rules:
+- SENIOR: title contains Senior/Sr/Lead/Principal/Staff/Architect/Head/Director, OR 5+ years (60+ months) required, OR responsibilities mention leading teams or architecting systems.
+- JUNIOR: title contains Junior/Jr/Associate/Entry/Intern/Graduate/Fresher/Trainee, OR <= 12 months required.
+- MID: everything else, or when uncertain.
+
 Important:
 - Return ONLY the JSON object.
 - Keep skills distinct and professional.
 """
+
+_SENIOR_KEYWORDS = [
+    "senior", "sr.", "sr ", "lead", "principal", "staff",
+    "architect", "head of", "director"
+]
+_JUNIOR_KEYWORDS = [
+    "junior", "jr.", "jr ", "associate", "entry", "intern",
+    "graduate", "fresher", "trainee"
+]
+
+
+def _infer_level_from_title(title: str) -> Optional[str]:
+    t = title.lower()
+    if any(k in t for k in _SENIOR_KEYWORDS):
+        return "SENIOR"
+    if any(k in t for k in _JUNIOR_KEYWORDS):
+        return "JUNIOR"
+    return None
+
+
+def _infer_level_from_experience(min_months) -> Optional[str]:
+    if min_months is None:
+        return None
+    if min_months >= 60:
+        return "SENIOR"
+    if min_months <= 12:
+        return "JUNIOR"
+    return "MID"
+
+
+def _resolve_level(llm_level: str, title: str, min_months) -> str:
+    """4-layer level inference: LLM → title keywords → experience → default MID."""
+    valid = {"JUNIOR", "MID", "SENIOR"}
+    return (
+        (llm_level.upper().strip() if llm_level and llm_level.upper().strip() in valid else None)
+        or _infer_level_from_title(title)
+        or _infer_level_from_experience(min_months)
+        or "MID"
+    )
 
 
 def _normalize_string_list(value: any) -> list[str]:
@@ -119,12 +165,19 @@ def parse_requisition_with_llm(
         final_certs = sorted(list(original_certs.union(set(_normalize_string_list(llm_output.get("certifications", []))))))
 
         # Merge LLM enrichment back into the full context
+        _title = llm_output.get("normalized_title", job_description.get("title", ""))
+        _exp = llm_output.get("experience", job_description.get("experience")) or {}
         enriched_jd = {
-            "normalized_title": llm_output.get("normalized_title", job_description.get("title")),
+            "normalized_title": _title,
             "normalized_role": llm_output.get("normalized_role", job_description.get("role")),
+            "level": _resolve_level(
+                llm_output.get("level", ""),
+                _title,
+                (_exp or {}).get("min_months")
+            ),
             "extracted_mandatory_skills": final_mandatory,
             "extracted_preferred_skills": final_preferred,
-            "experience": llm_output.get("experience", job_description.get("experience")),
+            "experience": _exp,
             "certifications_required": final_certs,
             
             # Preserve metadata and other fields
@@ -169,9 +222,12 @@ def parse_requisition_with_llm(
 
 def _fallback_parse(job_description: dict) -> dict:
     """Fallback logic when LLM is disabled or fails."""
+    _title = job_description.get("title", "Unknown")
+    _min_months = (job_description.get("experience") or {}).get("min_months")
     return {
-        "normalized_title": job_description.get("title", "Unknown"),
+        "normalized_title": _title,
         "normalized_role": job_description.get("role", "Unknown"),
+        "level": _resolve_level("", _title, _min_months),
         "extracted_mandatory_skills": list(set(job_description.get("mandatory_skills", []))),
         "extracted_preferred_skills": list(set(job_description.get("preferred_skills", []))),
         "experience": job_description.get("experience", {"min_months": None, "max_months": None}),
