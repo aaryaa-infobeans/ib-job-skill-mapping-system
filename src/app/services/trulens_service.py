@@ -1,85 +1,107 @@
 """TruLens service for observability and instrumentation."""
 
+import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from trulens_eval import Tru, TruChain, TruCustomApp
-from trulens_eval.tru_custom_app import instrument
+# Import the feedback module first so its trulens-import-noise suppressor and
+# logging config are installed before we import any trulens symbols here.
+from app.evaluation.feedback import (
+    get_feedback_functions,
+    _suppress_trulens_import_noise,
+)
 
-from app.evaluation.feedback import get_feedback_functions
+with _suppress_trulens_import_noise():
+    from trulens.core import Tru
+    from trulens.apps.custom import TruCustomApp
+    from trulens.apps.app import instrument
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
 class TruLensService:
     """Service to manage TruLens observability."""
-    
+
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(TruLensService, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-            
-        self.tru = Tru()
-        # Initialize database if not exists
-        # self.tru.migrate_database() 
-        
+
+        # Tru() probes optional integrations (llama_index, etc.) and emits raw
+        # debug prints when they are absent; suppress that import-time noise.
+        with _suppress_trulens_import_noise():
+            self.tru = Tru()
         self.feedbacks = get_feedback_functions()
         self._initialized = True
-        logger.info("TruLensService initialized with %d feedback functions", len(self.feedbacks))
+        logger.info(
+            "TruLensService initialized with %d feedback functions",
+            len(self.feedbacks),
+        )
 
     def get_recorder(self, app_id: str, version: str = "v1") -> TruCustomApp:
         """
         Create a TruLens recorder for the LangGraph application.
+
+        Only the top-level ``execute`` method is decorated with
+        ``@instrument`` so that TruLens creates exactly **one**
+        ``record_root`` span per pipeline run.  The individual agent
+        node functions are called inside ``execute`` (through the
+        LangGraph stream) but are NOT themselves ``@instrument``-ed
+        entry points, so they appear as children of that single root.
+
+        The LLM-level calls (_groq_completion, etc. on LLMClient) are
+        already instrumented independently and will show up as nested
+        child spans.
         """
-        from app.ai.agents.pii_scrubber import pii_scrubber_node
-        from app.ai.agents.requisition_parsing import requisition_parsing_node
-        from app.ai.agents.skill_normalization import skill_normalization_node
-        from app.ai.agents.embedding import embedding_node
-        from app.ai.agents.rag_retrieval import rag_retrieval_node
-        from app.ai.agents.matching_scoring import matching_scoring_node
-        from app.ai.agents.explanation_generation import explanation_generation_node
-        from app.ai.agents.result_aggregation import result_aggregation_node
 
         class LangGraphApp:
-            @instrument
-            def execute(self, state, request_id=None):
-                # This is the entry point for TruLens recording
-                from app.ai.graph import create_graph
-                graph = create_graph()
-                # Use invoke instead of stream for simple recording, 
-                # or we can wrap the stream loop here
-                return graph.invoke(state)
+            """Thin wrapper whose ``execute`` becomes the TruLens record root."""
 
             @instrument
-            def pii_scrubber(self, state): return pii_scrubber_node(state)
-            @instrument
-            def requisition_parsing(self, state): return requisition_parsing_node(state)
-            @instrument
-            def skill_normalization(self, state): return skill_normalization_node(state)
-            @instrument
-            def embedding(self, state): return embedding_node(state)
-            @instrument
-            def rag_retrieval(self, state): return rag_retrieval_node(state)
-            @instrument
-            def matching_scoring(self, state): return matching_scoring_node(state)
-            @instrument
-            def explanation_generation(self, state): return explanation_generation_node(state)
-            @instrument
-            def result_aggregation(self, state): return result_aggregation_node(state)
+            def execute(
+                self,
+                requisition_text: str,
+                current_state: Dict[str, Any],
+                execute_fn: Any,
+            ) -> Dict[str, Any]:
+                """
+                Run the full LangGraph pipeline.
+
+                ``execute_fn`` is a callback that invokes ``graph.stream``
+                and accumulates the final state dict.  We call it here so
+                that TruLens captures the entire execution under a single
+                root span.
+                """
+                final_state = execute_fn(current_state)
+
+                # Attach a serialisable ``output`` key so the TruLens
+                # dashboard can display the final candidates list.
+                try:
+                    final_state["output"] = json.dumps(
+                        final_state.get("final_results", []), indent=2, default=str
+                    )
+                except Exception:
+                    final_state["output"] = str(final_state.get("final_results", ""))
+
+                return final_state
+
+        app_instance = LangGraphApp()
 
         return TruCustomApp(
             app_id=app_id,
-            app=LangGraphApp(),
+            app=app_instance,
+            main_method=app_instance.execute,
             app_version=version,
-            feedbacks=self.feedbacks
+            feedbacks=self.feedbacks,
         )
 
     def start_dashboard(self, port: int = 8501):
@@ -97,6 +119,7 @@ class TruLensService:
             logger.info("TruLens dashboard stopped")
         except Exception as e:
             logger.error(f"Failed to stop TruLens dashboard: {str(e)}")
+
 
 # Singleton instance
 trulens_service = TruLensService()

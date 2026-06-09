@@ -99,7 +99,7 @@ else
 fi
 
 echo "🔄 Running database migrations with Alembic..."
-PYTHONPATH=src alembic upgrade head
+PYTHONPATH=src alembic upgrade heads
 
 if [ $? -ne 0 ]; then
     echo "❌ Database migration failed."

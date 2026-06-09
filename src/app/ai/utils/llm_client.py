@@ -7,7 +7,7 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-from trulens_eval.tru_custom_app import instrument
+from trulens.apps.app import instrument
 
 class LLMClient:
     """Unified client for multiple LLM providers."""
