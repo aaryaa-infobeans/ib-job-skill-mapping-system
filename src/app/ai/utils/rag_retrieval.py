@@ -304,12 +304,7 @@ class RAGRetrievalAgent(BaseAgent):
         if min_m == 0:
             min_m = None
 
-        # Only apply a minimum experience floor — over-qualified candidates are valid.
-        # The scoring layer's _exp_relevance() applies a graduated penalty for over-experience.
-        # max_m is intentionally not used as a hard SQL filter.
-        if min_m is not None:
-            filters.append("tm.experience_in_months >= :min_m")
-            params["min_m"] = min_m
+        # Experience is not used as a hard SQL filter — the scoring layer handles this.
 
     def _build_sql(self, filters: List[str], keyword_query_str: str = ""):
         if keyword_query_str.strip():

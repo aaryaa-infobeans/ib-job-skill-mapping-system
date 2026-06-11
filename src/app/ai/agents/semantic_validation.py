@@ -125,7 +125,7 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
             "mandatory_skills": job_description.get("mandatory_skills", []),
             "preferred_skills": job_description.get("preferred_skills", []),
             "location": job_description.get("location", []),
-            "jd_text": job_description.get("jd_text", "")[:500],  # Limit to first 500 chars
+            "jd_text": job_description.get("jd_text", "")[:2000],
         }
         
         logger.info("🔍 Running LLM semantic validation...")

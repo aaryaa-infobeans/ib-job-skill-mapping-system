@@ -3,6 +3,8 @@
 import json
 import logging
 import os
+import pathlib
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 
 from sqlalchemy.orm import Session
@@ -156,6 +158,36 @@ def _find_fuzzy_matches(term: str, skill_master_map: Dict[str, str]) -> List[str
             matches.append(skill_id)
     return matches
 
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[4]
+_DEBUG_FILE = _PROJECT_ROOT / "normalization_debug.json"
+
+
+def _dump_normalization_debug(
+    tag: str,
+    normalized_skills: dict,
+    inputs: dict = None,
+    llm_raw_result: dict = None,
+) -> None:
+    """Write normalization output to <project-root>/normalization_debug.json for debugging."""
+    payload = {
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "path": tag,
+        "inputs": inputs,
+        "llm_raw_result": llm_raw_result,
+        "normalized_skills": {
+            **normalized_skills,
+            "mandatory_skill_ids": list(normalized_skills.get("mandatory_skill_ids", [])),
+            "preferred_skill_ids": list(normalized_skills.get("preferred_skill_ids", [])),
+        },
+    }
+    try:
+        with open(_DEBUG_FILE, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, default=str)
+        logger.info("[DEBUG] normalization_debug.json written → %s", _DEBUG_FILE)
+    except Exception as exc:
+        logger.warning("[DEBUG] Failed to write normalization_debug.json: %s", exc)
+
+
 @trace_node("skill_normalization")
 def skill_normalization_node(state: GraphState) -> GraphState:
     """Normalize and expand skills using the skill ontology and LLM.
@@ -256,6 +288,11 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                 f"Skill normalization bypassed via direct IDs: "
                 f"mandatory={direct_mandatory_ids}, preferred={direct_preferred_ids}"
             )
+            _dump_normalization_debug(
+                "bypass",
+                state["normalized_skills"],
+                inputs={"mandatory": direct_mandatory_ids, "preferred": direct_preferred_ids},
+            )
             return state
         except Exception as e:
             logger.error(f"Direct skill-ID bypass failed, falling through to LLM: {e}")
@@ -274,51 +311,54 @@ def skill_normalization_node(state: GraphState) -> GraphState:
         
         logger.info(f"Loaded {len(ontology_data)} ontology items and {len(skill_master_map)} skill master items")
         
-        # Prepare inputs for LLM
-        raw_input = {
-            "mandatory": mandatory_skills,
-            "preferred": preferred_skills,
-            "certifications": required_certifications,
-            "ontology": ontology_data
-        }
-        
         from app.ai.utils.llm_client import llm_client
-        
-        # Call LLM for fuzzy-logic normalization and enrichment
-        logger.info("Calling LLM for skill normalization")
-        content, usage = llm_client.chat_completion(
-            messages=[
-                {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
-                {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
-            ],
-            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
-        )
 
-        
-        if not content:
-            raise ValueError("LLM normalization failed - no content returned")
+        # Normalize each category in its OWN LLM call. A combined call lets one
+        # noisy section (e.g. fragmented mandatory skills) make the model omit
+        # the others entirely — empirically the model would drop the `preferred`
+        # key whenever the mandatory list was bloated. Isolating the calls keeps
+        # each section's output independent and complete.
+        def _normalize_category(category: str, skills: List[str]) -> List[Dict]:
+            """Run a single-category normalization call; returns the list for that key."""
+            if not skills:
+                return []
+            raw_input = {category: skills, "ontology": ontology_data}
+            content, usage = llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
+                    {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
+                ],
+                response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
+            )
+            if not content:
+                raise ValueError(f"LLM normalization failed for '{category}' - no content returned")
 
-        # Parse result
-        result = json.loads(content)
-        
-        # Extract metadata for logging
-        cost = llm_client.get_completion_cost(usage) if usage else 0.0
-        
-        # Add to LLM logs for observability
-        state["llm_call_logs"].append({
-            "agent_name": "skill_normalization",
-            "prompt_name": "skill_ontology_normalization",
-            "model": usage.get("model", "unknown") if usage else "unknown",
-            "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
-            "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
-            "total_tokens": usage.get("total_tokens", 0) if usage else 0,
-            "cost_usd": cost
-        })
-        
-        # Update cumulative metrics
-        if usage:
-            state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + usage["total_tokens"]
-        state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + cost
+            parsed = json.loads(content)
+
+            # Per-call observability + cumulative metrics
+            cost = llm_client.get_completion_cost(usage) if usage else 0.0
+            state["llm_call_logs"].append({
+                "agent_name": "skill_normalization",
+                "prompt_name": f"skill_ontology_normalization_{category}",
+                "model": usage.get("model", "unknown") if usage else "unknown",
+                "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
+                "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+                "total_tokens": usage.get("total_tokens", 0) if usage else 0,
+                "cost_usd": cost
+            })
+            if usage:
+                state["cumulative_tokens"] = (state.get("cumulative_tokens") or 0) + usage["total_tokens"]
+            state["cumulative_cost_usd"] = (state.get("cumulative_cost_usd") or 0.0) + cost
+
+            return parsed.get(category) or []
+
+        logger.info("Calling LLM for skill normalization (separate calls per category)")
+        # Reconstruct the same `result` shape the downstream loops expect.
+        result = {
+            "mandatory": _normalize_category("mandatory", mandatory_skills),
+            "preferred": _normalize_category("preferred", preferred_skills),
+            "certifications": _normalize_category("certifications", required_certifications),
+        }
 
         # Map results to skill IDs and enriched terms
         normalized_mandatory_ids = []
@@ -436,7 +476,13 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "normalized_certifications": list(set(normalized_certs)),
             "certification_enriched": certification_enriched
         }
-        
+        _dump_normalization_debug(
+            "llm",
+            state["normalized_skills"],
+            inputs={"mandatory": mandatory_skills, "preferred": preferred_skills, "certifications": required_certifications},
+            llm_raw_result=result,
+        )
+
     except Exception as e:
         logger.error(f"Error in skill_normalization_node, falling back to deterministic: {str(e)}")
         
@@ -483,6 +529,11 @@ def skill_normalization_node(state: GraphState) -> GraphState:
             "normalized_certifications": required_certifications, # Fallback to original
             "certification_enriched": {}
         }
+        _dump_normalization_debug(
+            "fallback",
+            state["normalized_skills"],
+            inputs={"mandatory": mandatory_skills, "preferred": preferred_skills, "certifications": required_certifications},
+        )
         state["error_message"] = f"Normalization fallback used due to: {str(e)}"
     finally:
         db.close()
