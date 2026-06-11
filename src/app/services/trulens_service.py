@@ -97,7 +97,7 @@ class TruLensService:
         app_instance = LangGraphApp()
 
         return TruCustomApp(
-            app_id=app_id,
+            app_name=app_id,
             app=app_instance,
             main_method=app_instance.execute,
             app_version=version,

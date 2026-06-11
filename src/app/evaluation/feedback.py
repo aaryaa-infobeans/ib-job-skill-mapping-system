@@ -30,35 +30,110 @@ def _suppress_trulens_import_noise():
 
 with _suppress_trulens_import_noise():
     from trulens.core import Feedback
+    from trulens.core.feedback.endpoint import Endpoint
 
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
+def _robust_run_in_pace(self, func, *args, **kwargs):
+    """
+    Robust wrapper for Endpoint.run_in_pace to prevent rate limit (HTTP 429) errors
+    by dynamically sleeping the duration requested by the provider.
+    """
+    import time
+    import re
+
+    # Get retries, adding an extra safety buffer of attempts
+    retries = getattr(self, "retries", 3) + 3
+    attempts = 0
+    retry_delay = 5.0
+
+    errors = []
+
+    while retries > 0:
+        try:
+            self.pace_me()
+            attempts += 1
+            return func(*args, **kwargs)
+        except Exception as e:
+            err_msg = str(e)
+            sleep_time = retry_delay
+
+            # Match messages like: "Please try again in 5.38s"
+            match = re.search(r"try again in (\d+\.?\d*)s", err_msg)
+            if match:
+                sleep_time = float(match.group(1)) + 2.0  # Add 2s safety buffer
+                logger.warning(
+                    f"Rate limit (429) hit on {self.name}. "
+                    f"Sleeping for {sleep_time:.2f}s as requested by provider."
+                )
+            else:
+                retry_delay *= 2
+
+            retries -= 1
+            logger.warning(
+                f"{self.name} request failed ({type(e).__name__}: {e}). "
+                f"Retries remaining={retries}."
+            )
+            errors.append(e)
+
+            if not self._can_retry(e):
+                break
+
+            if retries > 0:
+                time.sleep(sleep_time)
+
+    raise RuntimeError(
+        f"Endpoint {self.name} request failed after {attempts} attempts: \n\t"
+        + ("\n\t".join(map(str, errors)))
+    )
+
+
+# Apply monkeypatch
+Endpoint.run_in_pace = _robust_run_in_pace
+
+
 def _make_provider():
     """Initialize and return the LLM provider for feedback evaluation."""
+    from trulens.core.utils.pace import Pace
+
     provider_name = settings.llm_provider.lower()
     if provider_name == "openai":
         if not settings.openai_api_key:
             raise RuntimeError("OpenAI API key missing for TruLens feedback.")
         from trulens.providers.openai import OpenAI as OpenAIProvider
-        return OpenAIProvider(model_engine=settings.openai_model)
+        provider = OpenAIProvider(model_engine=settings.openai_model)
+        provider.endpoint.rpm = 20.0
+        provider.endpoint.pace = Pace(seconds_per_period=60.0, rpm=20.0)
+        provider.endpoint.retries = 6
+        return provider
     elif provider_name == "google":
         if not settings.google_api_key:
             raise RuntimeError("Google API key missing for TruLens feedback.")
         from trulens.providers.google import Google as GoogleProvider
-        return GoogleProvider(model_id=settings.google_model)
+        provider = GoogleProvider(model_id=settings.google_model)
+        provider.endpoint.rpm = 15.0
+        provider.endpoint.pace = Pace(seconds_per_period=60.0, rpm=15.0)
+        provider.endpoint.retries = 6
+        return provider
     elif provider_name == "groq":
         if not settings.groq_api_key:
             raise RuntimeError("Groq API key missing for TruLens feedback.")
         from trulens.providers.openai import OpenAI as OpenAIProvider
         # Groq exposes an OpenAI-compatible endpoint
-        return OpenAIProvider(
+        provider = OpenAIProvider(
             model_engine=settings.groq_model,
             api_key=settings.groq_api_key,
             base_url="https://api.groq.com/openai/v1",
         )
+        # Groq free tier has extremely low token-per-minute (TPM) limit of 6000.
+        # Set rpm = 3.0 to pace requests safely and avoid TPM exhaustion.
+        provider.endpoint.rpm = 3.0
+        provider.endpoint.pace = Pace(seconds_per_period=60.0, rpm=3.0)
+        provider.endpoint.retries = 10  # Increase retries for rate limits
+        return provider
     else:
         logger.warning(
             f"Provider '{provider_name}' not directly supported. "
@@ -66,7 +141,11 @@ def _make_provider():
         )
         if settings.openai_api_key:
             from trulens.providers.openai import OpenAI as OpenAIProvider
-            return OpenAIProvider(model_engine=settings.openai_model)
+            provider = OpenAIProvider(model_engine=settings.openai_model)
+            provider.endpoint.rpm = 20.0
+            provider.endpoint.pace = Pace(seconds_per_period=60.0, rpm=20.0)
+            provider.endpoint.retries = 6
+            return provider
         raise RuntimeError("No usable LLM provider for TruLens feedback.")
 
 

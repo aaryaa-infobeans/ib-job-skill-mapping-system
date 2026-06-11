@@ -20,6 +20,7 @@ import torch
 def _make_fake_tokenizer(seq_len: int = 8):
     """Return a mock tokenizer that produces fixed-length token tensors."""
     tok = MagicMock()
+    tok.model_max_length = 2048
 
     def _call(texts, padding=True, truncation=True, max_length=2048, return_tensors="pt"):
         batch = len(texts) if isinstance(texts, list) else 1

@@ -213,19 +213,25 @@ def execute_graph_with_audit(
         # Groundedness) for THIS run only, scoping the events to those emitted
         # since run_start.
         try:
-            run_events = recorder.connector.get_events(
-                app_name=recorder.app_name,
-                app_version=recorder.app_version,
-                start_time=run_start,
-            )
-            recorder.compute_feedbacks(
-                raise_error_on_no_feedbacks_computed=False,
-                events=run_events,
-            )
-            logger.info(
-                "TruLens feedback computation triggered for %d events from this run",
-                len(run_events) if run_events is not None else 0,
-            )
+            error_msg = final_state.get("error_message")
+            if error_msg:
+                logger.info(
+                    f"Skipping feedback computation because graph execution had an error: {error_msg}"
+                )
+            else:
+                run_events = recorder.connector.get_events(
+                    app_name=recorder.app_name,
+                    app_version=recorder.app_version,
+                    start_time=run_start,
+                )
+                recorder.compute_feedbacks(
+                    raise_error_on_no_feedbacks_computed=False,
+                    events=run_events,
+                )
+                logger.info(
+                    "TruLens feedback computation triggered for %d events from this run",
+                    len(run_events) if run_events is not None else 0,
+                )
         except Exception as fb_err:
             logger.warning(f"TruLens feedback computation failed (non-fatal): {fb_err}")
 
