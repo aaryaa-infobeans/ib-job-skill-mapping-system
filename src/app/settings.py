@@ -147,6 +147,13 @@ class Settings(BaseSettings):
     # Feature flag: use jd_level_vector <-> resume_embedding for jd_level_similarity
     # Set RAG_USE_LEVEL_VECTOR=false in .env to revert to old full_jd_vector behavior
     rag_use_level_vector: bool = True
+
+    # Retrieval mode: which search path(s) feed the candidate pool.
+    #   "hybrid"   — semantic (pgvector) + BM25 keyword, fused with RRF (default)
+    #   "bm25"     — BM25 keyword path only (no semantic vector retrieval)
+    #   "semantic" — semantic vector path only (no BM25 keyword retrieval)
+    # Set RAG_RETRIEVAL_MODE=bm25 in .env to retrieve with BM25 alone.
+    rag_retrieval_mode: str = "hybrid"
     
     # Retry Configuration
     max_retry_attempts: int = 3

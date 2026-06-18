@@ -33,6 +33,7 @@ dependencies = [
     "groq>=1.2.0",
     "jwt>=1.4.0",
     "sentence-transformers>=5.4.1",
+    "mcp[cli]>=1.0",
 ]
 
 [project.optional-dependencies]

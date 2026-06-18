@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Users/swapnil.kunjir_infob/Desktop/ib-job-skill-mapping-system status db/)"
+    ]
+  }
+}

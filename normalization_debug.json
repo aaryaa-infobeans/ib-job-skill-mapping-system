@@ -1,0 +1,290 @@
+{
+  "timestamp": "2026-06-11T12:35:46.489291+00:00",
+  "path": "llm",
+  "inputs": {
+    "mandatory": [
+      "CSS",
+      "Del",
+      "Eclipse",
+      "HTML",
+      "JIRA",
+      "JavaScript",
+      "Postman",
+      "Salesforce",
+      "ServiceNow",
+      "Visual Studio"
+    ],
+    "preferred": [
+      "Dell Boomi Integration",
+      "IT Service Management",
+      "Service Portal framework",
+      "ServiceNow Scripting"
+    ],
+    "certifications": [
+      "Certified Implementation Specialist - IT Service Management",
+      "Certified System Administrator",
+      "ITIL4 Foundation"
+    ]
+  },
+  "llm_raw_result": {
+    "mandatory": [
+      {
+        "raw": "CSS",
+        "canonical": "CSS",
+        "enriched": []
+      },
+      {
+        "raw": "Del",
+        "canonical": "Delphi",
+        "enriched": []
+      },
+      {
+        "raw": "Eclipse",
+        "canonical": "Eclipse",
+        "enriched": []
+      },
+      {
+        "raw": "HTML",
+        "canonical": "HTML",
+        "enriched": []
+      },
+      {
+        "raw": "JIRA",
+        "canonical": "JIRA",
+        "enriched": []
+      },
+      {
+        "raw": "JavaScript",
+        "canonical": "JavaScript",
+        "enriched": []
+      },
+      {
+        "raw": "Postman",
+        "canonical": "Postman",
+        "enriched": []
+      },
+      {
+        "raw": "Salesforce",
+        "canonical": "Salesforce",
+        "enriched": []
+      },
+      {
+        "raw": "ServiceNow",
+        "canonical": "ServiceNow",
+        "enriched": []
+      },
+      {
+        "raw": "Visual Studio",
+        "canonical": "Visual Studio",
+        "enriched": []
+      }
+    ],
+    "preferred": [
+      {
+        "raw": "Dell Boomi Integration",
+        "canonical": "Dell Boomi",
+        "enriched": [
+          "Integration",
+          "API Management",
+          "Cloud Integration"
+        ]
+      },
+      {
+        "raw": "IT Service Management",
+        "canonical": "IT Service Management",
+        "enriched": [
+          "ITIL",
+          "Service Desk",
+          "Help Desk"
+        ]
+      },
+      {
+        "raw": "Service Portal framework",
+        "canonical": "Service Portal",
+        "enriched": [
+          "ServiceNow Portal",
+          "Portal Development",
+          "UI Development"
+        ]
+      },
+      {
+        "raw": "ServiceNow Scripting",
+        "canonical": "ServiceNow Scripting",
+        "enriched": [
+          "ServiceNow API",
+          "Scripting in ServiceNow"
+        ]
+      }
+    ],
+    "certifications": [
+      {
+        "raw": "Certified Implementation Specialist - IT Service Management",
+        "canonical": "Certified Implementation Specialist - IT Service Management",
+        "enriched": []
+      },
+      {
+        "raw": "Certified System Administrator",
+        "canonical": "Certified System Administrator",
+        "enriched": []
+      },
+      {
+        "raw": "ITIL4 Foundation",
+        "canonical": "ITIL4 Foundation",
+        "enriched": []
+      }
+    ]
+  },
+  "normalized_skills": {
+    "mandatory_skill_ids": [
+      "servicenow-third-party-risk-management",
+      "servicenow-application-portfolio-management",
+      "jira",
+      "modular-javascript",
+      "microsoft-visual-studio",
+      "css3",
+      "servicenow-service-mapping",
+      "delphi",
+      "servicenow",
+      "servicenow-service-provider",
+      "servicenow-performance-analytics",
+      "servicenow-integration",
+      "servicenow-it-service-management",
+      "servicenow-human-resources",
+      "servicenow-security-incident-response",
+      "servicenow-field-service-management",
+      "servicenow-scripting",
+      "javascript-es6",
+      "salesforce",
+      "servicenow-software-asset-management",
+      "css",
+      "scss",
+      "postman",
+      "servicenow-discovery",
+      "servicenow-cmdb",
+      "servicenow-risk-and-compliance",
+      "servicenow-event-management",
+      "javascript",
+      "servicenow-strategic-portfolio-management",
+      "servicenow-vulnerability-response",
+      "html5",
+      "servicenow-hardware-asset-management",
+      "servicenow-cloud-provisioning-and-governance",
+      "eclipse-ide",
+      "salesforce-integration",
+      "html",
+      "css2",
+      "servicenow-service-portal",
+      "servicenow-customer-service-management"
+    ],
+    "preferred_skill_ids": [
+      "servicenow-service-portal",
+      "dell-boomi",
+      "servicenow-it-service-management"
+    ],
+    "mandatory_enriched": {
+      "css": [],
+      "delphi": [],
+      "html": [],
+      "jira": [],
+      "javascript": [],
+      "postman": [],
+      "salesforce": [],
+      "servicenow": []
+    },
+    "preferred_enriched": {
+      "dell-boomi": [
+        "Integration",
+        "API Management",
+        "Cloud Integration"
+      ]
+    },
+    "mandatory_alternatives": {
+      "CSS": [
+        "css2",
+        "css",
+        "css3",
+        "scss"
+      ],
+      "Delphi": [
+        "delphi"
+      ],
+      "Eclipse": [
+        "eclipse-ide"
+      ],
+      "HTML": [
+        "html",
+        "html5"
+      ],
+      "JIRA": [
+        "jira"
+      ],
+      "JavaScript": [
+        "javascript-es6",
+        "modular-javascript",
+        "javascript"
+      ],
+      "Postman": [
+        "postman"
+      ],
+      "Salesforce": [
+        "salesforce",
+        "salesforce-integration"
+      ],
+      "ServiceNow": [
+        "servicenow-third-party-risk-management",
+        "servicenow-service-mapping",
+        "servicenow",
+        "servicenow-service-provider",
+        "servicenow-performance-analytics",
+        "servicenow-integration",
+        "servicenow-it-service-management",
+        "servicenow-customer-service-management",
+        "servicenow-human-resources",
+        "servicenow-security-incident-response",
+        "servicenow-field-service-management",
+        "servicenow-scripting",
+        "servicenow-software-asset-management",
+        "servicenow-discovery",
+        "servicenow-cmdb",
+        "servicenow-risk-and-compliance",
+        "servicenow-event-management",
+        "servicenow-strategic-portfolio-management",
+        "servicenow-vulnerability-response",
+        "servicenow-cloud-provisioning-and-governance",
+        "servicenow-hardware-asset-management",
+        "servicenow-service-portal",
+        "servicenow-application-portfolio-management"
+      ],
+      "Visual Studio": [
+        "microsoft-visual-studio"
+      ]
+    },
+    "preferred_alternatives": {
+      "Dell Boomi": [
+        "dell-boomi"
+      ],
+      "IT Service Management": [
+        "servicenow-it-service-management"
+      ],
+      "Service Portal": [
+        "servicenow-service-portal"
+      ],
+      "ServiceNow Scripting": []
+    },
+    "original_certifications": [
+      "Certified Implementation Specialist - IT Service Management",
+      "Certified System Administrator",
+      "ITIL4 Foundation"
+    ],
+    "normalized_certifications": [
+      "Certified System Administrator",
+      "Certified Implementation Specialist - IT Service Management",
+      "ITIL4 Foundation"
+    ],
+    "certification_enriched": {
+      "Certified Implementation Specialist - IT Service Management": [],
+      "Certified System Administrator": [],
+      "ITIL4 Foundation": []
+    }
+  }
+}

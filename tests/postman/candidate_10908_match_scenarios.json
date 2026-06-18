@@ -1,0 +1,20 @@
+{
+  "request_id": "REQ-TEST-1780999646053",
+  "schema_version": "1.0",
+  "source_system": "postman",
+  "job_description": {
+    "client_name": "Na",
+    "title": "ServiceNow Developer",
+    "role": "ServiceNow Developer",
+    "priority": "HIGH",
+    "location": ["Remote", "Pune", "Indore", "Bangalore"],
+    "work_mode": ["Remote", "Hybrid", "WFO"],
+    "experience": { "min_months": 24, "max_months": 120 },
+    "mandatory_skills": ["Eclipse", "Del", "Postman", "Visual Studio", "JIRA"],
+    "preferred_skills": ["IT Service Management", "ServiceNow Scripting", "ServiceNow", "Dell Boomi", "Salesforce", "ITIL"],
+    "certifications_required": ["Certified Implementation Specialist - IT Service Management", "ITIL4 Foundation", "Certified System Administrator"],
+    "target_member_ids": ["10908"],
+    "jd_text": "We are seeking a ServiceNow Developer with 2 to 10 years of experience. Duration: 6 Months. Start Date: 2026-06-09. Required Certifications: Certified Implementation Specialist - IT Service Management, ITIL4 Foundation certification, Certified System Administrator. Good experience in ServiceNow and Salesforce Implementation. Frequent formal client interaction. Proficiency in customization, configuration and implementation in ServiceNow and Scripting. Expertise in ServiceNow and Dell Boomi Integration. Experience in Service Portal framework. Configured Salesforce including validation rules, workflows, custom labels, custom settings, profiles and permissions. Good knowledge of web development technologies like HTML, CSS and JavaScript. Analytic approach for problem solving. Excellent team player with sound written and verbal communication skills. Ability to work under pressure and multi-task."
+  },
+  "metadata": {}
+}

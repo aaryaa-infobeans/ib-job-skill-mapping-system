@@ -97,17 +97,24 @@ class RAGRetrievalAgent(BaseAgent):
                 vectors, keyword_query_str
             )
 
+            mode = (settings.rag_retrieval_mode or "hybrid").strip().lower()
+            run_semantic = mode in ("hybrid", "semantic")
+            run_keyword = mode in ("hybrid", "bm25")
+            self.logger.info(f"RAG retrieval mode: {mode}")
+
             # Semantic path: composite vector-ordered top-N
             # bm25_score is embedded via LEFT JOIN subquery (col 14) for accurate scoring
-            sql = self._build_sql(filters, keyword_query_str)
-            semantic_rows = self.db.execute(sql, params).fetchall()
-            self.logger.info(
-                f"RAG SQL (semantic) returned {len(semantic_rows)} rows"
-            )
+            semantic_rows: list = []
+            if run_semantic:
+                sql = self._build_sql(filters, keyword_query_str)
+                semantic_rows = self.db.execute(sql, params).fetchall()
+                self.logger.info(
+                    f"RAG SQL (semantic) returned {len(semantic_rows)} rows"
+                )
 
             # Keyword path: pg_bm25 index — BM25 drives retrieval, not a boolean pre-filter
             keyword_rows: list = []
-            if keyword_query_str.strip():
+            if run_keyword and keyword_query_str.strip():
                 try:
                     kw_sql = self._build_keyword_sql(filters)
                     keyword_rows = self.db.execute(kw_sql, params).fetchall()
@@ -117,6 +124,10 @@ class RAGRetrievalAgent(BaseAgent):
                     )
                 except Exception as kw_err:
                     self.logger.warning(f"pg_bm25 keyword SQL failed, skipping keyword path: {kw_err}")
+            elif run_keyword and not keyword_query_str.strip():
+                self.logger.warning(
+                    "RAG retrieval mode requires BM25 but keyword query is empty — no keyword rows"
+                )
 
             # Build rank maps for RRF: {team_member_id: 1-based rank}
             semantic_rank_map: Dict[str, int] = {row[0]: i + 1 for i, row in enumerate(semantic_rows)}

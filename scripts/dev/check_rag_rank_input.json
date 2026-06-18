@@ -1,0 +1,40 @@
+{
+  "title": "Senior Python AI/ML Technical Lead / Engineering Manager",
+  "jd_level": "SENIOR",
+  "mandatory_skills": [
+    "Python",
+    "Python - Middleware & Server Side Programming",
+    "Python - AIML",
+    "Microservices",
+    "MySQL - DB Programming",
+    "Docker",
+    "AWS DevOps",
+    "Project Management",
+    "Team Management",
+    "REST API Development",
+    "Object-Oriented Programming (OOP)",
+    "Agile/Scrum"
+  ],
+  "preferred_skills": [
+    "Prompt Engineering",
+    "Azure DevOps",
+    "Jira",
+    "Power BI",
+    "Web 3.0",
+    "Blockchain",
+    "CI/CD",
+    "Generative AI",
+    "LLMs",
+    "LangChain",
+    "Cloud Architecture",
+    "Stakeholder Management"
+  ],
+  "certifications": [
+    "AWS Certified Developer - Associate",
+    "Microsoft Certified: Azure Developer Associate AZ-204"
+  ],
+  "jd_text": "Position: Senior Python AI/ML Technical Lead Experience: 10+ Years Location: Hybrid / Remote Employment Type: Full-Time. We are seeking an experienced Senior Python AI/ML Technical Lead to drive the design, development, and delivery of scalable AI-powered applications and enterprise solutions. The ideal candidate will have strong expertise in Python development, AI/ML technologies, cloud platforms, DevOps practices, and team leadership. Mandatory Skills: Python Development (10+ years), Python Middleware & Server-Side Programming, AI/ML Application Development, Microservices Architecture, MySQL Database Design & Development, Docker Containerization, AWS DevOps / AWS Cloud Services, Project Management, Team Management and Mentoring, REST API Design and Development, Software Design Patterns and OOP, Agile/Scrum Methodologies. Preferred Skills: Prompt Engineering and Generative AI, Azure DevOps, Jira, Power BI, Blockchain / Web 3.0 Exposure, CI/CD Pipeline Implementation, AWS Certified Developer Associate, Microsoft Azure Developer Associate (AZ-204). Key Responsibilities: Lead the architecture and development of scalable Python-based applications. Design and implement AI/ML solutions and intelligent automation workflows. Develop and maintain microservices-based platforms. Build and optimize database solutions using MySQL. Containerize applications using Docker and deploy them on AWS. Define DevOps strategies, CI/CD pipelines, and deployment processes. Manage project delivery, planning, estimations, and stakeholder communication. Lead and mentor engineering teams, conduct code reviews, and ensure best practices. Drive innovation in Generative AI, Prompt Engineering, and automation initiatives. Nice to Have: Experience with LLMs, OpenAI, LangChain, CrewAI, or Agentic AI frameworks. Experience with Kubernetes and cloud-native architectures.",
+  "member_id": "1793",
+  "top": 20,
+  "pool": 300
+}
