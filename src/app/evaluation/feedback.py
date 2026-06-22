@@ -4,6 +4,8 @@ import contextlib
 import io
 import json
 import logging
+import sys
+import types
 import warnings
 from typing import Any, List, Optional
 
@@ -12,6 +14,54 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="trulens")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="trulens_eval")
 logging.getLogger("trulens.core.utils.imports").setLevel(logging.ERROR)
 logging.getLogger("trulens_eval.utils.imports").setLevel(logging.ERROR)
+
+
+def _install_langchain_schema_shim() -> None:
+    """
+    ``trulens-providers-openai==2.2.2`` hard-imports
+    ``from langchain.schema import Generation, LLMResult`` in
+    ``trulens/providers/openai/endpoint.py``. langchain 1.x removed the
+    ``langchain.schema`` module (those symbols now live in
+    ``langchain_core.outputs``), so the import raises
+    ``ModuleNotFoundError: No module named 'langchain.schema'`` and the feedback
+    provider fails to initialise (``feedbacks=[]`` -> no RAG-triad scores).
+
+    Newer trulens providers (>=2.8.x) added a try/except fallback to
+    ``langchain_core.outputs`` but also pin ``openai<2.0.0``, which conflicts
+    with our ``openai>=2.26`` / ``langchain-openai`` stack — so we cannot
+    upgrade. Instead we backport that exact fallback by registering a
+    lightweight ``langchain.schema`` module that delegates attribute lookups to
+    ``langchain_core.outputs``. Must run before any trulens provider import.
+    No-op if ``langchain.schema`` already resolves (older langchain).
+    """
+    import importlib
+
+    if "langchain.schema" in sys.modules:
+        return
+    try:
+        importlib.import_module("langchain.schema")
+        return  # native module exists; nothing to shim
+    except Exception:
+        pass
+
+    try:
+        import langchain_core.outputs as _lc_outputs
+    except Exception:
+        return  # can't shim; let the original import error surface
+
+    shim = types.ModuleType("langchain.schema")
+
+    def __getattr__(name: str):  # PEP 562 module-level __getattr__
+        try:
+            return getattr(_lc_outputs, name)
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+
+    shim.__getattr__ = __getattr__  # type: ignore[attr-defined]
+    sys.modules["langchain.schema"] = shim
+
+
+_install_langchain_schema_shim()
 
 
 @contextlib.contextmanager
@@ -35,6 +85,14 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# TruLens feedback (LLM-judge) model for the Groq provider. The app's serving
+# model (settings.groq_model, e.g. llama-3.1-8b-instant) does NOT support the
+# `response_format=json_schema` structured outputs that the feedback judge
+# requires, so judge calls fail with HTTP 400. Use a Groq model that supports
+# structured outputs for evaluation only — the serving model is unchanged.
+# See https://console.groq.com/docs/structured-outputs#supported-models
+TRULENS_GROQ_JUDGE_MODEL = "openai/gpt-oss-20b"
+
 
 def _make_provider():
     """Initialize and return the LLM provider for feedback evaluation."""
@@ -53,9 +111,10 @@ def _make_provider():
         if not settings.groq_api_key:
             raise RuntimeError("Groq API key missing for TruLens feedback.")
         from trulens.providers.openai import OpenAI as OpenAIProvider
-        # Groq exposes an OpenAI-compatible endpoint
+        # Groq exposes an OpenAI-compatible endpoint. Use a structured-output
+        # capable judge model (not settings.groq_model) so feedback eval works.
         return OpenAIProvider(
-            model_engine=settings.groq_model,
+            model_engine=TRULENS_GROQ_JUDGE_MODEL,
             api_key=settings.groq_api_key,
             base_url="https://api.groq.com/openai/v1",
         )
@@ -274,8 +333,11 @@ def get_feedback_functions() -> List[Feedback]:
         # Feedback functions
         # ------------------------------------------------------------------
 
+        # Use the CoT variant: the plain `relevance` schema fails Groq's strict
+        # structured-output validation on gpt-oss-20b, while the CoT variant
+        # passes (and adds a reason). See _make_provider for judge model.
         f_answer_relevance = Feedback(
-            provider.relevance,
+            provider.relevance_with_cot_reasons,
             name="Answer Relevance",
         ).on({"prompt": selector_question, "response": selector_answer})
 

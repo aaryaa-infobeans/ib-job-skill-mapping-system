@@ -107,7 +107,15 @@ class TruLensService:
     def start_dashboard(self, port: int = 8501):
         """Start the TruLens dashboard."""
         try:
-            self.tru.run_dashboard(port=port, force=True)
+            # `force=True` kills any dashboard already bound to the port, but
+            # TruLens raises "Force stop option is not supported on windows"
+            # there, so only pass it on non-Windows platforms.
+            import sys
+
+            if sys.platform.startswith("win"):
+                self.tru.run_dashboard(port=port)
+            else:
+                self.tru.run_dashboard(port=port, force=True)
             logger.info(f"TruLens dashboard started on port {port}")
         except Exception as e:
             logger.error(f"Failed to start TruLens dashboard: {str(e)}")
