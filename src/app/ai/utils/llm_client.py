@@ -33,6 +33,15 @@ class LLMClient:
             if settings.google_api_key:
                 return genai.Client(api_key=settings.google_api_key)
 
+        elif self.provider in ("local", "ollama"):
+            from openai import OpenAI
+            return OpenAI(
+                api_key=settings.llm_local_api_key or "ollama",
+                base_url=settings.llm_local_base_url,
+                timeout=900.0,
+                max_retries=0,
+            )
+
         return None
 
     def chat_completion(
@@ -69,6 +78,8 @@ class LLMClient:
                     return self._groq_completion(messages, model, temperature, max_tokens, response_format)
                 elif self.provider == "google":
                     return self._google_completion(messages, model, temperature, max_tokens)
+                elif self.provider in ("local", "ollama"):
+                    return self._local_completion(messages, model, temperature, max_tokens, response_format)
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "rate limit" in error_str:
@@ -104,6 +115,31 @@ class LLMClient:
             "completion_tokens": response.usage.completion_tokens,
             "total_tokens": response.usage.total_tokens,
             "model": model
+        }
+        return content, usage
+
+
+    @instrument
+    def _local_completion(self, messages, model, temperature, max_tokens, response_format):
+        """OpenAI-compatible completion against a local Ollama endpoint."""
+        model = model or settings.llm_local_model
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+
+        response = self.client.chat.completions.create(**kwargs)
+        content = response.choices[0].message.content
+        usage_obj = getattr(response, "usage", None)
+        usage = {
+            "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0) or 0,
+            "completion_tokens": getattr(usage_obj, "completion_tokens", 0) or 0,
+            "total_tokens": getattr(usage_obj, "total_tokens", 0) or 0,
+            "model": model,
         }
         return content, usage
 

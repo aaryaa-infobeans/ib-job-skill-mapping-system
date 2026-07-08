@@ -65,3 +65,23 @@ secrets/
 *.json.key
 
 default.sqlite
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local backups
+.env_bk
+*.sqlite
+*.sqlite.old
+*.sqlite.legacy*
+*.db
+*.bak
+
+# Node
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

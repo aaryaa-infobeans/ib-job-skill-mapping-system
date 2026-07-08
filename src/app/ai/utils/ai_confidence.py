@@ -52,6 +52,8 @@ def get_ai_fit_confidence(jd_text: str, profile_text: str, model: Optional[str] 
                 model = settings.groq_model
             elif provider == "google":
                 model = settings.google_model
+            elif provider in ("local", "ollama"):
+                model = settings.llm_local_model
             else:
                 model = settings.openai_model
         

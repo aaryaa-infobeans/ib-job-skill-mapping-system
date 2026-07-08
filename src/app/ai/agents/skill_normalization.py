@@ -291,7 +291,7 @@ def skill_normalization_node(state: GraphState) -> GraphState:
                 {"role": "system", "content": NORMALIZER_SYSTEM_PROMPT + "\nIMPORTANT: Return ONLY valid JSON. Do not include any pre-amble or post-amble."},
                 {"role": "user", "content": f"Normalize these skills: {json.dumps(raw_input)}"}
             ],
-            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq", "local", "ollama"] else None
         )
 
         

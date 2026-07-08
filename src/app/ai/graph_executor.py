@@ -213,11 +213,24 @@ def execute_graph_with_audit(
         # Groundedness) for THIS run only, scoping the events to those emitted
         # since run_start.
         try:
+            try:
+                trulens_service.tru.force_flush()
+            except Exception:
+                pass
             run_events = recorder.connector.get_events(
                 app_name=recorder.app_name,
                 app_version=recorder.app_version,
                 start_time=run_start,
             )
+            try:
+                _empty = run_events is None or len(run_events) == 0
+            except Exception:
+                _empty = False
+            if _empty:
+                run_events = recorder.connector.get_events(
+                    app_name=recorder.app_name,
+                    app_version=recorder.app_version,
+                )
             recorder.compute_feedbacks(
                 raise_error_on_no_feedbacks_computed=False,
                 events=run_events,
@@ -226,6 +239,17 @@ def execute_graph_with_audit(
                 "TruLens feedback computation triggered for %d events from this run",
                 len(run_events) if run_events is not None else 0,
             )
+            # Block until feedback is computed + persisted, so a fast run does not
+            # exit before the background evaluator writes results (trulens_feedbacks=0).
+            try:
+                recorder.wait_for_feedback_results()
+                trulens_service.tru.wait_for_feedback_results()
+            except Exception as _w:
+                logger.warning("wait_for_feedback_results failed: %s", _w)
+            try:
+                trulens_service.tru.force_flush()
+            except Exception:
+                pass
         except Exception as fb_err:
             logger.warning(f"TruLens feedback computation failed (non-fatal): {fb_err}")
 

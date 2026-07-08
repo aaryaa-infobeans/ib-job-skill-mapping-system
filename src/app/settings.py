@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     input_cost_google: Optional[float] = None
     output_cost_google: Optional[float] = None
     
+    # --- TruLens feedback judge + local (Ollama) models ---
+    feedback_llm_provider: str = "openai"
+    feedback_openai_model: str = "gpt-4o-mini"
+    feedback_local_base_url: str = "http://localhost:11434/v1"
+    feedback_local_model: str = "qwen2.5:3b"
+    feedback_local_api_key: str = "ollama"
+    llm_local_base_url: str = "http://localhost:11434/v1"
+    llm_local_model: str = "llama3.2:3b"
+    llm_local_api_key: str = "ollama"
+
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.1
  

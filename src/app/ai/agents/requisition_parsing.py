@@ -138,7 +138,7 @@ def parse_requisition_with_llm(
                 {"role": "system", "content": REQUISITION_PARSING_PROMPT + "\nIMPORTANT: Return ONLY valid JSON."},
                 {"role": "user", "content": f"Please parse this job description:\n{json.dumps(context, default=json_serial)}"}
             ],
-            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq", "local", "ollama"] else None
         )
 
         if not content:

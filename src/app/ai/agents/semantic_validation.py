@@ -135,7 +135,7 @@ def validate_requisition_semantics(job_description: Dict, max_retries: int = 2) 
                 {"role": "system", "content": SEMANTIC_VALIDATION_PROMPT},
                 {"role": "user", "content": f"Validate this requisition data:\n{json.dumps(validation_context, indent=2)}"}
             ],
-            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq"] else None
+            response_format={"type": "json_object"} if llm_client.provider in ["openai", "groq", "local", "ollama"] else None
         )
 
         

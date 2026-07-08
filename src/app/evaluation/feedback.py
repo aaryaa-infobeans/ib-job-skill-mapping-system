@@ -6,8 +6,11 @@ import json
 import logging
 import sys
 import types
+import os
 import warnings
 from typing import Any, List, Optional
+
+os.environ.setdefault("TRULENS_OTEL_TRACING", "1")
 
 # Silence noisy trulens warnings and deprecations
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="trulens")
@@ -96,12 +99,22 @@ TRULENS_GROQ_JUDGE_MODEL = "openai/gpt-oss-20b"
 
 def _make_provider():
     """Initialize and return the LLM provider for feedback evaluation."""
-    provider_name = settings.llm_provider.lower()
+    provider_name = (settings.feedback_llm_provider or settings.llm_provider).lower()
     if provider_name == "openai":
         if not settings.openai_api_key:
             raise RuntimeError("OpenAI API key missing for TruLens feedback.")
+        os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
         from trulens.providers.openai import OpenAI as OpenAIProvider
-        return OpenAIProvider(model_engine=settings.openai_model)
+        return OpenAIProvider(model_engine=settings.feedback_openai_model)
+    elif provider_name in ("local", "ollama"):
+        from trulens.providers.openai import OpenAI as OpenAIProvider
+        return OpenAIProvider(
+            model_engine=settings.feedback_local_model,
+            api_key=settings.feedback_local_api_key or "ollama",
+            base_url=settings.feedback_local_base_url,
+            timeout=600.0,
+            max_retries=0,
+        )
     elif provider_name == "google":
         if not settings.google_api_key:
             raise RuntimeError("Google API key missing for TruLens feedback.")
