@@ -7,7 +7,28 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-from trulens.apps.app import instrument
+import contextlib as _contextlib
+import io as _io
+import logging as _logging
+
+# llm_client is imported before feedback.py (which contains the usual TruLens
+# noise suppressor). Set up suppression here — this is the first TruLens import.
+# Silence both logger.warning() calls AND raw print() calls that TruLens emits
+# for optional integrations (llama_index, providers-google, templates, etc.).
+_trulens_noisy_loggers = [
+    "trulens",                     # parent — covers all trulens.* children
+    "trulens.core.utils.imports",
+    "trulens_eval.utils.imports",
+]
+_saved_levels = {_n: _logging.getLogger(_n).level for _n in _trulens_noisy_loggers}
+for _n in _trulens_noisy_loggers:
+    _logging.getLogger(_n).setLevel(_logging.CRITICAL)
+
+with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
+    from trulens.apps.app import instrument
+
+for _n, _lvl in _saved_levels.items():
+    _logging.getLogger(_n).setLevel(_lvl)
 
 class LLMClient:
     """Unified client for multiple LLM providers."""

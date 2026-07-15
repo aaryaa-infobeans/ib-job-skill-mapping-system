@@ -1,12 +1,27 @@
 """Tracing and observability utilities for LangGraph."""
 
+import contextlib
 import functools
+import io
 import logging
 import time
 from typing import Any, Dict, Callable
 
-from trulens.core.session import TruSession
-from trulens_eval.tru_custom_app import instrument
+# tracing.py is the first module in the import chain to load TruLens.
+# Suppress all logger.warning() and print() noise that TruLens emits for
+# optional integrations (llama_index, providers-google, templates, etc.)
+# before any trulens symbol is imported.
+_trulens_loggers = ["trulens", "trulens.core.utils.imports", "trulens_eval.utils.imports"]
+_saved = {n: logging.getLogger(n).level for n in _trulens_loggers}
+for _n in _trulens_loggers:
+    logging.getLogger(_n).setLevel(logging.CRITICAL)
+
+with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    from trulens.core.session import TruSession
+    from trulens_eval.tru_custom_app import instrument
+
+for _n, _lvl in _saved.items():
+    logging.getLogger(_n).setLevel(_lvl)
 
 logger = logging.getLogger(__name__)
 
