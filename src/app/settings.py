@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     google_model: str = "gemini-2.5-flash"
     input_cost_google: Optional[float] = None
     output_cost_google: Optional[float] = None
+
+    # InfoBeans custom Anthropic (Claude) gateway
+    # Set LLM_PROVIDER=anthropic to activate; switch back to any other value to disable.
+    ib_anthropic_base_url: Optional[str] = None
+    ib_anthropic_auth_token: Optional[str] = None
+    ib_anthropic_model: str = "claude-sonnet-4-6"
+    input_cost_anthropic: Optional[float] = None
+    output_cost_anthropic: Optional[float] = None
     
     # --- TruLens feedback judge + local (Ollama) models ---
     feedback_llm_provider: str = "openai"

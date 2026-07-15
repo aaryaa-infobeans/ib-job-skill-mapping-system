@@ -42,6 +42,16 @@ class LLMClient:
                 max_retries=0,
             )
 
+        elif self.provider == "anthropic":
+            from anthropic import Anthropic
+            if not settings.ib_anthropic_auth_token:
+                logger.error("IB_ANTHROPIC_AUTH_TOKEN is not set for provider 'anthropic'")
+                return None
+            return Anthropic(
+                api_key=settings.ib_anthropic_auth_token,
+                base_url=settings.ib_anthropic_base_url,
+            )
+
         return None
 
     def chat_completion(
@@ -80,6 +90,8 @@ class LLMClient:
                     return self._google_completion(messages, model, temperature, max_tokens)
                 elif self.provider in ("local", "ollama"):
                     return self._local_completion(messages, model, temperature, max_tokens, response_format)
+                elif self.provider == "anthropic":
+                    return self._anthropic_completion(messages, model, temperature, max_tokens, response_format)
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "rate limit" in error_str:
@@ -203,6 +215,57 @@ class LLMClient:
         }
         return content, usage
 
+    @instrument
+    def _anthropic_completion(self, messages, model, temperature, max_tokens, response_format):
+        """Completion via the InfoBeans Anthropic (Claude) gateway."""
+        model = model or settings.ib_anthropic_model
+
+        # Anthropic API requires system prompt as a separate kwarg, not in messages.
+        system = ""
+        anthropic_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system = msg["content"]
+            else:
+                anthropic_messages.append({"role": msg["role"], "content": msg["content"]})
+
+        # JSON mode: inject instruction into system prompt (no native response_format param).
+        # Must be explicit about no markdown fences — Claude wraps output in ```json by default.
+        if response_format and response_format.get("type") == "json_object":
+            system = (system + "\n\nOutput ONLY a raw JSON object. No markdown, no code fences, no explanation — just the JSON.").strip()
+
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": anthropic_messages,
+        }
+        if system:
+            kwargs["system"] = system
+
+        try:
+            response = self.client.messages.create(**kwargs)
+        except Exception as exc:
+            # Some Claude models reject the temperature parameter — retry without it.
+            if "temperature" in str(exc).lower():
+                kwargs.pop("temperature", None)
+                response = self.client.messages.create(**kwargs)
+            else:
+                raise
+
+        content = "".join(
+            block.text for block in response.content
+            if getattr(block, "type", "") == "text"
+        )
+        usage = {
+            "prompt_tokens": response.usage.input_tokens,
+            "completion_tokens": response.usage.output_tokens,
+            "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
+            "model": model,
+        }
+        return content, usage
+
+
     def get_completion_cost(self, usage: Dict) -> float:
         """
         Calculate the cost of a completion based on usage metrics and provider.
@@ -225,6 +288,9 @@ class LLMClient:
         elif self.provider == "groq":
             input_rate = settings.input_cost_groq or 0.0
             output_rate = settings.output_cost_groq or 0.0
+        elif self.provider == "anthropic":
+            input_rate = settings.input_cost_anthropic or 0.0
+            output_rate = settings.output_cost_anthropic or 0.0
             
         cost = (prompt_tokens / 1_000_000 * input_rate) + (completion_tokens / 1_000_000 * output_rate)
         return cost
