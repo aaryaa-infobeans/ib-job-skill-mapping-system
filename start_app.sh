@@ -2,6 +2,7 @@
 
 # Configuration
 APP_PORT=9000
+TRULENS_PORT=8501
 DB_PORT=5433
 PROJECT_DIR="/var/www/html/ib-job-skill-mapping-system"
 VENV_DIR="$PROJECT_DIR/venv"
@@ -9,13 +10,20 @@ VENV_DIR="$PROJECT_DIR/venv"
 echo "🚀 Starting IB Job Skill Mapping System..."
 
 # 1. Stop existing processes
-echo "🛑 Stopping existing processes on ports $APP_PORT and $DB_PORT..."
+echo "🛑 Stopping existing processes on ports $APP_PORT, $TRULENS_PORT, and $DB_PORT..."
 
 # Kill process on app port
 APP_PID=$(lsof -t -i :$APP_PORT)
 if [ ! -z "$APP_PID" ]; then
     echo "Killing existing app process (PID: $APP_PID)..."
     kill -9 $APP_PID
+fi
+
+# Kill any existing TruLens dashboard process
+TRULENS_PID=$(lsof -t -i :$TRULENS_PORT 2>/dev/null)
+if [ ! -z "$TRULENS_PID" ]; then
+    echo "Killing existing TruLens dashboard (PID: $TRULENS_PID)..."
+    kill -9 $TRULENS_PID
 fi
 
 # We don't necessarily want to kill local Postgres if it's not the Docker one, 
@@ -109,12 +117,22 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Database migrations completed!"
 
-# 5. Start Backend Application
+# 5. Start TruLens Dashboard in the background
+echo "🦑 Starting TruLens Dashboard on port $TRULENS_PORT (background)..."
+mkdir -p logs
+PYTHONPATH=src python scripts/start_tru_dashboard.py --port $TRULENS_PORT > logs/trulens_dashboard.log 2>&1 &
+TRULENS_DASH_PID=$!
+echo "   TruLens Dashboard PID: $TRULENS_DASH_PID"
+echo "   Log: $PROJECT_DIR/logs/trulens_dashboard.log"
+echo "   URL: http://localhost:$TRULENS_PORT (ready in ~10 seconds)"
+
+# 6. Start Backend Application
 echo "🌐 Starting FastAPI backend on port $APP_PORT..."
 echo "---------------------------------------------------"
 echo "PostgreSQL: localhost:$DB_PORT (v17 + pgvector)"
-echo "App URL: http://127.0.0.1:$APP_PORT"
-echo "API Docs: http://127.0.0.1:$APP_PORT/docs"
+echo "App URL:    http://127.0.0.1:$APP_PORT"
+echo "API Docs:   http://127.0.0.1:$APP_PORT/docs"
+echo "Dashboard:  http://localhost:$TRULENS_PORT"
 echo "---------------------------------------------------"
 
 PYTHONPATH=src python -m uvicorn src.app.main:app --reload --host 127.0.0.1 --port $APP_PORT
