@@ -48,7 +48,9 @@ def get_ai_fit_confidence(jd_text: str, profile_text: str, model: Optional[str] 
         # Determine model if not provided
         if not model:
             provider = settings.llm_provider.lower()
-            if provider == "groq":
+            if provider == "anthropic":
+                model = settings.ib_anthropic_model
+            elif provider == "groq":
                 model = settings.groq_model
             elif provider == "google":
                 model = settings.google_model

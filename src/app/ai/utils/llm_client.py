@@ -278,6 +278,11 @@ class LLMClient:
             block.text for block in response.content
             if getattr(block, "type", "") == "text"
         )
+        # Strip markdown fences Claude sometimes wraps JSON in (```json ... ```)
+        if response_format and response_format.get("type") == "json_object":
+            import re as _re
+            content = _re.sub(r'^```(?:json)?\s*\n?', '', content.strip())
+            content = _re.sub(r'\n?```\s*$', '', content).strip()
         usage = {
             "prompt_tokens": response.usage.input_tokens,
             "completion_tokens": response.usage.output_tokens,
