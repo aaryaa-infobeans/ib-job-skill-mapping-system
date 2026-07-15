@@ -97,10 +97,90 @@ logger = logging.getLogger(__name__)
 TRULENS_GROQ_JUDGE_MODEL = "openai/gpt-oss-20b"
 
 
+class _AnthropicFeedbackProvider:
+    """
+    Minimal TruLens-compatible feedback provider backed by the Anthropic SDK.
+
+    TruLens Feedback() wraps any callable — it does not require subclassing
+    the TruLens LLMProvider hierarchy.  This class implements only the three
+    scoring methods used in get_feedback_functions() and routes every call
+    through the InfoBeans Anthropic gateway.
+    """
+
+    def __init__(self, model: str, auth_token: str, base_url: str) -> None:
+        from anthropic import Anthropic
+        self._client = Anthropic(api_key=auth_token, base_url=base_url)
+        self._model = model
+
+    def _score(self, system: str, user: str) -> tuple:
+        """Single Anthropic call that returns (score_0_to_1, reason_dict)."""
+        full_system = (
+            system
+            + '\n\nRespond with ONLY valid JSON — no markdown, no fences: '
+            '{"score": <integer 0-10>, "reason": "<one sentence>"}'
+        )
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=256,
+                system=full_system,
+                messages=[{"role": "user", "content": user}],
+            )
+            text = "".join(
+                b.text for b in response.content if getattr(b, "type", "") == "text"
+            )
+        except Exception as exc:
+            logger.warning("Anthropic feedback call failed: %s", exc)
+            return 0.5, {"reason": f"Evaluation failed: {exc}"}
+
+        try:
+            data = json.loads(text)
+            raw = float(data.get("score", 5))
+            return max(0.0, min(1.0, raw / 10.0)), {"reason": data.get("reason", text)}
+        except Exception:
+            import re
+            m = re.search(r'\b(10(?:\.0+)?|[0-9](?:\.[0-9]+)?)\b', text)
+            score = float(m.group(1)) / 10.0 if m else 0.5
+            return max(0.0, min(1.0, score)), {"reason": text}
+
+    def relevance_with_cot_reasons(self, prompt: str, response: str) -> tuple:
+        system = (
+            "You are an evaluator. Assess whether the RESPONSE is relevant to the PROMPT. "
+            "Score 0 = completely irrelevant, 10 = highly relevant."
+        )
+        return self._score(system, f"PROMPT:\n{prompt}\n\nRESPONSE:\n{response}")
+
+    def context_relevance(self, question: str, context) -> tuple:
+        if isinstance(context, list):
+            context = "\n".join(str(c) for c in context)
+        system = (
+            "You are an evaluator. Assess whether the CONTEXT is relevant to the QUESTION. "
+            "Score 0 = completely irrelevant, 10 = highly relevant."
+        )
+        return self._score(system, f"QUESTION:\n{question}\n\nCONTEXT:\n{context}")
+
+    def groundedness_measure_with_cot_reasons(self, source, statement: str) -> tuple:
+        if isinstance(source, list):
+            source = "\n".join(str(s) for s in source)
+        system = (
+            "You are an evaluator. Assess whether the STATEMENT is grounded in and "
+            "supported by the SOURCE. Score 0 = not grounded at all, 10 = fully grounded."
+        )
+        return self._score(system, f"SOURCE:\n{source}\n\nSTATEMENT:\n{statement}")
+
+
 def _make_provider():
     """Initialize and return the LLM provider for feedback evaluation."""
     provider_name = (settings.feedback_llm_provider or settings.llm_provider).lower()
-    if provider_name == "openai":
+    if provider_name == "anthropic":
+        if not settings.ib_anthropic_auth_token:
+            raise RuntimeError("IB_ANTHROPIC_AUTH_TOKEN missing for TruLens feedback.")
+        return _AnthropicFeedbackProvider(
+            model=settings.ib_anthropic_model,
+            auth_token=settings.ib_anthropic_auth_token,
+            base_url=settings.ib_anthropic_base_url,
+        )
+    elif provider_name == "openai":
         if not settings.openai_api_key:
             raise RuntimeError("OpenAI API key missing for TruLens feedback.")
         os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
