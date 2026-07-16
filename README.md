@@ -59,18 +59,30 @@ docker compose up -d postgres
 
 ### Step 3: Configure Environment
 
-Create a `.env` file in the project root:
+Copy the example file and fill in your credentials:
 
 ```bash
-# Required: Database connection
-DATABASE_URL=postgresql://user:password@localhost:5432/ib_job_skill_mapping
+cp .env.example .env
+```
 
-# Required: OpenAI API key (get from https://platform.openai.com/api-keys)
-OPENAI_API_KEY=sk-your-openai-api-key-here
+Minimum required values:
 
-# Optional: JWT secret (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+```bash
+# Database connection
+DATABASE_URL=postgresql+psycopg2://user:password@localhost:5433/ib_job_skill_mapping
+
+# InfoBeans Claude gateway (default LLM provider — obtain from the InfoBeans team)
+IB_ANTHROPIC_BASE_URL=https://gateway.creatingwow.in/
+IB_ANTHROPIC_AUTH_TOKEN=your-infobeans-auth-token
+
+# JWT secret (generate: python -c "import secrets; print(secrets.token_urlsafe(32))")
 SECRET_KEY=your-generated-secret-key-here
 ```
+
+> **Note:** `LLM_PROVIDER=anthropic` and `FEEDBACK_LLM_PROVIDER=anthropic` are already set
+> in `.env.example`. Both the pipeline and the TruLens feedback judge use the InfoBeans Claude
+> gateway out of the box. To switch providers, change those two lines — see `.env.example`
+> for the full list of supported values.
 
 ### Step 4: Run Database Migrations
 
@@ -101,14 +113,22 @@ python scripts/seed_candidates.py
 ### Step 6: Start the Application
 
 ```bash
-# Start API server with hot-reload
-uvicorn src.main:app --reload  --host 0.0.0.0 --port 8001
+# Recommended: use the startup script (starts DB, runs migrations,
+# launches TruLens dashboard on :8501, then FastAPI on :9000)
+./start_app.sh
+```
+
+Or manually:
+
+```bash
+PYTHONPATH=src python -m uvicorn src.app.main:app --reload --host 127.0.0.1 --port 9000
 ```
 
 The API is now running at:
-- **Swagger UI**: http://localhost:8000/docs
-- **API Base**: http://localhost:8000
-- **Health Check**: http://localhost:8000/health
+- **API Base**: http://127.0.0.1:9000
+- **Swagger UI**: http://127.0.0.1:9000/docs
+- **Health Check**: http://127.0.0.1:9000/health
+- **TruLens Dashboard**: http://localhost:8501 (auto-started by `start_app.sh`, ready ~10 s after launch)
 
 ### Step 7: Test the API
 
@@ -193,36 +213,46 @@ The system is integrated with **TruLens** for full-stack observability, tracing,
 
 ### Features
 - **Node-level Tracing**: Capture inputs, outputs, latency, and errors for every agent in the pipeline.
-- **LLM Evaluation**: Automated feedback functions for Groundedness, Answer Relevance, and Context Relevance.
+- **LLM Evaluation**: Automated feedback functions for Groundedness, Answer Relevance, and Context Relevance — all judged by the InfoBeans Claude gateway.
 - **Hierarchical Traces**: Visualize the parent-child relationship between graph execution and individual agent calls.
 - **Cost & Token Tracking**: Monitor usage across all agents in real-time.
 
 ### Running the Observability Dashboard
-To start the TruLens dashboard and visualize traces, use the provided utility script:
-```bash
-# Activation of venv is recommended
-source venv/bin/activate
 
-# Start dashboard (default port 8501)
+**Automatic (recommended):** The TruLens dashboard starts automatically on port 8501 whenever you run `./start_app.sh`. No extra steps needed.
+
+**Manual start:**
+```bash
+source venv/bin/activate
 python3 scripts/start_tru_dashboard.py --port 8501
 ```
+
 Then visit `http://localhost:8501` in your browser.
 
-> [!TIP]
-> If you see a warning about `trulens-providers-google not present in requirements`, ensure you have run `pip install -r requirements.txt` to synchronize your virtual environment with the latest dependencies.
+Logs are written to `logs/trulens_dashboard.log`.
+
+### Required `.env` settings
+
+```bash
+# Must be 1 — OTEL mode is required for the feedback selectors
+TRULENS_OTEL_TRACING=1
+
+# Judge LLM for feedback scoring (uses InfoBeans gateway by default)
+FEEDBACK_LLM_PROVIDER=anthropic
+IB_ANTHROPIC_BASE_URL=https://gateway.creatingwow.in/
+IB_ANTHROPIC_AUTH_TOKEN=your-infobeans-auth-token
+IB_ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
+> **Important:** `TRULENS_OTEL_TRACING=1` is required. Setting it to `0` causes a
+> `ValueError: Expected a Lens but got dict` at startup because the feedback selectors
+> use OTEL-mode syntax.
 
 ### Verification Demo
 Run the provided demo script to execute a sample workflow and verify TruLens recording:
 ```bash
-# Ensure you are in the virtual environment
+source venv/bin/activate
 python3 scripts/demo_trulens.py
-```
-
-### Configuration
-The following variables in `.env` control evaluation behavior:
-```bash
-# OpenAI key required for feedback functions
-OPENAI_API_KEY=sk-...
 ```
 
 ## 📦 Prerequisites
@@ -240,11 +270,17 @@ OPENAI_API_KEY=sk-...
 - **HTTPie or curl** - API testing
 - **pgAdmin** - Database management UI
 
-### API Keys
+### API Keys / LLM Credentials
 
-- **OpenAI API Key** - Required for LLM-based agents
-  - Get from: https://platform.openai.com/api-keys
-  - Set in `.env` file as `OPENAI_API_KEY`
+The default provider is the **InfoBeans Claude gateway** — no external account required:
+
+| Variable | Description | Required |
+|---|---|---|
+| `IB_ANTHROPIC_BASE_URL` | InfoBeans gateway URL | Yes (for `anthropic`) |
+| `IB_ANTHROPIC_AUTH_TOKEN` | Gateway auth token — obtain from InfoBeans team | Yes (for `anthropic`) |
+| `IB_ANTHROPIC_MODEL` | Model name (default: `claude-sonnet-4-6`) | No |
+
+To use an alternative provider instead, set `LLM_PROVIDER` and `FEEDBACK_LLM_PROVIDER` to one of `groq`, `openai`, `google`, or `local`, and supply the corresponding API key (see `.env.example`).
 
 ## 🚀 Installation
 
@@ -336,56 +372,45 @@ psql -U user -h localhost -d ib_job_skill_mapping -f specs-data/ib-job-skill-map
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+Start from the example file:
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://user:password@localhost:5432/ib_job_skill_mapping
+cp .env.example .env
+```
 
-# OpenAI API Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-4-turbo-preview
-OPENAI_EMBEDDING_MODEL=text-embedding-3-large
+Key variables to set for a working installation:
 
-# LLM Cost Tracking Configuration
-OPENAI_INPUT_RATE=0.003
-OPENAI_OUTPUT_RATE=0.006
+```bash
+# ── Database ─────────────────────────────────────────────────────────────────
+DATABASE_URL=postgresql+psycopg2://user:password@localhost:5433/ib_job_skill_mapping
 
-# Agent Scoring Weights
-WEIGHT_MANDATORY_SKILLS=0.25
-WEIGHT_PREFERRED_SKILLS=0.20
-WEIGHT_EXPERIENCE=0.10
-WEIGHT_SEMANTIC_SIMILARITY=0.10
-WEIGHT_CERTIFICATION=0.10
-WEIGHT_JD_TEXT=0.10
-WEIGHT_LOCATION=0.10
-WEIGHT_WORK_MODE=0.05
+# ── LLM Provider ─────────────────────────────────────────────────────────────
+# Change this one line to switch providers: anthropic | groq | openai | google | local
+LLM_PROVIDER=anthropic
 
-# Thresholds
-FIT_SCORE_THRESHOLD=0.55
-# Lowered to 0.3 to improve candidate retrieval recall
-RAG_SIMILARITY_THRESHOLD=0.3
+# InfoBeans Claude gateway (default — obtain token from InfoBeans team)
+IB_ANTHROPIC_BASE_URL=https://gateway.creatingwow.in/
+IB_ANTHROPIC_AUTH_TOKEN=your-infobeans-auth-token
+IB_ANTHROPIC_MODEL=claude-sonnet-4-6
 
-# Retry Configuration
-MAX_RETRY_ATTEMPTS=3
-RETRY_BACKOFF_FACTOR=2
+# ── TruLens Feedback Judge ────────────────────────────────────────────────────
+# Must be the same gateway as LLM_PROVIDER (or any other supported provider)
+FEEDBACK_LLM_PROVIDER=anthropic
+TRULENS_OTEL_TRACING=1        # must be 1 — do not change
 
-# pgvector Configuration
-PGVECTOR_DIMENSION=3072
+# ── Security ──────────────────────────────────────────────────────────────────
+SECRET_KEY=your-generated-secret-key          # python -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET_KEY=your-generated-secret-key
 
-# Application Configuration
+# ── Application ───────────────────────────────────────────────────────────────
 APP_ENV=development
 LOG_LEVEL=INFO
-
-# Security Configuration
-SECRET_KEY=your-secret-key-for-jwt-signing-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Server Configuration
 HOST=0.0.0.0
-PORT=8000
+PORT=9000
 RELOAD=true
 ```
+
+See `.env.example` for the full list of tuneable parameters (scoring weights, RAG pool sizes, retry config, etc.).
 
 ### Generate Secret Key
 
@@ -435,25 +460,32 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" http://localhost:8000/api/v1/jd-s
 
 ### Development Mode
 
-```bash
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Or using the convenience script:
+**Recommended — use the startup script** (handles DB, migrations, TruLens dashboard, and FastAPI in one command):
 
 ```bash
-# Windows PowerShell
-python -m uvicorn src.main:app --reload
-
-# macOS/Linux
-python3 -m uvicorn src.main:app --reload
+./start_app.sh
 ```
 
-The API will be available at:
-- **API Base**: http://localhost:8000
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
+This starts:
+| Service | URL |
+|---|---|
+| FastAPI + Swagger | http://127.0.0.1:9000 / http://127.0.0.1:9000/docs |
+| TruLens Dashboard | http://localhost:8501 (ready ~10 s after launch) |
+| PostgreSQL | localhost:5433 (Docker) |
+
+**Manual start (FastAPI only):**
+
+```bash
+source venv/bin/activate
+PYTHONPATH=src python -m uvicorn src.app.main:app --reload --host 127.0.0.1 --port 9000
+```
+
+**Manual start (TruLens dashboard only):**
+
+```bash
+source venv/bin/activate
+python3 scripts/start_tru_dashboard.py --port 8501
+```
 
 ### Production Mode
 
@@ -899,19 +931,64 @@ psql -U user -h localhost -c "CREATE DATABASE ib_job_skill_mapping"
 alembic upgrade head
 ```
 
-#### Issue: OpenAI API key not working
+#### Issue: InfoBeans Claude gateway returns 403 or 404
 
 **Solution:**
 ```bash
-# Verify .env file is in project root
-ls -la .env  # macOS/Linux
-dir .env     # Windows
+# 1. Verify your token and URL are correct in .env
+grep IB_ANTHROPIC .env
 
-# Test API key
-curl https://api.openai.com/v1/models \
-  -H "Authorization: Bearer YOUR_OPENAI_API_KEY"
+# 2. Check the model name is exactly "claude-sonnet-4-6" or "claude-haiku-4-5"
+#    (other model names are not whitelisted on the gateway)
 
-# Make sure .env is loaded (restart uvicorn after changing .env)
+# 3. Test the gateway directly
+curl -s https://gateway.creatingwow.in/v1/messages \
+  -H "x-api-key: $IB_ANTHROPIC_AUTH_TOKEN" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-sonnet-4-6","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}'
+
+# 4. Restart uvicorn after any .env change (--reload does not pick up .env edits)
+```
+
+#### Issue: "Requisition parsing failed after retries"
+
+**Solution:**
+This usually means the LLM returned markdown-fenced JSON instead of raw JSON, or the provider returned an error.
+
+```bash
+# Check the app log for the underlying error
+tail -100 logs/trulens_dashboard.log   # dashboard log
+# or the uvicorn terminal output
+
+# Ensure LLM_PROVIDER=anthropic and IB_ANTHROPIC_AUTH_TOKEN is set correctly
+grep LLM_PROVIDER .env
+grep IB_ANTHROPIC_AUTH_TOKEN .env
+```
+
+#### Issue: TruLens dashboard not loading at localhost:8501
+
+**Solution:**
+```bash
+# If started via start_app.sh, check the dashboard log
+tail -50 logs/trulens_dashboard.log
+
+# Start it manually to see the error
+source venv/bin/activate
+python3 scripts/start_tru_dashboard.py --port 8501
+
+# Ensure TRULENS_OTEL_TRACING=1 in .env (must not be 0)
+grep TRULENS_OTEL_TRACING .env
+```
+
+#### Issue: "ValueError: Expected a Lens but got dict" at startup
+
+**Solution:**
+```bash
+# This means TRULENS_OTEL_TRACING is missing or set to 0.
+# Set it to 1 in your .env file:
+echo "TRULENS_OTEL_TRACING=1" >> .env
+# Then restart the server.
 ```
 
 #### Issue: `uvicorn: command not found`
@@ -990,10 +1067,11 @@ pytest tests/test_api.py -v
    ON requisition_requests(status);
    ```
 
-3. **OpenAI API timeout**
+3. **LLM gateway timeout**
    ```bash
-   # Increase timeout in agent configuration
-   # Check network connectivity to api.openai.com
+   # Check network connectivity to the InfoBeans gateway
+   curl -I https://gateway.creatingwow.in/
+   # Increase LLM_MAX_RETRIES or LLM_RETRY_BASE_DELAY in .env if intermittent
    ```
 
 ### Getting Help
@@ -1179,5 +1257,5 @@ For issues or questions:
 
 ---
 
-**Version**: 0.1.0  
-**Last Updated**: February 3, 2026
+**Version**: 0.2.0  
+**Last Updated**: July 2026
