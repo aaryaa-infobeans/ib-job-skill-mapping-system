@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ENUM, JSONB
 
 # revision identifiers, used by Alembic.
 revision: str = "e8a217c84204"
@@ -145,7 +145,9 @@ def upgrade() -> None:
         sa.Column("base_location", sa.String(length=100), nullable=True),
         sa.Column(
             "work_type",
-            sa.Enum("wfo", "wfh", "hybrid", name="work_type_enum"),
+            # create_type=False: the type is created explicitly above,
+            # otherwise SQLAlchemy emits a second CREATE TYPE here
+            ENUM("wfo", "wfh", "hybrid", name="work_type_enum", create_type=False),
             nullable=True,
         ),
         sa.Column("profile_url", sa.String(length=1024), nullable=True),

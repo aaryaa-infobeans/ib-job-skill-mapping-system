@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        # .env also carries keys consumed elsewhere (e.g. OPENAI_API_KEY);
+        # ignore them instead of failing validation
+        extra = "ignore"
     
     def get_database_url(self) -> str:
         """
